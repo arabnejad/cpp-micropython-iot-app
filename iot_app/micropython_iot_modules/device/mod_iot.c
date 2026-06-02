@@ -1,0 +1,27 @@
+#include "py/runtime.h"
+
+extern const mp_obj_module_t iot_private_display_module;
+extern const mp_obj_module_t iot_private_input_module;
+extern const mp_obj_module_t iot_private_scheduler_module;
+extern const mp_obj_module_t iot_private_system_module;
+
+/*
+ * Applications import one public `iot` module. It exposes the private native
+ * modules under stable names. Python helper functions can be added later
+ * without changing the C++ drivers.
+ */
+static const mp_rom_map_elem_t iot_module_globals_table[] = {
+    {MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_iot)},
+    {MP_ROM_QSTR(MP_QSTR_display), MP_ROM_PTR(&iot_private_display_module)},
+    {MP_ROM_QSTR(MP_QSTR_input), MP_ROM_PTR(&iot_private_input_module)},
+    {MP_ROM_QSTR(MP_QSTR_scheduler), MP_ROM_PTR(&iot_private_scheduler_module)},
+    {MP_ROM_QSTR(MP_QSTR_system), MP_ROM_PTR(&iot_private_system_module)},
+};
+static MP_DEFINE_CONST_DICT(iot_module_globals, iot_module_globals_table);
+
+const mp_obj_module_t iot_public_module = {
+    .base    = {&mp_type_module},
+    .globals = (mp_obj_dict_t *)&iot_module_globals,
+};
+
+MP_REGISTER_MODULE(MP_QSTR_iot, iot_public_module);

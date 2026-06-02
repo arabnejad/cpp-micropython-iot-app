@@ -1,0 +1,5 @@
+{
+  "id": "button-counter",
+  "name": "Gamepad button counter",
+  "entry_point": "main.py"
+}

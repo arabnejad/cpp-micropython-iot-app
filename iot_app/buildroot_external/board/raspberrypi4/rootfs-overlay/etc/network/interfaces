@@ -1,0 +1,13 @@
+# Bring up Wi-Fi and Ethernet automatically. Either interface can provide the
+# network connection used by SSH and application deployment.
+
+auto lo
+iface lo inet loopback
+
+auto wlan0
+iface wlan0 inet dhcp
+	hostname $(hostname)
+
+auto eth0
+iface eth0 inet dhcp
+	hostname $(hostname)

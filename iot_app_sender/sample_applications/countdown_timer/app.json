@@ -1,0 +1,5 @@
+{
+  "id": "countdown-timer",
+  "name": "Gamepad countdown timer",
+  "entry_point": "main.py"
+}

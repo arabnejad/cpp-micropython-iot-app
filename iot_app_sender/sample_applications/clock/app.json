@@ -1,0 +1,5 @@
+{
+  "id": "ubuntu-clock",
+  "name": "Ubuntu clock app",
+  "entry_point": "main.py"
+}

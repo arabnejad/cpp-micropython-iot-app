@@ -1,0 +1,5 @@
+{
+  "id": "joystick-visualizer",
+  "name": "Text joystick visualizer",
+  "entry_point": "main.py"
+}

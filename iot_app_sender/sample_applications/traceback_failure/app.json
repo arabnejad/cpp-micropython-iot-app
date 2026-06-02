@@ -1,0 +1,5 @@
+{
+  "id": "traceback-failure",
+  "name": "Traceback failure demo",
+  "entry_point": "main.py"
+}

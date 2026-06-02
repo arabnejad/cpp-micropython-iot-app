@@ -1,0 +1,96 @@
+#!/bin/sh
+
+# Buildroot installs this script as S90iot-app, so BusyBox starts IoT App near
+# the end of boot. It is also available as /etc/init.d/iot-app for manual
+# start, stop, and restart commands.
+
+DAEMON="/usr/bin/iot_app"
+PIDFILE="/var/run/iot_app.pid"
+LOGFILE="/var/log/iot_app.log"
+RUNTIME_USER="iot-app"
+STARTUP_WAIT_SECONDS=30
+
+iot_app_is_running() {
+	[ -r "$PIDFILE" ] || return 1
+	iot_app_pid="$(cat "$PIDFILE")"
+	[ -n "$iot_app_pid" ] && kill -0 "$iot_app_pid" 2>/dev/null
+}
+
+wait_for_startup_services() {
+	printf "Waiting for network and MQTT for up to %s seconds: " "$STARTUP_WAIT_SECONDS"
+	/usr/libexec/iot-app-wait-ready "$STARTUP_WAIT_SECONDS"
+	echo "ready or continuing offline"
+}
+
+start() {
+	if iot_app_is_running; then
+		echo "iot_app is already running"
+		return 0
+	fi
+	rm -f "$PIDFILE"
+
+	wait_for_startup_services
+
+	printf "Starting iot_app: "
+	touch "$LOGFILE"
+	chown "$RUNTIME_USER:$RUNTIME_USER" "$LOGFILE"
+	start-stop-daemon --start --background --make-pidfile \
+		--pidfile "$PIDFILE" --chuid "$RUNTIME_USER" \
+		--output "$LOGFILE" --exec "$DAEMON"
+	status=$?
+	if [ "$status" -ne 0 ]; then
+		echo "FAIL"
+		return "$status"
+	fi
+
+	# Starting in the background only confirms that the process was created.
+	# Give it a moment to load its libraries and initialize the display, then
+	# confirm that it is still running.
+	sleep 1
+	if [ -r "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+		echo "OK"
+	else
+		rm -f "$PIDFILE"
+		echo "FAIL (see $LOGFILE)"
+		return 1
+	fi
+}
+
+stop() {
+	printf "Stopping iot_app: "
+	if ! start-stop-daemon --stop --test --quiet --pidfile "$PIDFILE" --exec "$DAEMON"; then
+		rm -f "$PIDFILE"
+		echo "not running"
+		return 0
+	fi
+
+	start-stop-daemon --stop --quiet --pidfile "$PIDFILE" --exec "$DAEMON"
+	status=$?
+	while start-stop-daemon --stop --test --quiet --pidfile "$PIDFILE" --exec "$DAEMON"; do
+		sleep 0.1
+	done
+	rm -f "$PIDFILE"
+	if [ "$status" -eq 0 ]; then
+		echo "OK"
+	else
+		echo "FAIL"
+	fi
+	return "$status"
+}
+
+case "$1" in
+	start)
+		start
+		;;
+	stop)
+		stop
+		;;
+	restart)
+		stop
+		start
+		;;
+	*)
+		echo "Usage: $0 {start|stop|restart}"
+		exit 1
+		;;
+esac

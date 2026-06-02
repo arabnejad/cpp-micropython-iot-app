@@ -1,0 +1,118 @@
+#!/bin/sh
+
+DAEMON="/usr/sbin/wpa_supplicant"
+CONFIGURATION="/etc/wpa_supplicant.conf"
+INTERFACE="wlan0"
+PIDFILE="/var/run/wpa_supplicant.${INTERFACE}.pid"
+ASSOCIATION_WAIT_SECONDS=15
+
+wifi_is_associated() {
+	[ -r "/sys/class/net/$INTERFACE/carrier" ] &&
+		[ "$(cat "/sys/class/net/$INTERFACE/carrier" 2>/dev/null)" = "1" ]
+}
+
+wifi_process_is_running() {
+	[ -r "$PIDFILE" ] || return 1
+	wpa_supplicant_pid="$(cat "$PIDFILE")"
+	[ -n "$wpa_supplicant_pid" ] &&
+		kill -0 "$wpa_supplicant_pid" 2>/dev/null
+}
+
+start() {
+	printf "Starting Wi-Fi: "
+
+	# mdev normally loads this driver during early boot. Loading it here as well
+	# makes Wi-Fi startup reliable if the device appeared a little later.
+	if [ ! -e "/sys/class/net/$INTERFACE" ]; then
+		modprobe brcmfmac >/dev/null 2>&1 || true
+	fi
+
+	waited_seconds=0
+	while [ ! -e "/sys/class/net/$INTERFACE" ] && [ "$waited_seconds" -lt 10 ]; do
+		sleep 1
+		waited_seconds=$((waited_seconds + 1))
+	done
+
+	if [ ! -e "/sys/class/net/$INTERFACE" ]; then
+		echo "$INTERFACE is not available"
+		return 1
+	fi
+
+	if wifi_process_is_running; then
+		echo "already running"
+		return 0
+	fi
+
+	rm -f "$PIDFILE"
+	# wpa_supplicant backgrounds itself with -B and writes its process ID with
+	# -P. Calling it directly keeps its Wi-Fi options away from
+	# start-stop-daemon's own option parser.
+	"$DAEMON" \
+		-B \
+		-Dnl80211 \
+		-i"$INTERFACE" \
+		-c"$CONFIGURATION" \
+		-P"$PIDFILE"
+	status=$?
+	if [ "$status" -ne 0 ]; then
+		echo "FAIL"
+		return "$status"
+	fi
+
+	# Give authentication time to finish before S40network asks for a DHCP
+	# address. A failed association is not fatal here; the network can still be
+	# provided by Ethernet and IoT App is allowed to start offline.
+	waited_seconds=0
+	while ! wifi_is_associated &&
+	      [ "$waited_seconds" -lt "$ASSOCIATION_WAIT_SECONDS" ]; do
+		sleep 1
+		waited_seconds=$((waited_seconds + 1))
+	done
+
+	if wifi_is_associated; then
+		echo "connected"
+	else
+		echo "started, but not associated"
+	fi
+}
+
+stop() {
+	printf "Stopping Wi-Fi: "
+	if ! wifi_process_is_running; then
+		rm -f "$PIDFILE"
+		echo "not running"
+		return 0
+	fi
+
+	status=0
+	kill "$wpa_supplicant_pid" 2>/dev/null || status=$?
+	waited_seconds=0
+	while kill -0 "$wpa_supplicant_pid" 2>/dev/null &&
+	      [ "$waited_seconds" -lt 5 ]; do
+		sleep 1
+		waited_seconds=$((waited_seconds + 1))
+	done
+	rm -f "$PIDFILE"
+	if [ "$status" -eq 0 ]; then
+		echo "OK"
+	else
+		echo "not running"
+	fi
+}
+
+case "$1" in
+	start)
+		start
+		;;
+	stop)
+		stop
+		;;
+	restart)
+		stop
+		start
+		;;
+	*)
+		echo "Usage: $0 {start|stop|restart}"
+		exit 1
+		;;
+esac
