@@ -7,7 +7,6 @@
 #include "iot/messaging/mqtt_application_receiver.h"
 #include "iot/python/python_application_manager.h"
 #include "iot/python/python_application_loader.h"
-#include "iot/python/python_application_runner.h"
 #include "iot/python/temporary_python_application_installer.h"
 #include "iot/system/system_information.h"
 #include "iot/ui/render_backend.h"
@@ -92,10 +91,8 @@ int main(int argc, char **argv) {
                                          iot::runtime::maximumPendingRenderCommands};
     screenManager.start();
 
-    iot::python::PythonApplicationRunner pythonApplicationRunner{
+    iot::python::PythonApplicationManager pythonApplicationManager{
         screenManager, activeDisplay, displayManager, systemInformationProvider, iot::runtime::pythonHeapSizeInBytes};
-    iot::python::PythonApplicationManager pythonApplicationManager{pythonApplicationRunner, screenManager,
-                                                                   activeDisplay};
     pythonApplicationManager.startDefaultApplication(defaultPythonApplication);
 
     IOT_LOG_INFO(applicationLogger, "Running Python app '", pythonApplicationManager.activeScreenName(),
@@ -114,7 +111,7 @@ int main(int argc, char **argv) {
     iot::messaging::MqttApplicationReceiver mqttApplicationReceiver{std::move(mqttSettings), applicationMessageQueue,
                                                                     iot::messaging::mqttClientApi()};
     iot::python::TemporaryPythonApplicationInstaller temporaryApplicationInstaller{
-        applicationLoader, iot::python::defaultTemporaryApplicationRoot()};
+        iot::python::defaultTemporaryApplicationRoot()};
     iot::messaging::ApplicationDeploymentController deploymentController{
         runtimeConfig.deviceId,
         iot::messaging::ApplicationDeploymentMessageParser{iot::runtime::maximumPythonSourceSizeInBytes},
@@ -140,11 +137,7 @@ int main(int argc, char **argv) {
         deploymentController.process(*receivedMessage);
       }
 
-      const auto callbackResult = pythonApplicationManager.runScheduledCallbacks();
-      if (!callbackResult.succeeded) {
-        IOT_LOG_ERROR(applicationLogger, "Python app '", callbackResult.failedApplicationName,
-                      "' failed during a scheduled update; the emergency screen is active");
-      }
+      pythonApplicationManager.runScheduledCallbacks();
     }
 
     mqttApplicationReceiver.stop();

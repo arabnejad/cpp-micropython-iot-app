@@ -5,8 +5,8 @@
 namespace iot {
 namespace tests {
 
-/**
- * Routes Linux I2C calls through an `ILinuxI2cSystemCalls` implementation.
+/*
+ * Routes Linux I2C calls through an ILinuxI2cSystemCalls implementation.
  *
  * Ordinary class tests inject the interface directly. This scoped adapter is
  * only for end-to-end tests that create a gamepad through the public C or

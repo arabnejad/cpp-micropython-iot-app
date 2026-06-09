@@ -5,17 +5,17 @@
 namespace iot {
 namespace messaging {
 
-/**
- * The part of `MqttApplicationReceiver` used by the deployment controller.
+/*
+ * Status-publishing part of MqttApplicationReceiver.
  *
- * The deployment controller only publishes status messages. Broker connection,
- * subscription, and network callback work stays in `MqttApplicationReceiver`.
+ * The deployment controller only needs to publish replies. Connection,
+ * subscription, and callback handling remain in MqttApplicationReceiver.
  */
 class IMqttApplicationReceiver {
 public:
   virtual ~IMqttApplicationReceiver() = default;
 
-  /** Publishes one status for the deployment identified by its transfer ID. */
+  /* Publishes one deployment status. */
   virtual void publishStatus(const ApplicationDeploymentStatus &deploymentStatus) = 0;
 };
 

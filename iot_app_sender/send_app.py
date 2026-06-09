@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Send one single-file MicroPython application to an IoT App device."""
+"""Send a single-file MicroPython application to an IoT App device."""
 
 from __future__ import annotations
 
@@ -16,8 +16,6 @@ from typing import Any, Optional
 from uuid import uuid4
 
 import paho.mqtt.client as mqtt
-from paho.mqtt.packettypes import PacketTypes
-from paho.mqtt.properties import Properties
 
 
 # These limits are part of the current sender design, not choices that need to
@@ -204,7 +202,7 @@ def load_and_validate_application_metadata(
 def resolve_application_entry_point(
     application_directory: Path, application_metadata: dict[str, str]
 ) -> Path:
-    """Finds the Python file named by `app.json` and keeps it inside the app."""
+    """Finds the Python file named by app.json and keeps it inside the app."""
 
     relative_entry_point = PurePosixPath(application_metadata["entry_point"])
     entry_point_path = application_directory.joinpath(*relative_entry_point.parts)
@@ -356,14 +354,11 @@ def send_application(configuration: SenderConfiguration, wait_for_device: bool) 
         if state.subscription_error:
             raise SenderError(state.subscription_error)
 
-        publish_properties = Properties(PacketTypes.PUBLISH)
-        publish_properties.CorrelationData = transfer_id.encode("ascii")
         publish_result = client.publish(
             deployment.install_topic,
             payload=deployment.payload,
             qos=1,
             retain=False,
-            properties=publish_properties,
         )
         publish_result.wait_for_publish(timeout=MQTT_CONNECTION_TIMEOUT_SECONDS)
         if not publish_result.is_published():

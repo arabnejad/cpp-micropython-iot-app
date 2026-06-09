@@ -87,39 +87,38 @@ void removeFailedInstallationFiles(const std::filesystem::path &stagingDirectory
 
 } // namespace
 
-TemporaryPythonApplicationInstaller::TemporaryPythonApplicationInstaller(
-    const PythonApplicationLoader &applicationLoader, std::filesystem::path temporaryRootDirectory)
-    : applicationLoader_(applicationLoader), temporaryRootDirectory_(std::move(temporaryRootDirectory)) {
-  if (temporaryRootDirectory_.empty()) {
-    IOT_LOG_ERROR(logger_, "Cannot create installer because temporaryRootDirectory is empty");
+TemporaryPythonApplicationInstaller::TemporaryPythonApplicationInstaller(std::filesystem::path temporaryRootDirectory)
+    : m_temporaryRootDirectory(std::move(temporaryRootDirectory)) {
+  if (m_temporaryRootDirectory.empty()) {
+    IOT_LOG_ERROR(m_logger, "Cannot create installer because temporaryRootDirectory is empty");
     throw std::invalid_argument("Temporary application installer requires a root directory");
   }
 
   std::error_code error;
-  const auto      existingStatus = std::filesystem::symlink_status(temporaryRootDirectory_, error);
+  const auto      existingStatus = std::filesystem::symlink_status(m_temporaryRootDirectory, error);
   if (!error && std::filesystem::exists(existingStatus)) {
     if (std::filesystem::is_symlink(existingStatus) || !std::filesystem::is_directory(existingStatus)) {
       throw std::runtime_error("Temporary application root is not a normal directory: " +
-                               temporaryRootDirectory_.string());
+                               m_temporaryRootDirectory.string());
     }
-    std::filesystem::remove_all(temporaryRootDirectory_, error);
+    std::filesystem::remove_all(m_temporaryRootDirectory, error);
     if (error) {
       throw std::runtime_error("Could not clear old temporary applications: " + error.message());
     }
   }
-  createPrivateDirectory(temporaryRootDirectory_);
+  createPrivateDirectory(m_temporaryRootDirectory);
 }
 
-PythonApplication
-TemporaryPythonApplicationInstaller::installAndLoad(const messaging::ApplicationDeploymentRequest &deploymentRequest) {
+PythonApplication TemporaryPythonApplicationInstaller::installApplication(
+    const messaging::ApplicationDeploymentRequest &deploymentRequest) {
   const std::filesystem::path transferDirectoryName(deploymentRequest.transferId);
   const std::filesystem::path entryPointPath(deploymentRequest.entryPoint);
   throwIfPathIsUnsafe(transferDirectoryName, "Deployment transfer ID");
   throwIfPathIsUnsafe(entryPointPath, "Application entry point");
 
-  const auto stagingDirectory   = temporaryRootDirectory_ / (".staging-" + deploymentRequest.transferId);
-  const auto installedDirectory = temporaryRootDirectory_ / deploymentRequest.transferId;
-  IOT_LOG_DEBUG(logger_, "Installing application id=", deploymentRequest.applicationId,
+  const auto stagingDirectory   = m_temporaryRootDirectory / (".staging-" + deploymentRequest.transferId);
+  const auto installedDirectory = m_temporaryRootDirectory / deploymentRequest.transferId;
+  IOT_LOG_DEBUG(m_logger, "Installing application id=", deploymentRequest.applicationId,
                 ", transferId=", deploymentRequest.transferId, ", stagingDirectory=", stagingDirectory,
                 ", installedDirectory=", installedDirectory, ", sourceBytes=", deploymentRequest.sourceCode.size());
   std::error_code error;
@@ -148,17 +147,28 @@ TemporaryPythonApplicationInstaller::installAndLoad(const messaging::Application
     }
     installedDirectoryWasCreated = true;
 
-    // Use the same loader as the shipped app so both package types follow the
-    // same rules. Load after the rename so the files are checked only once.
-    return applicationLoader_.load(installedDirectory);
+    // The MQTT parser has already checked the metadata and source. Build the
+    // application from those values instead of opening and parsing the files
+    // that were just written.
+    const auto normalizedInstalledDirectory = std::filesystem::canonical(installedDirectory, error);
+    if (error) {
+      throw std::runtime_error("Could not resolve the installed application directory: " + error.message());
+    }
+    const auto normalizedEntryPointPath = std::filesystem::canonical(installedDirectory / entryPointPath, error);
+    if (error) {
+      throw std::runtime_error("Could not resolve the installed application entry point: " + error.message());
+    }
+    return {deploymentRequest.applicationId, deploymentRequest.applicationName, normalizedInstalledDirectory,
+            normalizedEntryPointPath, deploymentRequest.sourceCode};
   } catch (const std::exception &caughtError) {
-    IOT_LOG_ERROR(logger_, "Temporary application installation failed; applicationId=", deploymentRequest.applicationId,
+    IOT_LOG_ERROR(m_logger,
+                  "Temporary application installation failed; applicationId=", deploymentRequest.applicationId,
                   ", transferId=", deploymentRequest.transferId, ", stagingDirectory=", stagingDirectory,
                   ", installedDirectory=", installedDirectory, ": ", caughtError.what());
     removeFailedInstallationFiles(stagingDirectory, installedDirectory, installedDirectoryWasCreated);
     throw;
   } catch (...) {
-    IOT_LOG_ERROR(logger_, "Temporary application installation failed with an unknown exception; applicationId=",
+    IOT_LOG_ERROR(m_logger, "Temporary application installation failed with an unknown exception; applicationId=",
                   deploymentRequest.applicationId, ", transferId=", deploymentRequest.transferId,
                   ", stagingDirectory=", stagingDirectory, ", installedDirectory=", installedDirectory);
     removeFailedInstallationFiles(stagingDirectory, installedDirectory, installedDirectoryWasCreated);
@@ -168,24 +178,24 @@ TemporaryPythonApplicationInstaller::installAndLoad(const messaging::Application
 
 void TemporaryPythonApplicationInstaller::removeInstalledApplication(
     const std::filesystem::path &applicationDirectory) noexcept {
-  const auto relativePath = applicationDirectory.lexically_relative(temporaryRootDirectory_);
+  const auto relativePath = applicationDirectory.lexically_relative(m_temporaryRootDirectory);
   if (!isSafeRelativePath(relativePath) || relativePath.has_parent_path()) {
-    IOT_LOG_WARNING(logger_, "Refused to remove application directory outside the temporary root; directory=",
-                    applicationDirectory, ", temporaryRoot=", temporaryRootDirectory_);
+    IOT_LOG_WARNING(m_logger, "Refused to remove application directory outside the temporary root; directory=",
+                    applicationDirectory, ", temporaryRoot=", m_temporaryRootDirectory);
     return;
   }
   std::error_code error;
   std::filesystem::remove_all(applicationDirectory, error);
   if (error) {
-    IOT_LOG_WARNING(logger_, "Could not remove temporary application directory ", applicationDirectory, ": ",
+    IOT_LOG_WARNING(m_logger, "Could not remove temporary application directory ", applicationDirectory, ": ",
                     error.message());
   } else {
-    IOT_LOG_DEBUG(logger_, "Removed temporary application directory ", applicationDirectory);
+    IOT_LOG_DEBUG(m_logger, "Removed temporary application directory ", applicationDirectory);
   }
 }
 
 std::filesystem::path defaultTemporaryApplicationRoot() {
-  // Use `/tmp` directly. Do not allow an environment variable to move received
+  // Use /tmp directly. Do not allow an environment variable to move received
   // apps into permanent storage.
   return std::filesystem::path{"/tmp"} / ("iot-app-" + std::to_string(static_cast<unsigned long>(::getuid()))) /
          "applications";

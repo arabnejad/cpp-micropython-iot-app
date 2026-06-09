@@ -19,8 +19,7 @@ iot_native_result_t iot_gamepad_refresh_input_state(void *gamepad_handle);
 iot_native_result_t iot_gamepad_is_connected(void *gamepad_handle, int *is_connected);
 iot_native_result_t iot_gamepad_read_state(void *gamepad_handle, iot_gamepad_state_t *state);
 iot_native_result_t iot_gamepad_joystick_direction(void *gamepad_handle, const char **direction);
-iot_native_result_t iot_gamepad_read_diagnostics(void *gamepad_handle,
-                                                  iot_gamepad_device_information_t *diagnostics);
+iot_native_result_t iot_gamepad_read_diagnostics(void *gamepad_handle, iot_gamepad_device_information_t *diagnostics);
 
 #ifdef __cplusplus
 }

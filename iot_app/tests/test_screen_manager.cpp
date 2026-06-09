@@ -18,10 +18,10 @@ bool waitForTextBox(tests::RecordingRenderBackend &recordingRenderBackend, Widge
 class FailingRenderBackend final : public IRenderBackend {
 public:
   explicit FailingRenderBackend(bool shouldFailDuringInitialization)
-      : shouldFailDuringInitialization_(shouldFailDuringInitialization) {}
+      : m_shouldFailDuringInitialization(shouldFailDuringInitialization) {}
 
   void initialize(const display::ActiveDisplay &) override {
-    if (shouldFailDuringInitialization_) {
+    if (m_shouldFailDuringInitialization) {
       throw std::runtime_error("renderer initialization failed");
     }
   }
@@ -40,7 +40,7 @@ public:
   }
 
 private:
-  bool shouldFailDuringInitialization_{false};
+  bool m_shouldFailDuringInitialization{false};
 };
 
 TEST(ScreenManagerTest, SendsTextBoxCreationAndUpdatesToTheRenderThread) {

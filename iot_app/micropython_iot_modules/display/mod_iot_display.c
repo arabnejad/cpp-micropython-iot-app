@@ -188,10 +188,10 @@ static mp_obj_t display_fill_area(size_t number_of_arguments, const mp_obj_t *po
                    allowed_arguments, arguments);
 
   const iot_optional_color_t color = color_or_default(arguments[ARG_color].u_obj, 0U, 0U, 0U, "color");
-  raise_native_error(iot_display_fill_area(
-      signed_32_bit_value(arguments[ARG_x].u_int), signed_32_bit_value(arguments[ARG_y].u_int),
-      signed_32_bit_value(arguments[ARG_width].u_int), signed_32_bit_value(arguments[ARG_height].u_int), color.red,
-      color.green, color.blue));
+  raise_native_error(
+      iot_display_fill_area(signed_32_bit_value(arguments[ARG_x].u_int), signed_32_bit_value(arguments[ARG_y].u_int),
+                            signed_32_bit_value(arguments[ARG_width].u_int),
+                            signed_32_bit_value(arguments[ARG_height].u_int), color.red, color.green, color.blue));
   return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_KW(display_fill_area_object, 0, display_fill_area);

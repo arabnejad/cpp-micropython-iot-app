@@ -29,19 +29,19 @@ iot::python::MicroPythonApplicationContext &context() {
   return *activeContext;
 }
 
-/**
- * Runs one C++ function and converts any exception into a result understood by
- * the MicroPython C binding.
+/*
+ * Runs a C++ operation without letting its exception cross into MicroPython's
+ * C code.
  *
- * `FunctionToRun` is the compiler-generated type of the lambda passed to this
- * function. For example:
+ * FunctionToRun is the compiler-generated type of the lambda passed here. For
+ * example:
  *
  *   return runSafely([=] {
  *     context().screenManager().clear({red, green, blue});
  *   });
  *
- * In this example, `functionToRun()` executes the code inside the lambda. The
- * template lets us accept that lambda directly without using `std::function`.
+ * functionToRun() executes the lambda body. Using a template avoids wrapping
+ * every bridge call in std::function.
  */
 template <typename FunctionToRun> iot_native_result_t runSafely(FunctionToRun functionToRun) noexcept {
   try {

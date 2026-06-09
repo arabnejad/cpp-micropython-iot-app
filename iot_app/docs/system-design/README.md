@@ -16,8 +16,8 @@ If a Python application fails, IoT App stops its interpreter and shows the
 traceback on the native emergency screen. The shipped default app runs again
 only after the C++ process restarts.
 
-This document explains how the complete system fits together. Use the focused
-guides for day-to-day tasks:
+This document follows the full runtime from startup to drawing and application
+deployment. The shorter guides are better for day-to-day tasks:
 
 - [IoT App README](../../README.md) for building, running, and configuring the
   runtime.
@@ -82,7 +82,7 @@ Ubuntu computer
 │       │                                                           │
 │       v                                                           │
 │  Stop the current app, run the new app, and handle its timers     │
-│  (PythonApplicationManager and PythonApplicationRunner)           │
+│  (PythonApplicationManager)                                       │
 │       │                                                           │
 │       │ Python drawing requests                                   │
 │       v                                                           │
@@ -101,10 +101,10 @@ The deployment result travels back separately:
 Raspberry Pi -- success or failure --> MQTT broker --> Ubuntu sender
 ```
 
-The main thread is the control thread. It starts and stops Python, validates
-deployments, and runs scheduled Python callbacks. The MQTT thread never starts
-an application. The render thread never runs Python. This split keeps ownership
-clear and avoids calling thread-sensitive libraries from the wrong place.
+The main thread controls the process. It starts and stops Python, validates
+deployments, and runs scheduled callbacks. The MQTT thread never starts an
+application, and the render thread never runs Python. Each thread therefore
+uses only the library and state it owns.
 
 ## 4. Main design choices
 
@@ -115,8 +115,8 @@ threads, LVGL, MicroPython, MQTT, display discovery, and application failures.
 Python decides what appears on the screen and how often application-level work
 runs.
 
-This lets a Python application stay small without making the device runtime
-depend on a system Python installation.
+Python applications can stay small, and the device does not need a separate
+Python installation.
 
 ### 4.2 One C++ process, one Python interpreter at a time
 
@@ -235,11 +235,9 @@ main()
 ├── PythonApplicationLoader
 ├── ScreenManager
 │   └── IRenderBackend (LVGL framebuffer implementation)
-├── PythonApplicationRunner
+├── PythonApplicationManager
 │   ├── MicroPythonApplicationContext    created per Python app
 │   └── MicroPythonRuntime               created per Python app
-├── PythonApplicationManager
-│   └── owns application state and failure handling
 ├── ApplicationMessageQueue
 ├── MqttApplicationReceiver
 ├── TemporaryPythonApplicationInstaller
@@ -274,7 +272,7 @@ when the active application changes.
 
 ### 7.1 Main thread
 
-The main thread does the following work:
+The main thread handles:
 
 - Loads configuration and the default application.
 - Discovers and selects the active display.
@@ -331,9 +329,9 @@ operations stay on the main thread.
 The two queues have fixed size limits. This prevents incoming applications or
 drawing requests from using memory without a limit.
 
-Each queue also has a condition variable. The condition variable does not hold
-the message or drawing command. It simply wakes the receiving thread when new
-work has been added to its queue.
+Each queue has a condition variable that wakes its receiving thread. The queue
+holds the message or drawing command; the condition variable only provides the
+wake-up signal.
 
 No thread calls MicroPython from a callback owned by another thread.
 
@@ -348,7 +346,7 @@ Normal startup follows this order:
 4. Read that display again and capture its active DRM mode
 5. Find and load the shipped default application
 6. Start ScreenManager and open /dev/fb0 on the render thread
-7. Create the Python runner and application manager
+7. Create the Python application manager
 8. Create a fresh MicroPython interpreter
 9. Run the default application's main.py
 10. Start the MQTT receiver
@@ -579,8 +577,8 @@ package.
 
 ### 12.1 Application loader
 
-`PythonApplicationLoader` applies the same rules to the shipped app and a
-received app:
+PythonApplicationLoader reads an application that already exists on disk.
+IoT App uses it for the shipped default application:
 
 1. Resolve the application directory to a canonical path.
 2. Read `app.json` with a 64 KiB limit.
@@ -591,8 +589,14 @@ received app:
 7. Reject empty source and null bytes.
 8. Return a `PythonApplication` containing its own source-code copy.
 
-The runner does not depend on the source file staying open. It compiles the
+The manager does not depend on the source file staying open. It compiles the
 owned source string from memory.
+
+Applications received through MQTT have already passed the deployment message
+parser before they reach the installer. TemporaryPythonApplicationInstaller
+writes that checked metadata and source into a staging directory, renames it
+to its final directory, and returns a PythonApplication using the same
+checked values. It does not reopen and parse the files that it just wrote.
 
 ### 12.2 Default application location
 
@@ -668,23 +672,19 @@ application's lifetime:
 | `ApplicationMetadata` | Holds the `id`, `name`, and `entry_point` values read from `app.json`. |
 | `PythonApplication` | Holds a completely loaded application, including its metadata, paths, and Python source code. This is the object passed through the rest of the runtime. |
 | `PythonApplicationLoader` | Reads `app.json` and the entry-point file from an application directory, checks them, and returns a `PythonApplication`. |
-| `TemporaryPythonApplicationInstaller` | Writes an application received through MQTT under `/tmp`, then uses `PythonApplicationLoader` to load it. The shipped default application does not use this installer. |
-| `PythonApplicationManager` | Decides when an application starts or stops. It also records Python failures, tracks the current application state, and shows the C++ emergency screen. |
-| `PythonApplicationRunner` | Starts and stops one Python session for the manager. It creates the context and interpreter described below. |
+| TemporaryPythonApplicationInstaller | Writes an application that passed MQTT validation under /tmp and returns it with its final paths. The shipped default application does not use this installer. |
+| PythonApplicationManager | Owns one Python application session. It creates and destroys the context and interpreter, advances timers, tracks application state, and shows the C++ emergency screen after a failure. |
 | `MicroPythonApplicationContext` | Gives the display and system bridge functions access to the C++ services used by the current Python application. |
 | `MicroPythonRuntime` | Allocates the Python heap, starts MicroPython, executes `main.py`, runs scheduled callbacks, and shuts the interpreter down. |
-| `PythonApplicationFailure` | Stores the application name, failure phase, time, and traceback used by the emergency screen. |
 
 The same headers also define a few small values passed between these classes:
 
 - `ApplicationState` says whether the default app, an external app, the
   emergency screen, or nothing is active.
 - `PythonExecutionResult` carries success or a Python traceback from the
-  runtime to the runner.
+  runtime to the manager.
 - `ExternalApplicationActivationResult` tells the deployment controller
   whether an external app started.
-- `ScheduledApplicationUpdateResult` tells the main loop whether a scheduled
-  callback failed.
 
 The shipped default application follows this path when `iot_app` starts:
 
@@ -700,9 +700,6 @@ PythonApplication
   v
 PythonApplicationManager
   |
-  v
-PythonApplicationRunner
-  |
   ├── creates MicroPythonApplicationContext
   └── creates MicroPythonRuntime -> executes main.py
 ```
@@ -714,31 +711,26 @@ ApplicationDeploymentController
   |
   v
 TemporaryPythonApplicationInstaller
-  |  writes the application under /tmp
-  v
-PythonApplicationLoader
+  |  writes the checked application under /tmp
   |
   v
 PythonApplication
   |
   v
-PythonApplicationManager -> PythonApplicationRunner
+PythonApplicationManager
 ```
 
-After loading, both application types use the same manager, runner, context,
-and MicroPython runtime.
+After this point, both application types use the same manager, context, and
+MicroPython runtime.
 
 While an application is running, the main loop asks the manager when the next
-Python callback is due. The request passes through the runner to the runtime:
+Python callback is due. The manager asks the runtime directly:
 
 ```text
 main loop
   |
   v
 PythonApplicationManager
-  |
-  v
-PythonApplicationRunner
   |
   v
 MicroPythonRuntime -> MicroPython scheduler
@@ -767,8 +759,8 @@ MicroPythonApplicationContext
 The input bridge does not use this context. Each Python gamepad object has its
 own C++ gamepad handle, so its bridge functions can use that handle directly.
 
-When an application stops, fails, or is replaced, the manager asks the runner
-to stop it. The runner destroys the interpreter before the context:
+When an application stops, fails, or is replaced, the manager destroys the
+interpreter before the context:
 
 ```text
 1. Destroy MicroPythonRuntime
@@ -782,10 +774,11 @@ This order keeps the context available while MicroPython is shutting down.
 `ScreenManager` is not destroyed during an application switch because the next
 application or the emergency screen uses the same display service.
 
-If Python startup or a scheduled callback fails, the failure result and
-traceback reach `PythonApplicationManager`. The manager makes sure the runner
-has stopped the interpreter, saves a `PythonApplicationFailure`, and uses the
-still-running `ScreenManager` to show the emergency screen.
+If Python startup or a scheduled callback fails, MicroPythonRuntime returns
+the traceback to PythonApplicationManager. The manager stops the interpreter,
+builds the error text, and sends it to the still-running ScreenManager. The
+failure details are no longer needed after the screen command has copied the
+completed text.
 
 ### 13.2 Starting an interpreter
 
@@ -793,15 +786,15 @@ Each Python application gets a new MicroPython interpreter. This prevents
 variables, timers, and other Python state from the previous application from
 being reused accidentally.
 
-`PythonApplicationRunner` creates two objects:
+PythonApplicationManager creates two objects for each application:
 
 - `MicroPythonApplicationContext` connects Python modules to the C++ services
   and device information they need.
 - `MicroPythonRuntime` owns the interpreter and its fixed-size memory area.
 
-The context starts first and stops last. This keeps the C++ services available
-for the entire time that Python is running. Only the main thread runs the
-interpreter.
+The manager creates the context before the interpreter and destroys it after
+the interpreter. The C++ services are therefore still available while
+MicroPython shuts down. Only the main thread runs the interpreter.
 
 ### 13.3 Running the Python entry point
 
@@ -815,9 +808,9 @@ Python source -> compile -> run
                             +--> error: save the traceback and show the emergency screen
 ```
 
-A small C helper performs the compile and run steps. MicroPython reports some
-errors using a C mechanism, so the helper catches those errors before control
-returns to C++. This keeps the surrounding C++ code safe.
+A small C helper compiles and runs the source. MicroPython reports some errors
+with a non-local jump, so the helper catches them before returning to C++. That
+prevents the jump from skipping live C++ objects and their destructors.
 
 The runtime keeps up to 8 KiB of traceback text. It uses that text for logs and
 the error screen. If the entry point finishes without an error, the interpreter
@@ -954,10 +947,9 @@ callback errors are caught in C before control returns to C++. This prevents
 MicroPython's non-local exception jump from skipping live C++ objects and their
 destructors.
 
-The bridge headers use only C-compatible values, pointers, and structures.
-This keeps the MicroPython-specific argument handling in small C files while
-the hardware, display, and application logic remains in the normal C++
-classes.
+The bridge headers contain only C-compatible values, pointers, and structures.
+MicroPython argument handling stays in the small C files, while the hardware,
+display, and application logic remains in the C++ classes.
 
 ### 13.6 Enabled MicroPython features
 
@@ -1144,9 +1136,9 @@ process restarts.
 
 ### 16.4 Why the error screen is native
 
-Keeping the emergency screen in C++ means a changed or broken default application cannot
-remove the only way to show a traceback. Before drawing this screen, C++
-removes the application's widgets so they cannot cover the error message.
+The emergency screen belongs to C++, so a broken Python application cannot
+remove the only available traceback display. C++ clears the application's
+widgets before drawing the error.
 
 ## 17. MQTT deployment subsystem
 
@@ -1217,16 +1209,14 @@ The sender subscribes to this status topic before publishing the application.
 It can therefore receive progress and the final result for that specific
 transfer.
 
-Both sides calculate this topic from `device_id` and `transfer_id`. The topic
-is not included in the JSON message or sent as an MQTT Response Topic property.
-This gives the protocol one clear rule for choosing where status messages go.
+Both sides calculate this topic from `device_id` and `transfer_id`. It is not
+included in the JSON message or sent as an MQTT Response Topic property. There
+is only one rule for finding the status topic.
 
 Both directions use MQTT QoS 1. This asks the broker to deliver each message at
 least once, although a message may occasionally be delivered more than once.
-
-Each MQTT 5 status message also carries the transfer ID as correlation data.
-Correlation data is a small metadata field that identifies which application
-request the status belongs to.
+The transfer ID in the status topic and JSON payload is enough to match a reply
+to its request, so the protocol does not add a second correlation property.
 
 ### 17.3 Deployment message
 
@@ -1259,9 +1249,9 @@ the JSON, install the application, and start MicroPython.
 normal implementation forwards those calls to libmosquitto. Tests use an
 in-memory implementation, so they do not need a running broker.
 
-The queue keeps the two threads separate. The MQTT callback can arrive at any
-time, but it never calls MicroPython itself. All MicroPython work stays on the
-main thread that owns the interpreter.
+The MQTT callback can arrive at any time. It puts the message in the queue and
+returns without calling MicroPython. The main thread later removes the message
+and does the MicroPython work on the thread that owns the interpreter.
 
 ### 17.5 Validation
 
@@ -1294,7 +1284,8 @@ The installation steps are:
 1. Create a private staging directory with user-only permissions.
 2. Write a generated `app.json` and the entry-point source as private files.
 3. Rename staging to the transfer directory.
-4. Load it with the normal `PythonApplicationLoader`.
+4. Return a `PythonApplication` built from the validated metadata, source, and
+   final paths.
 5. Remove staging if any step fails.
 
 Renaming keeps the final directory from appearing half-written. The installer
@@ -1414,9 +1405,9 @@ The sender result depends on when the Python exception happens:
 | While running the entry point during startup | `failed: Python raised an exception while starting the external application` | The native emergency screen shows the startup traceback. No Python app remains running. |
 | Later, inside a scheduled callback | The sender has already received `started: External application started successfully` | IoT App stops Python and the native emergency screen shows the callback traceback. |
 
-A scheduled callback runs only after the entry point has finished successfully.
-For that reason, `started` confirms that application startup completed; it does
-not guarantee that a future callback will succeed.
+A scheduled callback cannot run until the entry point has finished. The
+`started` status confirms successful startup, but it cannot predict whether a
+later callback will fail.
 
 The current protocol does not publish a second MQTT status when a later
 callback fails. The sender may therefore finish successfully before the
@@ -1604,9 +1595,11 @@ architecture and build an aarch64 Linux image with the required display and
 runtime support.
 
 Both service types run the same readiness check before starting IoT App. It
-waits for any non-loopback IPv4 address and the local Mosquitto process for up
-to 30 seconds. IoT App still starts after the timeout, so the offline dashboard
-can appear and MQTT can reconnect later. The systemd service also waits for
+waits up to 30 seconds for Ethernet or Wi-Fi to receive an IPv4 address and for
+the local Mosquitto process to start. The local-only `lo` interface does not
+count as a network connection. IoT App still starts after the timeout, so the
+offline dashboard can appear and MQTT can reconnect later. The systemd service
+also waits for
 `/dev/fb0` and restarts after failure. The SysV script uses
 `start-stop-daemon` with the same runtime account.
 
@@ -1653,6 +1646,7 @@ These rules keep the current design predictable:
 5. The screen manager outlives every Python application.
 6. A new app starts with a clean interpreter and cleared screen.
 7. Received source stays in `/tmp` and the shipped default stays persistent.
-8. Both shipped and received apps pass through the same application loader.
+8. Shipped apps are loaded from disk; received apps use the metadata and source
+   already checked by the deployment parser.
 9. The active Linux display mode is read, never changed.
 10. Failure display does not depend on Python drawing code.

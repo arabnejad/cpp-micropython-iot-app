@@ -18,7 +18,7 @@ constexpr std::size_t   maximumQueuedApplicationMessages = 4U;
 constexpr std::size_t   maximumRememberedDeployments     = 64U;
 constexpr std::size_t   maximumPendingRenderCommands     = 256U;
 
-/** Settings the application needs before it can start. */
+/* Values used to find the default application and connect to MQTT. */
 struct RuntimeConfig {
   bool                  showHelp{false};
   std::filesystem::path defaultApplicationDirectory;
@@ -30,10 +30,14 @@ struct RuntimeConfig {
   std::string   mqttPassword;
 };
 
-/** Reads startup settings from the command line and environment variables. */
+/*
+ * Checks whether --help was requested, finds the installed default Python
+ * application, and reads the device ID and MQTT connection values from the
+ * environment. The collected values are returned in a RuntimeConfig object.
+ */
 RuntimeConfig loadRuntimeConfig(int argc, char **argv);
 
-/** Builds the short help text shown by `--help`. */
+/* Builds the short help text shown by --help. */
 std::string runtimeUsage(const char *programPath);
 
 } // namespace runtime

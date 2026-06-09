@@ -1,7 +1,5 @@
-/**
- * @file lvgl_framebuffer_render_backend.cpp
- *
- * Draws through Linux `/dev/fb0`. Linux chooses the monitor mode before this
+/*
+ * Draws through Linux /dev/fb0. Linux chooses the monitor mode before this
  * app starts, and LVGL uses the framebuffer at that same size. This app does
  * not change the monitor resolution.
  *
@@ -14,7 +12,7 @@
  *   https://github.com/lvgl/lv_port_linux/blob/738f6b217340f7472960dcbebb68ca632619c376/src/lib/display_backends/fbdev.c#L84-L95
  * - Official LVGL 9.5 Linux framebuffer documentation:
  *   https://github.com/lvgl/lvgl/blob/v9.5.0/docs/src/integration/embedded_linux/drivers/fbdev.rst#L17-L42
- * - Raspberry Pi 4 example using `/dev/fb0` with the same API:
+ * - Raspberry Pi 4 example using /dev/fb0 with the same API:
  *   https://forum.lvgl.io/t/i-faced-undefined-reference-to-lv-linux-fbdev-create-error/15131/2
  */
 
@@ -35,10 +33,10 @@ namespace iot {
 namespace ui {
 namespace {
 
-/**
+/*
  * Linux exposes the console framebuffer through this device.
  *
- * Opening `/dev/fb0` uses the mode Linux already selected. It does not change
+ * Opening /dev/fb0 uses the mode Linux already selected. It does not change
  * the monitor mode like a direct DRM renderer could.
  */
 constexpr const char *framebufferDevicePath = "/dev/fb0";
@@ -66,18 +64,18 @@ void validateBounds(const Rect &bounds) {
   }
 }
 
-/** Keeps the outer box and its text label together. */
+/* Keeps the outer box and its text label together. */
 struct TextBoxWidgets {
   lv_obj_t *box{nullptr};
   lv_obj_t *label{nullptr};
 };
 
-/** Draws LVGL widgets into the framebuffer already set up by Linux. */
+/* Draws LVGL widgets into the framebuffer already set up by Linux. */
 class LvglFramebufferRenderBackend final : public IRenderBackend {
 public:
   explicit LvglFramebufferRenderBackend(std::unique_ptr<ILvglFramebufferDriver> framebufferDriver)
-      : framebufferDriver_(std::move(framebufferDriver)) {
-    if (!framebufferDriver_) {
+      : m_framebufferDriver(std::move(framebufferDriver)) {
+    if (!m_framebufferDriver) {
       throw std::invalid_argument("LVGL render backend requires a framebuffer driver");
     }
   }
@@ -93,27 +91,27 @@ public:
   LvglFramebufferRenderBackend &operator=(LvglFramebufferRenderBackend &&)      = delete;
 
   void initialize(const display::ActiveDisplay &activeDisplay) override {
-    if (isInitialized_) {
+    if (m_isInitialized) {
       throw std::logic_error("LVGL render backend is already initialized");
     }
 
     lv_init();
-    isInitialized_ = true;
-    lvglDisplay_   = framebufferDriver_->createDisplay();
-    if (lvglDisplay_ == nullptr) {
+    m_isInitialized = true;
+    m_lvglDisplay   = m_framebufferDriver->createDisplay();
+    if (m_lvglDisplay == nullptr) {
       shutdown();
       throw std::runtime_error("LVGL could not create a Linux framebuffer display");
     }
 
-    if (!framebufferDriver_->openFramebuffer(lvglDisplay_, framebufferDevicePath)) {
+    if (!m_framebufferDriver->openFramebuffer(m_lvglDisplay, framebufferDevicePath)) {
       shutdown();
       throw std::runtime_error(std::string{"LVGL could not open "} + framebufferDevicePath +
                                ". Check that the device exists and that this user has permission to write to it.");
     }
-    lv_display_set_default(lvglDisplay_);
+    lv_display_set_default(m_lvglDisplay);
 
-    const auto framebufferWidth  = static_cast<std::uint32_t>(lv_display_get_horizontal_resolution(lvglDisplay_));
-    const auto framebufferHeight = static_cast<std::uint32_t>(lv_display_get_vertical_resolution(lvglDisplay_));
+    const auto framebufferWidth  = static_cast<std::uint32_t>(lv_display_get_horizontal_resolution(m_lvglDisplay));
+    const auto framebufferHeight = static_cast<std::uint32_t>(lv_display_get_vertical_resolution(m_lvglDisplay));
     if (framebufferWidth != activeDisplay.mode().width || framebufferHeight != activeDisplay.mode().height) {
       const std::string framebufferSize = std::to_string(framebufferWidth) + "x" + std::to_string(framebufferHeight);
       const std::string activeDrmModeSize =
@@ -130,15 +128,15 @@ public:
   }
 
   void shutdown() noexcept override {
-    textBoxes_.clear();
-    errorScreenLayer_ = nullptr;
-    if (lvglDisplay_ != nullptr) {
-      lv_display_delete(lvglDisplay_);
-      lvglDisplay_ = nullptr;
+    m_textBoxes.clear();
+    m_errorScreenLayer = nullptr;
+    if (m_lvglDisplay != nullptr) {
+      lv_display_delete(m_lvglDisplay);
+      m_lvglDisplay = nullptr;
     }
-    if (isInitialized_) {
+    if (m_isInitialized) {
       lv_deinit();
-      isInitialized_ = false;
+      m_isInitialized = false;
     }
   }
 
@@ -150,13 +148,13 @@ public:
     lv_obj_set_style_text_align(textBoxWidgets.label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_obj_center(textBoxWidgets.label);
 
-    textBoxes_[textBoxId] = textBoxWidgets;
+    m_textBoxes[textBoxId] = textBoxWidgets;
   }
 
   void updateTextBox(WidgetId textBoxId, const std::string &updatedText) override {
     throwIfNotInitialized();
-    const auto textBox = textBoxes_.find(textBoxId);
-    if (textBox == textBoxes_.end()) {
+    const auto textBox = m_textBoxes.find(textBoxId);
+    if (textBox == m_textBoxes.end()) {
       throw std::invalid_argument("The requested text-box widget does not exist");
     }
     lv_label_set_text(textBox->second.label, updatedText.c_str());
@@ -164,8 +162,8 @@ public:
 
   void moveTextBox(WidgetId textBoxId, std::int32_t x, std::int32_t y) override {
     throwIfNotInitialized();
-    const auto textBox = textBoxes_.find(textBoxId);
-    if (textBox == textBoxes_.end()) {
+    const auto textBox = m_textBoxes.find(textBoxId);
+    if (textBox == m_textBoxes.end()) {
       throw std::invalid_argument("The requested text-box widget does not exist");
     }
     lv_obj_set_pos(textBox->second.box, x, y);
@@ -173,15 +171,15 @@ public:
 
   void deleteTextBox(WidgetId textBoxId) override {
     throwIfNotInitialized();
-    const auto textBox = textBoxes_.find(textBoxId);
-    if (textBox == textBoxes_.end()) {
+    const auto textBox = m_textBoxes.find(textBoxId);
+    if (textBox == m_textBoxes.end()) {
       throw std::invalid_argument("The requested text-box widget does not exist");
     }
 
     // Deleting the outer box also deletes the label that LVGL created inside
     // it. Remove both stored pointers because neither object exists now.
     lv_obj_delete(textBox->second.box);
-    textBoxes_.erase(textBox);
+    m_textBoxes.erase(textBox);
   }
 
   void fillArea(const FilledAreaSpec &filledAreaSpec) override {
@@ -204,26 +202,26 @@ public:
 
     // The top layer belongs to the runtime, so application widgets cannot
     // cover the error screen.
-    errorScreenLayer_ = lv_obj_create(lv_layer_top());
-    lv_obj_set_pos(errorScreenLayer_, 0, 0);
-    lv_obj_set_size(errorScreenLayer_, LV_PCT(100), LV_PCT(100));
-    lv_obj_remove_flag(errorScreenLayer_, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_style_bg_color(errorScreenLayer_, toLvglColor(errorBoxSpec.backgroundColor), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(errorScreenLayer_, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_border_width(errorScreenLayer_, 0, LV_PART_MAIN);
-    lv_obj_set_style_radius(errorScreenLayer_, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_all(errorScreenLayer_, 0, LV_PART_MAIN);
+    m_errorScreenLayer = lv_obj_create(lv_layer_top());
+    lv_obj_set_pos(m_errorScreenLayer, 0, 0);
+    lv_obj_set_size(m_errorScreenLayer, LV_PCT(100), LV_PCT(100));
+    lv_obj_remove_flag(m_errorScreenLayer, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_bg_color(m_errorScreenLayer, toLvglColor(errorBoxSpec.backgroundColor), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(m_errorScreenLayer, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_border_width(m_errorScreenLayer, 0, LV_PART_MAIN);
+    lv_obj_set_style_radius(m_errorScreenLayer, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(m_errorScreenLayer, 0, LV_PART_MAIN);
 
-    const TextBoxWidgets errorTextBoxWidgets = createTextBoxWidgets(errorScreenLayer_, errorBoxSpec);
+    const TextBoxWidgets errorTextBoxWidgets = createTextBoxWidgets(m_errorScreenLayer, errorBoxSpec);
     lv_obj_align(errorTextBoxWidgets.label, LV_ALIGN_TOP_LEFT, 0, 0);
   }
 
   void clear(Color screenBackgroundColor) override {
     throwIfNotInitialized();
-    textBoxes_.clear();
-    if (errorScreenLayer_ != nullptr) {
-      lv_obj_delete(errorScreenLayer_);
-      errorScreenLayer_ = nullptr;
+    m_textBoxes.clear();
+    if (m_errorScreenLayer != nullptr) {
+      lv_obj_delete(m_errorScreenLayer);
+      m_errorScreenLayer = nullptr;
     }
     lv_obj_t *activeScreen = lv_screen_active();
     lv_obj_clean(activeScreen);
@@ -262,16 +260,16 @@ private:
   }
 
   void throwIfNotInitialized() const {
-    if (!isInitialized_ || lvglDisplay_ == nullptr) {
+    if (!m_isInitialized || m_lvglDisplay == nullptr) {
       throw std::logic_error("LVGL render backend is not initialized");
     }
   }
 
-  bool                                         isInitialized_{false};
-  std::unique_ptr<ILvglFramebufferDriver>      framebufferDriver_;
-  lv_display_t                                *lvglDisplay_{nullptr};
-  lv_obj_t                                    *errorScreenLayer_{nullptr};
-  std::unordered_map<WidgetId, TextBoxWidgets> textBoxes_;
+  bool                                         m_isInitialized{false};
+  std::unique_ptr<ILvglFramebufferDriver>      m_framebufferDriver;
+  lv_display_t                                *m_lvglDisplay{nullptr};
+  lv_obj_t                                    *m_errorScreenLayer{nullptr};
+  std::unordered_map<WidgetId, TextBoxWidgets> m_textBoxes;
 };
 
 } // namespace

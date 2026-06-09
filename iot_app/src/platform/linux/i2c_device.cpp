@@ -19,10 +19,8 @@
 #include <thread>
 #include <vector>
 
-/**
- * @file i2c_device.cpp
- *
- * Implements the I2C operations in `I2cDevice` using Linux `/dev/i2c-N` files.
+/*
+ * Implements I2cDevice through the Linux /dev/i2c-N interface.
  * No libi2c dependency is needed.
  */
 
@@ -33,14 +31,14 @@ namespace {
 constexpr int kLowestNormalAddress  = 0x03;
 constexpr int kHighestNormalAddress = 0x77;
 
-/** Formats an I2C address like `0x50`. */
+/* Formats an I2C address such as 0x50. */
 std::string formatAddress(std::uint8_t i2cAddress) {
   std::ostringstream output;
   output << "0x" << std::hex << std::nouppercase << std::setw(2) << std::setfill('0') << static_cast<int>(i2cAddress);
   return output.str();
 }
 
-/** Checks that Linux can represent the requested transfer size. */
+/* Checks that Linux can represent the requested transfer size. */
 void validateTransferSize(std::size_t size, const std::string &operation) {
   if (size == 0U) {
     throw std::invalid_argument(operation + " requires at least one byte");
@@ -73,19 +71,19 @@ public:
   }
 };
 
-} // namespace
-
-ILinuxI2cSystemCalls &linuxI2cSystemCalls() {
+ILinuxI2cSystemCalls &defaultLinuxI2cSystemCalls() {
   static LinuxI2cSystemCalls systemCalls;
   return systemCalls;
 }
 
+} // namespace
+
 I2cDevice::I2cDevice(int i2cBusNumber, std::uint8_t i2cAddress)
-    : I2cDevice(i2cBusNumber, i2cAddress, linuxI2cSystemCalls()) {}
+    : I2cDevice(i2cBusNumber, i2cAddress, defaultLinuxI2cSystemCalls()) {}
 
 I2cDevice::I2cDevice(int i2cBusNumber, std::uint8_t i2cAddress, ILinuxI2cSystemCalls &linuxSystemCalls)
-    : i2cDevicePath_("/dev/i2c-" + std::to_string(i2cBusNumber)), i2cBusNumber_(i2cBusNumber), i2cAddress_(i2cAddress),
-      linuxSystemCalls_(&linuxSystemCalls) {
+    : m_i2cDevicePath("/dev/i2c-" + std::to_string(i2cBusNumber)), m_i2cBusNumber(i2cBusNumber),
+      m_i2cAddress(i2cAddress), m_linuxSystemCalls(&linuxSystemCalls) {
   if (i2cBusNumber < 0 || i2cBusNumber > 255) {
     throw std::invalid_argument("I2C bus number must be between 0 and 255");
   }
@@ -93,44 +91,44 @@ I2cDevice::I2cDevice(int i2cBusNumber, std::uint8_t i2cAddress, ILinuxI2cSystemC
     throw std::invalid_argument("I2C address must be between 0x03 and 0x77");
   }
 
-  fileDescriptor_ = linuxSystemCalls_->openDevice(i2cDevicePath_.c_str(), O_RDWR | O_CLOEXEC);
-  if (fileDescriptor_ < 0) {
+  m_fileDescriptor = m_linuxSystemCalls->openDevice(m_i2cDevicePath.c_str(), O_RDWR | O_CLOEXEC);
+  if (m_fileDescriptor < 0) {
     const int savedError = errno;
-    throw std::runtime_error("Could not open " + i2cDevicePath_ + ": " + std::strerror(savedError));
+    throw std::runtime_error("Could not open " + m_i2cDevicePath + ": " + std::strerror(savedError));
   }
 
-  if (linuxSystemCalls_->deviceControl(fileDescriptor_, I2C_FUNCS,
-                                       reinterpret_cast<unsigned long>(&adapterFunctions_)) < 0) {
+  if (m_linuxSystemCalls->deviceControl(m_fileDescriptor, I2C_FUNCS,
+                                        reinterpret_cast<unsigned long>(&m_adapterFunctions)) < 0) {
     const int savedError = errno;
-    linuxSystemCalls_->closeDevice(fileDescriptor_);
-    fileDescriptor_ = -1;
-    throw std::runtime_error("Could not read capabilities from " + i2cDevicePath_ + ": " + std::strerror(savedError));
+    m_linuxSystemCalls->closeDevice(m_fileDescriptor);
+    m_fileDescriptor = -1;
+    throw std::runtime_error("Could not read capabilities from " + m_i2cDevicePath + ": " + std::strerror(savedError));
   }
 
   // Setting the address only configures this file descriptor. The first real
   // register read is what proves that the device is present.
-  if (linuxSystemCalls_->deviceControl(fileDescriptor_, I2C_SLAVE, static_cast<unsigned long>(i2cAddress_)) < 0) {
+  if (m_linuxSystemCalls->deviceControl(m_fileDescriptor, I2C_SLAVE, static_cast<unsigned long>(m_i2cAddress)) < 0) {
     const int savedError = errno;
-    linuxSystemCalls_->closeDevice(fileDescriptor_);
-    fileDescriptor_ = -1;
-    throw std::runtime_error("Could not select I2C address " + formatAddress(i2cAddress_) + " on " + i2cDevicePath_ +
+    m_linuxSystemCalls->closeDevice(m_fileDescriptor);
+    m_fileDescriptor = -1;
+    throw std::runtime_error("Could not select I2C address " + formatAddress(m_i2cAddress) + " on " + m_i2cDevicePath +
                              ": " + std::strerror(savedError));
   }
 }
 
 I2cDevice::~I2cDevice() {
-  if (fileDescriptor_ >= 0) {
-    linuxSystemCalls_->closeDevice(fileDescriptor_);
+  if (m_fileDescriptor >= 0) {
+    m_linuxSystemCalls->closeDevice(m_fileDescriptor);
   }
 }
 
 void I2cDevice::write(const std::vector<std::uint8_t> &bytesToWrite) {
-  std::lock_guard<std::mutex> lock(transactionMutex_);
+  std::lock_guard<std::mutex> lock(m_transactionMutex);
   writeUnlocked(bytesToWrite);
 }
 
 std::vector<std::uint8_t> I2cDevice::read(std::size_t numberOfBytesToRead) {
-  std::lock_guard<std::mutex> lock(transactionMutex_);
+  std::lock_guard<std::mutex> lock(m_transactionMutex);
   return readUnlocked(numberOfBytesToRead);
 }
 
@@ -139,9 +137,9 @@ std::vector<std::uint8_t> I2cDevice::writeRead(const std::vector<std::uint8_t> &
   validateTransferSize(bytesToWrite.size(), "I2C write");
   validateTransferSize(numberOfBytesToRead, "I2C read");
 
-  std::lock_guard<std::mutex> lock(transactionMutex_);
-  if ((adapterFunctions_ & I2C_FUNC_I2C) == 0UL) {
-    throw std::runtime_error(i2cDevicePath_ + " does not support combined I2C transactions");
+  std::lock_guard<std::mutex> lock(m_transactionMutex);
+  if ((m_adapterFunctions & I2C_FUNC_I2C) == 0UL) {
+    throw std::runtime_error(m_i2cDevicePath + " does not support combined I2C transactions");
   }
 
   // Linux's API accepts a writable pointer even though it does not change the
@@ -150,11 +148,11 @@ std::vector<std::uint8_t> I2cDevice::writeRead(const std::vector<std::uint8_t> &
   std::vector<std::uint8_t> readBuffer(numberOfBytesToRead);
 
   i2c_msg messages[2]{};
-  messages[0].addr  = i2cAddress_;
+  messages[0].addr  = m_i2cAddress;
   messages[0].flags = 0;
   messages[0].len   = static_cast<std::uint16_t>(writeBuffer.size());
   messages[0].buf   = writeBuffer.data();
-  messages[1].addr  = i2cAddress_;
+  messages[1].addr  = m_i2cAddress;
   messages[1].flags = I2C_M_RD;
   messages[1].len   = static_cast<std::uint16_t>(readBuffer.size());
   messages[1].buf   = readBuffer.data();
@@ -165,13 +163,14 @@ std::vector<std::uint8_t> I2cDevice::writeRead(const std::vector<std::uint8_t> &
 
   int result = -1;
   do {
-    result = linuxSystemCalls_->deviceControl(fileDescriptor_, I2C_RDWR, reinterpret_cast<unsigned long>(&transaction));
+    result =
+        m_linuxSystemCalls->deviceControl(m_fileDescriptor, I2C_RDWR, reinterpret_cast<unsigned long>(&transaction));
   } while (result < 0 && errno == EINTR);
 
   if (result != 2) {
     const int savedError = errno;
-    throw std::runtime_error("Combined I2C transaction failed for " + formatAddress(i2cAddress_) + " on " +
-                             i2cDevicePath_ + ": " + std::strerror(savedError));
+    throw std::runtime_error("Combined I2C transaction failed for " + formatAddress(m_i2cAddress) + " on " +
+                             m_i2cDevicePath + ": " + std::strerror(savedError));
   }
   return readBuffer;
 }
@@ -183,7 +182,7 @@ std::vector<std::uint8_t> I2cDevice::writeThenRead(const std::vector<std::uint8_
     throw std::invalid_argument("I2C read delay cannot be negative");
   }
 
-  std::lock_guard<std::mutex> lock(transactionMutex_);
+  std::lock_guard<std::mutex> lock(m_transactionMutex);
   writeUnlocked(bytesToWrite);
   if (delayBeforeRead.count() > 0) {
     std::this_thread::sleep_for(delayBeforeRead);
@@ -192,15 +191,15 @@ std::vector<std::uint8_t> I2cDevice::writeThenRead(const std::vector<std::uint8_
 }
 
 int I2cDevice::busNumber() const noexcept {
-  return i2cBusNumber_;
+  return m_i2cBusNumber;
 }
 
 std::uint8_t I2cDevice::address() const noexcept {
-  return i2cAddress_;
+  return m_i2cAddress;
 }
 
 const std::string &I2cDevice::devicePath() const noexcept {
-  return i2cDevicePath_;
+  return m_i2cDevicePath;
 }
 
 void I2cDevice::writeUnlocked(const std::vector<std::uint8_t> &bytesToWrite) {
@@ -208,16 +207,16 @@ void I2cDevice::writeUnlocked(const std::vector<std::uint8_t> &bytesToWrite) {
 
   ssize_t bytesWritten = -1;
   do {
-    bytesWritten = linuxSystemCalls_->writeBytes(fileDescriptor_, bytesToWrite.data(), bytesToWrite.size());
+    bytesWritten = m_linuxSystemCalls->writeBytes(m_fileDescriptor, bytesToWrite.data(), bytesToWrite.size());
   } while (bytesWritten < 0 && errno == EINTR);
 
   if (bytesWritten < 0) {
     const int savedError = errno;
-    throw std::runtime_error("I2C write failed for " + formatAddress(i2cAddress_) + " on " + i2cDevicePath_ + ": " +
+    throw std::runtime_error("I2C write failed for " + formatAddress(m_i2cAddress) + " on " + m_i2cDevicePath + ": " +
                              std::strerror(savedError));
   }
   if (static_cast<std::size_t>(bytesWritten) != bytesToWrite.size()) {
-    throw std::runtime_error("Short I2C write to " + formatAddress(i2cAddress_) + ": expected " +
+    throw std::runtime_error("Short I2C write to " + formatAddress(m_i2cAddress) + ": expected " +
                              std::to_string(bytesToWrite.size()) + " bytes, sent " + std::to_string(bytesWritten));
   }
 }
@@ -228,16 +227,16 @@ std::vector<std::uint8_t> I2cDevice::readUnlocked(std::size_t numberOfBytesToRea
 
   ssize_t bytesRead = -1;
   do {
-    bytesRead = linuxSystemCalls_->readBytes(fileDescriptor_, bytesReadFromDevice.data(), bytesReadFromDevice.size());
+    bytesRead = m_linuxSystemCalls->readBytes(m_fileDescriptor, bytesReadFromDevice.data(), bytesReadFromDevice.size());
   } while (bytesRead < 0 && errno == EINTR);
 
   if (bytesRead < 0) {
     const int savedError = errno;
-    throw std::runtime_error("I2C read failed for " + formatAddress(i2cAddress_) + " on " + i2cDevicePath_ + ": " +
+    throw std::runtime_error("I2C read failed for " + formatAddress(m_i2cAddress) + " on " + m_i2cDevicePath + ": " +
                              std::strerror(savedError));
   }
   if (static_cast<std::size_t>(bytesRead) != numberOfBytesToRead) {
-    throw std::runtime_error("Short I2C read from " + formatAddress(i2cAddress_) + ": expected " +
+    throw std::runtime_error("Short I2C read from " + formatAddress(m_i2cAddress) + ": expected " +
                              std::to_string(numberOfBytesToRead) + " bytes, received " + std::to_string(bytesRead));
   }
   return bytesReadFromDevice;

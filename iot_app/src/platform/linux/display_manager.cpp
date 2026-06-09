@@ -19,9 +19,7 @@
 #include <utility>
 #include <vector>
 
-/**
- * @file display_manager.cpp
- *
+/*
  * Finds monitors and their modes through Linux DRM/KMS.
  *
  * This file only reads display information. Drawing is handled separately by
@@ -32,21 +30,21 @@ namespace iot {
 namespace display {
 namespace {
 
-/**
+/*
  * Small wrapper that closes a Linux file descriptor automatically.
  *
  * This also closes the descriptor when a function returns early or throws.
  */
 class FileDescriptor {
 public:
-  /** Opens a DRM device such as `/dev/dri/card0`. */
+  /* Opens a DRM device such as /dev/dri/card0. */
   explicit FileDescriptor(const std::string &drmDevicePath)
-      : fileDescriptor_(::open(drmDevicePath.c_str(), O_RDWR | O_CLOEXEC)) {}
+      : m_fileDescriptor(::open(drmDevicePath.c_str(), O_RDWR | O_CLOEXEC)) {}
 
-  /** Closes the device when it is open. */
+  /* Closes the device when it is open. */
   ~FileDescriptor() {
-    if (fileDescriptor_ >= 0) {
-      ::close(fileDescriptor_);
+    if (m_fileDescriptor >= 0) {
+      ::close(m_fileDescriptor);
     }
   }
 
@@ -56,22 +54,22 @@ public:
   FileDescriptor(FileDescriptor &&)                 = delete;
   FileDescriptor &operator=(FileDescriptor &&)      = delete;
 
-  /** Checks whether `open()` returned a usable descriptor. */
+  /* True when open() returned a usable descriptor. */
   bool valid() const noexcept {
-    return fileDescriptor_ >= 0;
+    return m_fileDescriptor >= 0;
   }
 
-  /** Gets the raw descriptor passed to libdrm. */
+  /* Raw descriptor passed to libdrm. */
   int get() const noexcept {
-    return fileDescriptor_;
+    return m_fileDescriptor;
   }
 
 private:
-  /** Linux file descriptor, or -1 when the device is not open. */
-  int fileDescriptor_{-1};
+  /* Linux file descriptor, or -1 when the device is not open. */
+  int m_fileDescriptor{-1};
 };
 
-/** Copies a libdrm mode into the type used by the rest of the app. */
+/* Copies a libdrm mode into the type used by the rest of the app. */
 DisplayMode makeMode(const drmModeModeInfo &drmMode) {
   DisplayMode displayMode;
   displayMode.name          = drmMode.name;
@@ -83,7 +81,7 @@ DisplayMode makeMode(const drmModeModeInfo &drmMode) {
   return displayMode;
 }
 
-/**
+/*
  * Finds the mode a connector is using right now.
  *
  * DRM stores the active mode on the CRTC, not directly on the connector. The
@@ -105,23 +103,23 @@ std::optional<DisplayMode> currentMode(int fd, const drmModeConnector &connector
   return makeMode(crtc->mode);
 }
 
-/** Builds the Linux connector name, for example `HDMI-A-1`. */
+/* Builds a Linux connector name such as HDMI-A-1. */
 std::string makeConnectorName(const drmModeConnector &connector) {
   const char       *typeName = drmModeGetConnectorTypeName(connector.connector_type);
   const std::string prefix   = typeName == nullptr ? "Unknown" : typeName;
   return prefix + "-" + std::to_string(connector.connector_type_id);
 }
 
-/**
- * Finds the primary DRM devices under `/dev/dri`.
+/*
+ * Finds the primary DRM devices under /dev/dri.
  *
- * Render-only nodes such as `renderD128` are skipped because they cannot list
+ * Render-only nodes such as renderD128 are skipped because they cannot list
  * monitor connectors.
  */
 std::vector<std::filesystem::path> findPrimaryDrmDevicePaths() {
   std::vector<std::filesystem::path> drmDevicePaths;
   std::error_code                    error;
-  // Linux calls these devices `card0`, `card1`, and so on. "Card" also includes
+  // Linux calls these devices card0, card1, and so on. "Card" also includes
   // built-in hardware such as the Raspberry Pi VC4 display device.
   const std::filesystem::path driDirectory{"/dev/dri"};
   if (!std::filesystem::exists(driDirectory, error)) {
@@ -151,7 +149,7 @@ std::vector<std::filesystem::path> findPrimaryDrmDevicePaths() {
   return drmDevicePaths;
 }
 
-/**
+/*
  * Finds every usable monitor connected to one DRM device.
  *
  * A monitor must be connected and have at least one mode. If one DRM device
@@ -214,36 +212,36 @@ public:
   }
 };
 
-} // namespace
-
-IDrmDisplayApi &drmDisplayApi() {
+IDrmDisplayApi &linuxDrmDisplayApi() {
   static LinuxDrmDisplayApi api;
   return api;
 }
 
-/** Stores one monitor together with its active mode. */
+} // namespace
+
+/* Saves the monitor details and current mode from one scan. */
 ActiveDisplay::ActiveDisplay(DisplayInfo displayInformation, DisplayMode activeDisplayMode)
-    : displayInformation_(std::move(displayInformation)), activeDisplayMode_(std::move(activeDisplayMode)) {}
+    : m_displayInformation(std::move(displayInformation)), m_activeDisplayMode(std::move(activeDisplayMode)) {}
 
-/** Gets the monitor information captured during the last scan. */
+/* Monitor details from the scan. */
 const DisplayInfo &ActiveDisplay::display() const noexcept {
-  return displayInformation_;
+  return m_displayInformation;
 }
 
-/** Gets the mode that was active during the last scan. */
+/* Mode that was active during the scan. */
 const DisplayMode &ActiveDisplay::mode() const noexcept {
-  return activeDisplayMode_;
+  return m_activeDisplayMode;
 }
 
-DisplayManager::DisplayManager() : DisplayManager(drmDisplayApi()) {}
+DisplayManager::DisplayManager() : DisplayManager(linuxDrmDisplayApi()) {}
 
-DisplayManager::DisplayManager(IDrmDisplayApi &drmDisplayApi) : drmDisplayApi_(drmDisplayApi) {}
+DisplayManager::DisplayManager(IDrmDisplayApi &drmDisplayApi) : m_drmDisplayApi(drmDisplayApi) {}
 
 std::vector<DisplayInfo> DisplayManager::connectedDisplays() const {
-  return drmDisplayApi_.connectedDisplays();
+  return m_drmDisplayApi.connectedDisplays();
 }
 
-/**
+/*
  * Reads a monitor again and returns its current DRM mode.
  *
  * The cable may have changed since the first scan, so the monitor is checked

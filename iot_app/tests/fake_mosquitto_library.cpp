@@ -16,8 +16,8 @@ struct mosquitto *FakeMqttClientApi::createClient(const char *, void *userData) 
   if (failClientCreation) {
     return nullptr;
   }
-  userData_ = userData;
-  return client_;
+  m_userData = userData;
+  return m_client;
 }
 
 void FakeMqttClientApi::destroyClient(struct mosquitto *) {
@@ -40,15 +40,15 @@ int FakeMqttClientApi::setCredentials(struct mosquitto *, const char *username, 
 }
 
 void FakeMqttClientApi::setConnectedCallback(struct mosquitto *, messaging::MqttConnectedCallback callback) {
-  connectedCallback_ = callback;
+  m_connectedCallback = callback;
 }
 
 void FakeMqttClientApi::setDisconnectedCallback(struct mosquitto *, messaging::MqttDisconnectedCallback callback) {
-  disconnectedCallback_ = callback;
+  m_disconnectedCallback = callback;
 }
 
 void FakeMqttClientApi::setMessageCallback(struct mosquitto *, messaging::MqttMessageCallback callback) {
-  messageCallback_ = callback;
+  m_messageCallback = callback;
 }
 
 int FakeMqttClientApi::connectAsync(struct mosquitto *, const char *host, int port, int keepAliveSeconds) {
@@ -83,13 +83,6 @@ int FakeMqttClientApi::addJsonContentType(mosquitto_property **mqttProperties) {
   return contentTypePropertyResult;
 }
 
-int FakeMqttClientApi::addCorrelationData(mosquitto_property **mqttProperties, const void *, std::uint16_t) {
-  if (correlationDataPropertyResult == MOSQ_ERR_SUCCESS) {
-    *mqttProperties = reinterpret_cast<mosquitto_property *>(this);
-  }
-  return correlationDataPropertyResult;
-}
-
 int FakeMqttClientApi::publish(struct mosquitto *, const char *topic, const void *payload, int payloadSize,
                                const mosquitto_property *) {
   publishedTopic = topic == nullptr ? "" : topic;
@@ -112,35 +105,35 @@ const char *FakeMqttClientApi::reasonText(int) const {
 }
 
 void FakeMqttClientApi::reportConnectionResult(int reasonCode) {
-  if (connectedCallback_ != nullptr) {
-    connectedCallback_(client_, userData_, reasonCode, 0, nullptr);
+  if (m_connectedCallback != nullptr) {
+    m_connectedCallback(m_client, m_userData, reasonCode, 0, nullptr);
   }
 }
 
 void FakeMqttClientApi::reportDisconnection(int reasonCode) {
-  if (disconnectedCallback_ != nullptr) {
-    disconnectedCallback_(client_, userData_, reasonCode, nullptr);
+  if (m_disconnectedCallback != nullptr) {
+    m_disconnectedCallback(m_client, m_userData, reasonCode, nullptr);
   }
 }
 
 void FakeMqttClientApi::deliverMessage(const std::string &topic, const std::string &payload) {
-  if (messageCallback_ == nullptr) {
+  if (m_messageCallback == nullptr) {
     return;
   }
   struct mosquitto_message message {};
   message.topic      = const_cast<char *>(topic.c_str());
   message.payload    = const_cast<char *>(payload.data());
   message.payloadlen = static_cast<int>(payload.size());
-  messageCallback_(client_, userData_, &message, nullptr);
+  m_messageCallback(m_client, m_userData, &message, nullptr);
 }
 
 void FakeMqttClientApi::deliverEmptyMessage(const std::string &topic) {
-  if (messageCallback_ == nullptr) {
+  if (m_messageCallback == nullptr) {
     return;
   }
   struct mosquitto_message message {};
   message.topic = const_cast<char *>(topic.c_str());
-  messageCallback_(client_, userData_, &message, nullptr);
+  m_messageCallback(m_client, m_userData, &message, nullptr);
 }
 
 } // namespace tests

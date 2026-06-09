@@ -1,7 +1,7 @@
 # IoT Application
 
-This directory contains all project-owned source, configuration, scripts, and
-Buildroot integration for the embedded IoT App.
+This directory holds the code and configuration maintained as part of IoT App,
+including its Buildroot integration.
 
 The repository-root `lvgl/`, `micropython/`, and `buildroot/` directories are
 pinned upstream submodules and must remain unmodified.
@@ -22,9 +22,9 @@ of writing directly to `std::cout` or `std::cerr`. A class owns a logger named
 after that class:
 
 ```cpp
-logging::Logger logger_{"ScreenManager"};
+logging::Logger m_logger{"ScreenManager"};
 
-IOT_LOG_INFO(logger_, "Rendering started");
+IOT_LOG_INFO(m_logger, "Rendering started");
 ```
 
 That call produces:
@@ -184,9 +184,9 @@ require later MicroPython filesystem/import integration.
 `ScreenManager` opens LVGL once and remains alive for the complete C++ process.
 It sends every LVGL operation through one render thread and rejects drawing
 when its bounded command queue is full. `PythonApplicationManager` owns the
-default/external/emergency state and recovery policy. `PythonApplicationRunner`
-owns only the current MicroPython interpreter and its application context, so
-switching applications creates a clean interpreter without reopening LVGL.
+default/external/emergency state, the current MicroPython interpreter, its
+application context, timer updates, and recovery policy. Switching applications
+creates a clean interpreter without reopening LVGL.
 Python can observe the available display size through `display.size()`, but it
 does not control the system resolution.
 
@@ -235,9 +235,8 @@ is consistent and does not require a Python polling loop.
 
 ## Scheduled Python updates
 
-An application's `main.py` performs its startup work and then returns. For
-objects that must change later, register short callback functions with the
-native scheduler:
+An application's `main.py` sets up its screen and then returns. Register a short
+scheduler callback for anything that needs to change later:
 
 ```python
 from iot import display, scheduler, system
@@ -404,10 +403,9 @@ settings tell the runtime not to send credentials. Anonymous port 1883 is
 unencrypted and must be used only for development on a trusted network. Add
 TLS, separate device/sender accounts, and topic ACLs before production.
 
-The MQTT network callback never calls MicroPython or LVGL. It copies a bounded
-message into a four-entry queue. The main runtime thread then validates JSON,
-the destination device, source byte count, Base64 data, and SHA-256 before it
-changes the running application.
+The MQTT callback never calls MicroPython or LVGL. It copies the message into a
+four-entry queue and returns. The main thread checks the JSON, target device,
+source size, Base64 data, and SHA-256 before changing the running application.
 
 Received applications are temporary:
 

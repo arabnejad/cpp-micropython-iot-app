@@ -23,13 +23,12 @@ messaging::ApplicationDeploymentRequest createValidDeploymentRequest() {
   return deploymentRequest;
 }
 
-TEST(TemporaryPythonApplicationInstallerTest, WritesLoadsAndRemovesOneReceivedApplication) {
+TEST(TemporaryPythonApplicationInstallerTest, WritesReturnsAndRemovesOneReceivedApplication) {
   tests::TemporaryDirectory           temporaryDirectory;
-  const PythonApplicationLoader       pythonApplicationLoader(1024U);
-  TemporaryPythonApplicationInstaller temporaryApplicationInstaller(pythonApplicationLoader, temporaryDirectory.path());
+  TemporaryPythonApplicationInstaller temporaryApplicationInstaller(temporaryDirectory.path());
 
   const PythonApplication installedApplication =
-      temporaryApplicationInstaller.installAndLoad(createValidDeploymentRequest());
+      temporaryApplicationInstaller.installApplication(createValidDeploymentRequest());
 
   EXPECT_EQ(installedApplication.applicationId, "external-clock");
   EXPECT_EQ(installedApplication.sourceCode, "print('clock')\n");
@@ -41,32 +40,29 @@ TEST(TemporaryPythonApplicationInstallerTest, WritesLoadsAndRemovesOneReceivedAp
 
 TEST(TemporaryPythonApplicationInstallerTest, RefusesAnUnsafeTransferIdBeforeWritingFiles) {
   tests::TemporaryDirectory           temporaryDirectory;
-  const PythonApplicationLoader       pythonApplicationLoader(1024U);
-  TemporaryPythonApplicationInstaller temporaryApplicationInstaller(pythonApplicationLoader, temporaryDirectory.path());
+  TemporaryPythonApplicationInstaller temporaryApplicationInstaller(temporaryDirectory.path());
   auto                                deploymentRequest = createValidDeploymentRequest();
   deploymentRequest.transferId                          = "../unsafe";
 
-  EXPECT_THROW(temporaryApplicationInstaller.installAndLoad(deploymentRequest), std::runtime_error);
+  EXPECT_THROW(temporaryApplicationInstaller.installApplication(deploymentRequest), std::runtime_error);
 }
 
 TEST(TemporaryPythonApplicationInstallerTest, RequiresANormalNonEmptyTemporaryRootDirectory) {
-  const PythonApplicationLoader pythonApplicationLoader(1024U);
-  EXPECT_THROW(TemporaryPythonApplicationInstaller(pythonApplicationLoader, {}), std::invalid_argument);
+  EXPECT_THROW(TemporaryPythonApplicationInstaller{std::filesystem::path{}}, std::invalid_argument);
 
   tests::TemporaryDirectory temporaryDirectory;
   const auto                linkPath = temporaryDirectory.path() / "applications-link";
   std::filesystem::create_directory_symlink(temporaryDirectory.path(), linkPath);
-  EXPECT_THROW(TemporaryPythonApplicationInstaller(pythonApplicationLoader, linkPath), std::runtime_error);
+  EXPECT_THROW(TemporaryPythonApplicationInstaller{linkPath}, std::runtime_error);
 }
 
 TEST(TemporaryPythonApplicationInstallerTest, RejectsAnUnsafeEntryPointAndWillNotRemoveOutsideItsRoot) {
   tests::TemporaryDirectory           temporaryDirectory;
-  const PythonApplicationLoader       pythonApplicationLoader(1024U);
-  TemporaryPythonApplicationInstaller temporaryApplicationInstaller(pythonApplicationLoader, temporaryDirectory.path());
+  TemporaryPythonApplicationInstaller temporaryApplicationInstaller(temporaryDirectory.path());
   auto                                deploymentRequest = createValidDeploymentRequest();
   deploymentRequest.entryPoint                          = "../unsafe.py";
 
-  EXPECT_THROW(temporaryApplicationInstaller.installAndLoad(deploymentRequest), std::runtime_error);
+  EXPECT_THROW(temporaryApplicationInstaller.installApplication(deploymentRequest), std::runtime_error);
 
   const auto outsideDirectory = std::filesystem::path{temporaryDirectory.path().string() + "-outside"};
   std::filesystem::create_directories(outsideDirectory);
@@ -77,17 +73,17 @@ TEST(TemporaryPythonApplicationInstallerTest, RejectsAnUnsafeEntryPointAndWillNo
 
 TEST(TemporaryPythonApplicationInstallerTest, CreatesNestedEntryPointDirectoriesAndReplacesTheSameTransfer) {
   tests::TemporaryDirectory           temporaryDirectory;
-  const PythonApplicationLoader       pythonApplicationLoader(1024U);
-  TemporaryPythonApplicationInstaller temporaryApplicationInstaller(pythonApplicationLoader, temporaryDirectory.path());
+  TemporaryPythonApplicationInstaller temporaryApplicationInstaller(temporaryDirectory.path());
   auto                                deploymentRequest = createValidDeploymentRequest();
   deploymentRequest.entryPoint                          = "application/main.py";
 
-  const PythonApplication firstInstalledApplication = temporaryApplicationInstaller.installAndLoad(deploymentRequest);
+  const PythonApplication firstInstalledApplication =
+      temporaryApplicationInstaller.installApplication(deploymentRequest);
   EXPECT_TRUE(std::filesystem::is_regular_file(firstInstalledApplication.entryPointPath));
   EXPECT_EQ(firstInstalledApplication.sourceCode, "print('clock')\n");
 
   deploymentRequest.sourceCode                   = "print('replacement')\n";
-  const PythonApplication replacementApplication = temporaryApplicationInstaller.installAndLoad(deploymentRequest);
+  const PythonApplication replacementApplication = temporaryApplicationInstaller.installApplication(deploymentRequest);
   EXPECT_EQ(replacementApplication.sourceCode, "print('replacement')\n");
   temporaryApplicationInstaller.removeInstalledApplication(replacementApplication.packageDirectory);
 }
@@ -98,16 +94,13 @@ TEST(TemporaryPythonApplicationInstallerTest, ClearsOldFilesWhenItTakesOverAnExi
   std::filesystem::create_directories(applicationsRoot);
   std::ofstream(applicationsRoot / "old-file") << "old";
 
-  const PythonApplicationLoader       pythonApplicationLoader(1024U);
-  TemporaryPythonApplicationInstaller temporaryApplicationInstaller(pythonApplicationLoader, applicationsRoot);
+  TemporaryPythonApplicationInstaller temporaryApplicationInstaller(applicationsRoot);
 
   EXPECT_FALSE(std::filesystem::exists(applicationsRoot / "old-file"));
 }
 
 TEST(TemporaryPythonApplicationInstallerTest, ReportsUnusableRootsAndProvidesTheTemporarySystemRoot) {
-  const PythonApplicationLoader pythonApplicationLoader(1024U);
-  EXPECT_THROW(TemporaryPythonApplicationInstaller(pythonApplicationLoader, "/proc/iot-app-test-directory"),
-               std::runtime_error);
+  EXPECT_THROW(TemporaryPythonApplicationInstaller{"/proc/iot-app-test-directory"}, std::runtime_error);
 
   const std::filesystem::path defaultApplicationsRoot = defaultTemporaryApplicationRoot();
   EXPECT_EQ(defaultApplicationsRoot.filename(), "applications");
@@ -117,33 +110,21 @@ TEST(TemporaryPythonApplicationInstallerTest, ReportsUnusableRootsAndProvidesThe
 TEST(TemporaryPythonApplicationInstallerTest, ReportsAnErrorWhenItsTemporaryRootIsReplacedWithAFile) {
   tests::TemporaryDirectory           temporaryDirectory;
   const auto                          applicationsRoot = temporaryDirectory.path() / "applications";
-  const PythonApplicationLoader       pythonApplicationLoader(1024U);
-  TemporaryPythonApplicationInstaller temporaryApplicationInstaller(pythonApplicationLoader, applicationsRoot);
+  TemporaryPythonApplicationInstaller temporaryApplicationInstaller(applicationsRoot);
 
   std::filesystem::remove_all(applicationsRoot);
   std::ofstream(applicationsRoot) << "not a directory";
 
-  EXPECT_THROW(temporaryApplicationInstaller.installAndLoad(createValidDeploymentRequest()), std::runtime_error);
-}
-
-TEST(TemporaryPythonApplicationInstallerTest, RemovesTheInstalledCopyWhenTheApplicationLoaderRejectsIt) {
-  tests::TemporaryDirectory           temporaryDirectory;
-  const PythonApplicationLoader       pythonApplicationLoader(4U);
-  TemporaryPythonApplicationInstaller temporaryApplicationInstaller(pythonApplicationLoader, temporaryDirectory.path());
-
-  EXPECT_THROW(temporaryApplicationInstaller.installAndLoad(createValidDeploymentRequest()), std::runtime_error);
-  EXPECT_FALSE(std::filesystem::exists(temporaryDirectory.path() / "transfer-42"));
-  EXPECT_FALSE(std::filesystem::exists(temporaryDirectory.path() / ".staging-transfer-42"));
+  EXPECT_THROW(temporaryApplicationInstaller.installApplication(createValidDeploymentRequest()), std::runtime_error);
 }
 
 TEST(TemporaryPythonApplicationInstallerTest, ReportsAnEntryPointThatWouldOverwriteADirectory) {
   tests::TemporaryDirectory           temporaryDirectory;
-  const PythonApplicationLoader       pythonApplicationLoader(1024U);
-  TemporaryPythonApplicationInstaller temporaryApplicationInstaller(pythonApplicationLoader, temporaryDirectory.path());
+  TemporaryPythonApplicationInstaller temporaryApplicationInstaller(temporaryDirectory.path());
   auto                                deploymentRequest = createValidDeploymentRequest();
   deploymentRequest.entryPoint                          = ".";
 
-  EXPECT_THROW(temporaryApplicationInstaller.installAndLoad(deploymentRequest), std::runtime_error);
+  EXPECT_THROW(temporaryApplicationInstaller.installApplication(deploymentRequest), std::runtime_error);
 }
 
 void *alwaysFailJsonAllocation(std::size_t) {
@@ -168,25 +149,23 @@ void releaseTestJsonMemory(void *memory) {
 
 TEST(TemporaryPythonApplicationInstallerTest, ReportsAnOutOfMemoryErrorWhileCreatingApplicationMetadata) {
   tests::TemporaryDirectory           temporaryDirectory;
-  const PythonApplicationLoader       pythonApplicationLoader(1024U);
-  TemporaryPythonApplicationInstaller temporaryApplicationInstaller(pythonApplicationLoader, temporaryDirectory.path());
+  TemporaryPythonApplicationInstaller temporaryApplicationInstaller(temporaryDirectory.path());
   cJSON_Hooks                         jsonMemoryHooks{&alwaysFailJsonAllocation, &ignoreJsonMemoryRelease};
 
   cJSON_InitHooks(&jsonMemoryHooks);
-  EXPECT_THROW(temporaryApplicationInstaller.installAndLoad(createValidDeploymentRequest()), std::runtime_error);
+  EXPECT_THROW(temporaryApplicationInstaller.installApplication(createValidDeploymentRequest()), std::runtime_error);
   cJSON_InitHooks(nullptr);
 }
 
 TEST(TemporaryPythonApplicationInstallerTest, ReportsAnOutOfMemoryErrorWhileSerializingApplicationMetadata) {
   tests::TemporaryDirectory           temporaryDirectory;
-  const PythonApplicationLoader       pythonApplicationLoader(1024U);
-  TemporaryPythonApplicationInstaller temporaryApplicationInstaller(pythonApplicationLoader, temporaryDirectory.path());
+  TemporaryPythonApplicationInstaller temporaryApplicationInstaller(temporaryDirectory.path());
   cJSON_Hooks                         jsonMemoryHooks{&allocateJsonMemoryUntilConfiguredLimit, &releaseTestJsonMemory};
 
   successfulJsonAllocationsBeforeFailure = 10U;
   jsonAllocationCount                    = 0U;
   cJSON_InitHooks(&jsonMemoryHooks);
-  EXPECT_THROW(temporaryApplicationInstaller.installAndLoad(createValidDeploymentRequest()), std::runtime_error);
+  EXPECT_THROW(temporaryApplicationInstaller.installApplication(createValidDeploymentRequest()), std::runtime_error);
   cJSON_InitHooks(nullptr);
 }
 

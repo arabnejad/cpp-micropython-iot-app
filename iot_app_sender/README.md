@@ -1,8 +1,8 @@
 # IoT App Sender
 
-This Ubuntu-side tool sends one single-file MicroPython application to a
-Raspberry Pi through MQTT. It is the first development version of the future
-`.iotapp` package sender.
+This Ubuntu tool sends a single-file MicroPython application to a Raspberry Pi
+through MQTT. The current format is deliberately small. A later version may
+grow into an `.iotapp` package sender with support for several files and assets.
 
 The sender publishes to an MQTT broker. With the example configuration,
 Mosquitto runs on the Raspberry Pi at `192.168.0.67`; the C++ receiver inside
@@ -19,9 +19,10 @@ iot_app_sender                              Mosquitto broker
       |<------- deployment status, MQTT QoS 1 -----+
 ```
 
-The broker accepting the message is not proof that the application started.
-Each deployment has a unique transfer ID and status topic. By default, the
-sender waits for `iot_app` to report a final result.
+An acknowledgement from the broker only says that it received the MQTT
+message. It does not say that the application started. Each deployment has its
+own transfer ID and status topic, and the sender waits for `iot_app` to report
+the result.
 
 The C++ receiver starts the shipped default app before subscribing. A valid
 external app replaces the current Python session without restarting the C++
@@ -183,8 +184,8 @@ No C++ or Python code change is required for this anonymous development setup.
 
 ### Troubleshoot `Connection refused`
 
-An error such as the following means the sender could not connect to the MQTT
-broker. The Python application has not reached `iot_app` yet.
+This error means that the sender could not connect to the MQTT broker. The
+Python application has not reached `iot_app` yet.
 
 ```text
 iot_app_sender failed: [Errno 111] Connection refused

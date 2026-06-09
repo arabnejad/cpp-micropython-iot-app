@@ -8,16 +8,16 @@ namespace iot {
 namespace display {
 namespace internal {
 
-/**
+/*
  * Calls the correct libdrm cleanup function when a DRM pointer is released.
  *
- * `DrmObjectType` is the type returned by libdrm. `ReleaseFunction` is the C
+ * DrmObjectType is the type returned by libdrm. ReleaseFunction is the C
  * function that releases that type. For example, a connector uses:
  *
  *   DrmObjectType  = drmModeConnector
  *   ReleaseFunction = drmModeFreeConnector
  *
- * C++ `delete` cannot release libdrm objects. `std::unique_ptr` calls this
+ * C++ delete cannot release libdrm objects. std::unique_ptr calls this
  * deleter automatically when its DRM object goes out of scope.
  */
 template <typename DrmObjectType, void (*ReleaseFunction)(DrmObjectType *)> struct DrmObjectDeleter {
@@ -28,7 +28,7 @@ template <typename DrmObjectType, void (*ReleaseFunction)(DrmObjectType *)> stru
   }
 };
 
-/**
+/*
  * Creates an owning C++ pointer for one libdrm object type.
  *
  * For example:
@@ -36,13 +36,11 @@ template <typename DrmObjectType, void (*ReleaseFunction)(DrmObjectType *)> stru
  *   using DrmConnectorPtr =
  *       UniqueDrmObject<drmModeConnector, drmModeFreeConnector>;
  *
- * A `DrmConnectorPtr` can hold the pointer returned by
- * `drmModeGetConnector()`. When it leaves scope, it automatically calls
- * `drmModeFreeConnector()`.
+ * A DrmConnectorPtr can hold the pointer returned by drmModeGetConnector().
+ * When it leaves scope, it calls drmModeFreeConnector().
  */
 template <typename DrmObjectType, void (*ReleaseFunction)(DrmObjectType *)>
-using UniqueDrmObject =
-    std::unique_ptr<DrmObjectType, DrmObjectDeleter<DrmObjectType, ReleaseFunction>>;
+using UniqueDrmObject = std::unique_ptr<DrmObjectType, DrmObjectDeleter<DrmObjectType, ReleaseFunction>>;
 
 using DrmResourcesPtr        = UniqueDrmObject<drmModeRes, drmModeFreeResources>;
 using DrmConnectorPtr        = UniqueDrmObject<drmModeConnector, drmModeFreeConnector>;

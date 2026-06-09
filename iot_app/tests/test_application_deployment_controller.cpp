@@ -40,39 +40,36 @@ std::string replaceEveryOccurrence(std::string text, const std::string &oldValue
 class ApplicationDeploymentControllerTest : public ::testing::Test {
 protected:
   ApplicationDeploymentControllerTest()
-      : temporaryApplicationInstaller_(pythonApplicationLoader_, temporaryDirectory_.path()),
-        recordingRenderBackend_(std::make_unique<tests::RecordingRenderBackend>()),
-        screenManager_(tests::testActiveDisplay(), std::move(recordingRenderBackend_), 16U),
-        pythonApplicationRunner_(screenManager_, tests::testActiveDisplay(), displayManager_,
-                                 systemInformationProvider_, 256U * 1024U),
-        pythonApplicationManager_(pythonApplicationRunner_, screenManager_, tests::testActiveDisplay()) {}
+      : m_temporaryApplicationInstaller(m_temporaryDirectory.path()),
+        m_recordingRenderBackend(std::make_unique<tests::RecordingRenderBackend>()),
+        m_screenManager(tests::testActiveDisplay(), std::move(m_recordingRenderBackend), 16U),
+        m_pythonApplicationManager(m_screenManager, tests::testActiveDisplay(), m_displayManager,
+                                   m_systemInformationProvider, 256U * 1024U) {}
 
   void SetUp() override {
-    screenManager_.start();
+    m_screenManager.start();
   }
 
   void TearDown() override {
-    pythonApplicationManager_.stop();
-    screenManager_.stop();
+    m_pythonApplicationManager.stop();
+    m_screenManager.stop();
   }
 
   std::unique_ptr<ApplicationDeploymentController>
   createDeploymentController(std::size_t rememberedDeploymentCapacity = 4U) {
-    return std::make_unique<ApplicationDeploymentController>("test-device", ApplicationDeploymentMessageParser(1024U),
-                                                             temporaryApplicationInstaller_, pythonApplicationManager_,
-                                                             mqttApplicationReceiver_, rememberedDeploymentCapacity);
+    return std::make_unique<ApplicationDeploymentController>(
+        "test-device", ApplicationDeploymentMessageParser(1024U), m_temporaryApplicationInstaller,
+        m_pythonApplicationManager, m_mqttApplicationReceiver, rememberedDeploymentCapacity);
   }
 
-  tests::TemporaryDirectory                      temporaryDirectory_;
-  python::PythonApplicationLoader                pythonApplicationLoader_{1024U};
-  python::TemporaryPythonApplicationInstaller    temporaryApplicationInstaller_;
-  std::unique_ptr<tests::RecordingRenderBackend> recordingRenderBackend_;
-  ui::ScreenManager                              screenManager_;
-  tests::TestDisplayManager                      displayManager_;
-  tests::TestSystemInformationProvider           systemInformationProvider_;
-  python::PythonApplicationRunner                pythonApplicationRunner_;
-  python::PythonApplicationManager               pythonApplicationManager_;
-  RecordingMqttApplicationReceiver               mqttApplicationReceiver_;
+  tests::TemporaryDirectory                      m_temporaryDirectory;
+  python::TemporaryPythonApplicationInstaller    m_temporaryApplicationInstaller;
+  std::unique_ptr<tests::RecordingRenderBackend> m_recordingRenderBackend;
+  ui::ScreenManager                              m_screenManager;
+  tests::TestDisplayManager                      m_displayManager;
+  tests::TestSystemInformationProvider           m_systemInformationProvider;
+  python::PythonApplicationManager               m_pythonApplicationManager;
+  RecordingMqttApplicationReceiver               m_mqttApplicationReceiver;
 };
 
 TEST_F(ApplicationDeploymentControllerTest, InstallsAndStartsAValidatedExternalApplication) {
@@ -80,10 +77,10 @@ TEST_F(ApplicationDeploymentControllerTest, InstallsAndStartsAValidatedExternalA
 
   deploymentController->process({validDeploymentMessageJson});
 
-  EXPECT_EQ(pythonApplicationManager_.state(), python::ApplicationState::ExternalApplication);
-  EXPECT_EQ(pythonApplicationManager_.activeScreenName(), "External app");
-  ASSERT_EQ(mqttApplicationReceiver_.publishedStatuses.size(), 4U);
-  EXPECT_EQ(mqttApplicationReceiver_.publishedStatuses.back().deploymentState, "started");
+  EXPECT_EQ(m_pythonApplicationManager.state(), python::ApplicationState::ExternalApplication);
+  EXPECT_EQ(m_pythonApplicationManager.activeScreenName(), "External app");
+  ASSERT_EQ(m_mqttApplicationReceiver.publishedStatuses.size(), 4U);
+  EXPECT_EQ(m_mqttApplicationReceiver.publishedStatuses.back().deploymentState, "started");
 }
 
 TEST_F(ApplicationDeploymentControllerTest, PublishesARejectionAndRemembersTheRejectedTransfer) {
@@ -91,12 +88,12 @@ TEST_F(ApplicationDeploymentControllerTest, PublishesARejectionAndRemembersTheRe
   const ReceivedApplicationMessage rejectedMessage{R"json({"transfer_id":"bad-transfer","device_id":"wrong"})json"};
 
   deploymentController->process(rejectedMessage);
-  ASSERT_EQ(mqttApplicationReceiver_.publishedStatuses.size(), 2U);
-  EXPECT_EQ(mqttApplicationReceiver_.publishedStatuses.back().deploymentState, "rejected");
+  ASSERT_EQ(m_mqttApplicationReceiver.publishedStatuses.size(), 2U);
+  EXPECT_EQ(m_mqttApplicationReceiver.publishedStatuses.back().deploymentState, "rejected");
 
   deploymentController->process(rejectedMessage);
-  ASSERT_EQ(mqttApplicationReceiver_.publishedStatuses.size(), 3U);
-  EXPECT_EQ(mqttApplicationReceiver_.publishedStatuses.back().deploymentState, "rejected");
+  ASSERT_EQ(m_mqttApplicationReceiver.publishedStatuses.size(), 3U);
+  EXPECT_EQ(m_mqttApplicationReceiver.publishedStatuses.back().deploymentState, "rejected");
 }
 
 TEST_F(ApplicationDeploymentControllerTest, RemovesAnApplicationThatFailsDuringStartupAndPublishesFailure) {
@@ -112,9 +109,9 @@ TEST_F(ApplicationDeploymentControllerTest, RemovesAnApplicationThatFailsDuringS
 
   deploymentController->process({brokenDeploymentJson});
 
-  ASSERT_EQ(mqttApplicationReceiver_.publishedStatuses.size(), 4U);
-  EXPECT_EQ(mqttApplicationReceiver_.publishedStatuses.back().deploymentState, "failed");
-  EXPECT_FALSE(std::filesystem::exists(temporaryDirectory_.path() / "transfer-42"));
+  ASSERT_EQ(m_mqttApplicationReceiver.publishedStatuses.size(), 4U);
+  EXPECT_EQ(m_mqttApplicationReceiver.publishedStatuses.back().deploymentState, "failed");
+  EXPECT_FALSE(std::filesystem::exists(m_temporaryDirectory.path() / "transfer-42"));
 }
 
 TEST_F(ApplicationDeploymentControllerTest, RemovesThePreviousExternalApplicationWhenAReplacementStarts) {
@@ -125,9 +122,9 @@ TEST_F(ApplicationDeploymentControllerTest, RemovesThePreviousExternalApplicatio
 
   deploymentController->process({replacementDeploymentJson});
 
-  EXPECT_FALSE(std::filesystem::exists(temporaryDirectory_.path() / "transfer-42"));
-  EXPECT_TRUE(std::filesystem::exists(temporaryDirectory_.path() / "transfer-43"));
-  EXPECT_EQ(mqttApplicationReceiver_.publishedStatuses.back().deploymentState, "started");
+  EXPECT_FALSE(std::filesystem::exists(m_temporaryDirectory.path() / "transfer-42"));
+  EXPECT_TRUE(std::filesystem::exists(m_temporaryDirectory.path() / "transfer-43"));
+  EXPECT_EQ(m_mqttApplicationReceiver.publishedStatuses.back().deploymentState, "started");
 }
 
 TEST_F(ApplicationDeploymentControllerTest, ProcessesATransferAgainAfterItsRememberedStatusIsRemoved) {
@@ -136,40 +133,40 @@ TEST_F(ApplicationDeploymentControllerTest, ProcessesATransferAgainAfterItsRemem
   const std::string secondDeploymentJson =
       replaceEveryOccurrence(validDeploymentMessageJson, "transfer-42", "transfer-43");
   deploymentController->process({secondDeploymentJson});
-  const std::size_t statusesBeforeRepeatingFirstTransfer = mqttApplicationReceiver_.publishedStatuses.size();
+  const std::size_t statusesBeforeRepeatingFirstTransfer = m_mqttApplicationReceiver.publishedStatuses.size();
 
   deploymentController->process({validDeploymentMessageJson});
 
-  EXPECT_EQ(mqttApplicationReceiver_.publishedStatuses.size(), statusesBeforeRepeatingFirstTransfer + 4U);
-  EXPECT_EQ(mqttApplicationReceiver_.publishedStatuses.back().deploymentState, "started");
+  EXPECT_EQ(m_mqttApplicationReceiver.publishedStatuses.size(), statusesBeforeRepeatingFirstTransfer + 4U);
+  EXPECT_EQ(m_mqttApplicationReceiver.publishedStatuses.back().deploymentState, "started");
 }
 
 TEST_F(ApplicationDeploymentControllerTest, RejectsAnEmptyDeviceId) {
   EXPECT_THROW(ApplicationDeploymentController({}, ApplicationDeploymentMessageParser(1024U),
-                                               temporaryApplicationInstaller_, pythonApplicationManager_,
-                                               mqttApplicationReceiver_, 1U),
+                                               m_temporaryApplicationInstaller, m_pythonApplicationManager,
+                                               m_mqttApplicationReceiver, 1U),
                std::invalid_argument);
 }
 
 TEST_F(ApplicationDeploymentControllerTest, RejectsAZeroRememberedDeploymentCapacity) {
   EXPECT_THROW(ApplicationDeploymentController("test-device", ApplicationDeploymentMessageParser(1024U),
-                                               temporaryApplicationInstaller_, pythonApplicationManager_,
-                                               mqttApplicationReceiver_, 0U),
+                                               m_temporaryApplicationInstaller, m_pythonApplicationManager,
+                                               m_mqttApplicationReceiver, 0U),
                std::invalid_argument);
 }
 
 TEST_F(ApplicationDeploymentControllerTest, PublishesFailureWhenTheTemporaryApplicationCannotBeInstalled) {
-  std::filesystem::permissions(temporaryDirectory_.path(),
+  std::filesystem::permissions(m_temporaryDirectory.path(),
                                std::filesystem::perms::owner_read | std::filesystem::perms::owner_exec,
                                std::filesystem::perm_options::replace);
   auto deploymentController = createDeploymentController(1U);
 
   deploymentController->process({validDeploymentMessageJson});
 
-  std::filesystem::permissions(temporaryDirectory_.path(), std::filesystem::perms::owner_all,
+  std::filesystem::permissions(m_temporaryDirectory.path(), std::filesystem::perms::owner_all,
                                std::filesystem::perm_options::replace);
-  ASSERT_EQ(mqttApplicationReceiver_.publishedStatuses.size(), 3U);
-  EXPECT_EQ(mqttApplicationReceiver_.publishedStatuses.back().deploymentState, "failed");
+  ASSERT_EQ(m_mqttApplicationReceiver.publishedStatuses.size(), 3U);
+  EXPECT_EQ(m_mqttApplicationReceiver.publishedStatuses.back().deploymentState, "failed");
 }
 
 TEST_F(ApplicationDeploymentControllerTest, IgnoresAMessageWithoutASafeTransferId) {
@@ -177,7 +174,7 @@ TEST_F(ApplicationDeploymentControllerTest, IgnoresAMessageWithoutASafeTransferI
 
   deploymentController->process({R"json({"transfer_id":"../unsafe"})json"});
 
-  EXPECT_TRUE(mqttApplicationReceiver_.publishedStatuses.empty());
+  EXPECT_TRUE(m_mqttApplicationReceiver.publishedStatuses.empty());
 }
 
 TEST(ApplicationDeploymentMessageParserTest, RejectsAnUnsafeTransferIdBeforeDeploymentServicesAreNeeded) {

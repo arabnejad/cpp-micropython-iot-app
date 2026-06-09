@@ -105,7 +105,7 @@ bool terminalSupportsColor(std::FILE *output) noexcept {
 
 } // namespace
 
-Logger::Logger(std::string className) : className_(std::move(className)) {}
+Logger::Logger(std::string className) : m_className(std::move(className)) {}
 
 bool Logger::isEnabled(LogLevel level) const noexcept {
   static const LogLevel minimumLevel = configuredMinimumLevel();
@@ -120,8 +120,8 @@ void Logger::write(LogLevel level, const char *functionName, const std::string &
     if (levelColumn.size() < levelColumnWidth) {
       line.append(levelColumnWidth - levelColumn.size(), ' ');
     }
-    if (!className_.empty()) {
-      line += '[' + className_ + ']';
+    if (!m_className.empty()) {
+      line += '[' + m_className + ']';
     }
     line += '[' + std::string(functionName == nullptr ? "unknown" : functionName) + ']';
     line += ' ';

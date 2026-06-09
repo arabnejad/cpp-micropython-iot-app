@@ -24,36 +24,36 @@ using ::testing::Return;
 class LinuxI2cDeviceTest : public ::testing::Test {
 protected:
   void SetUp() override {
-    ON_CALL(linuxCalls_, openDevice(_, _)).WillByDefault(Return(openFileDescriptor_));
-    ON_CALL(linuxCalls_, closeDevice(_)).WillByDefault(Return(0));
-    EXPECT_CALL(linuxCalls_, deviceControl(_, _, _))
+    ON_CALL(m_linuxCalls, openDevice(_, _)).WillByDefault(Return(m_openFileDescriptor));
+    ON_CALL(m_linuxCalls, closeDevice(_)).WillByDefault(Return(0));
+    EXPECT_CALL(m_linuxCalls, deviceControl(_, _, _))
         .Times(::testing::AnyNumber())
         .WillRepeatedly(Invoke([this](int, unsigned long request, unsigned long argument) {
           if (request == I2C_FUNCS) {
-            *reinterpret_cast<unsigned long *>(argument) = adapterFunctions_;
+            *reinterpret_cast<unsigned long *>(argument) = m_adapterFunctions;
           }
           return 0;
         }));
   }
 
-  NiceMock<tests::MockLinuxI2cSystemCalls> linuxCalls_;
-  int                                      openFileDescriptor_{42};
-  unsigned long                            adapterFunctions_{I2C_FUNC_I2C};
+  NiceMock<tests::MockLinuxI2cSystemCalls> m_linuxCalls;
+  int                                      m_openFileDescriptor{42};
+  unsigned long                            m_adapterFunctions{I2C_FUNC_I2C};
 };
 
 TEST_F(LinuxI2cDeviceTest, ValidatesBusAndAddressBeforeOpeningLinuxDevices) {
-  EXPECT_CALL(linuxCalls_, openDevice(_, _)).Times(0);
+  EXPECT_CALL(m_linuxCalls, openDevice(_, _)).Times(0);
 
-  EXPECT_THROW(I2cDevice(-1, 0x50U, linuxCalls_), std::invalid_argument);
-  EXPECT_THROW(I2cDevice(1, 0x02U, linuxCalls_), std::invalid_argument);
+  EXPECT_THROW(I2cDevice(-1, 0x50U, m_linuxCalls), std::invalid_argument);
+  EXPECT_THROW(I2cDevice(1, 0x02U, m_linuxCalls), std::invalid_argument);
 }
 
 TEST_F(LinuxI2cDeviceTest, OpensTheRequestedBusAndSelectsTheAddress) {
-  EXPECT_CALL(linuxCalls_, openDevice(::testing::StrEq("/dev/i2c-1"), _)).WillOnce(Return(openFileDescriptor_));
-  EXPECT_CALL(linuxCalls_, deviceControl(openFileDescriptor_, I2C_SLAVE, 0x50U)).WillOnce(Return(0));
-  EXPECT_CALL(linuxCalls_, closeDevice(openFileDescriptor_)).WillOnce(Return(0));
+  EXPECT_CALL(m_linuxCalls, openDevice(::testing::StrEq("/dev/i2c-1"), _)).WillOnce(Return(m_openFileDescriptor));
+  EXPECT_CALL(m_linuxCalls, deviceControl(m_openFileDescriptor, I2C_SLAVE, 0x50U)).WillOnce(Return(0));
+  EXPECT_CALL(m_linuxCalls, closeDevice(m_openFileDescriptor)).WillOnce(Return(0));
 
-  I2cDevice i2cDevice(1, 0x50U, linuxCalls_);
+  I2cDevice i2cDevice(1, 0x50U, m_linuxCalls);
 
   EXPECT_EQ(i2cDevice.devicePath(), "/dev/i2c-1");
   EXPECT_EQ(i2cDevice.busNumber(), 1);
@@ -61,39 +61,39 @@ TEST_F(LinuxI2cDeviceTest, OpensTheRequestedBusAndSelectsTheAddress) {
 }
 
 TEST_F(LinuxI2cDeviceTest, ReportsWhenTheLinuxDeviceCannotBeOpened) {
-  EXPECT_CALL(linuxCalls_, openDevice(_, _)).WillOnce(Return(-1));
+  EXPECT_CALL(m_linuxCalls, openDevice(_, _)).WillOnce(Return(-1));
   errno = ENOENT;
-  EXPECT_THROW(I2cDevice(1, 0x50U, linuxCalls_), std::runtime_error);
+  EXPECT_THROW(I2cDevice(1, 0x50U, m_linuxCalls), std::runtime_error);
 }
 
 TEST_F(LinuxI2cDeviceTest, ClosesTheDeviceWhenItsCapabilitiesCannotBeRead) {
-  EXPECT_CALL(linuxCalls_, deviceControl(openFileDescriptor_, I2C_FUNCS, _)).WillOnce(Return(-1));
-  EXPECT_CALL(linuxCalls_, closeDevice(openFileDescriptor_));
+  EXPECT_CALL(m_linuxCalls, deviceControl(m_openFileDescriptor, I2C_FUNCS, _)).WillOnce(Return(-1));
+  EXPECT_CALL(m_linuxCalls, closeDevice(m_openFileDescriptor));
   errno = EIO;
-  EXPECT_THROW(I2cDevice(1, 0x50U, linuxCalls_), std::runtime_error);
+  EXPECT_THROW(I2cDevice(1, 0x50U, m_linuxCalls), std::runtime_error);
 }
 
 TEST_F(LinuxI2cDeviceTest, ClosesTheDeviceWhenItsAddressCannotBeSelected) {
-  EXPECT_CALL(linuxCalls_, deviceControl(openFileDescriptor_, I2C_SLAVE, 0x50U)).WillOnce(Return(-1));
-  EXPECT_CALL(linuxCalls_, closeDevice(openFileDescriptor_));
+  EXPECT_CALL(m_linuxCalls, deviceControl(m_openFileDescriptor, I2C_SLAVE, 0x50U)).WillOnce(Return(-1));
+  EXPECT_CALL(m_linuxCalls, closeDevice(m_openFileDescriptor));
   errno = EBUSY;
-  EXPECT_THROW(I2cDevice(1, 0x50U, linuxCalls_), std::runtime_error);
+  EXPECT_THROW(I2cDevice(1, 0x50U, m_linuxCalls), std::runtime_error);
 }
 
 TEST_F(LinuxI2cDeviceTest, ReadsWritesAndPerformsARepeatedStartTransaction) {
-  I2cDevice i2cDevice(1, 0x50U, linuxCalls_);
+  I2cDevice i2cDevice(1, 0x50U, m_linuxCalls);
 
-  EXPECT_CALL(linuxCalls_, writeBytes(openFileDescriptor_, _, 2U))
+  EXPECT_CALL(m_linuxCalls, writeBytes(m_openFileDescriptor, _, 2U))
       .WillOnce(Invoke([](int, const std::uint8_t *bytes, std::size_t) {
         EXPECT_EQ(std::vector<std::uint8_t>(bytes, bytes + 2), (std::vector<std::uint8_t>{0xaaU, 0xbbU}));
         return 2;
       }));
-  EXPECT_CALL(linuxCalls_, readBytes(openFileDescriptor_, _, 3U))
+  EXPECT_CALL(m_linuxCalls, readBytes(m_openFileDescriptor, _, 3U))
       .WillOnce(Invoke([](int, std::uint8_t *bytes, std::size_t) {
         std::memcpy(bytes, "\x10\x20\x30", 3U);
         return 3;
       }));
-  EXPECT_CALL(linuxCalls_, deviceControl(openFileDescriptor_, I2C_RDWR, _))
+  EXPECT_CALL(m_linuxCalls, deviceControl(m_openFileDescriptor, I2C_RDWR, _))
       .WillOnce(Invoke([](int, unsigned long, unsigned long argument) {
         auto *transaction = reinterpret_cast<i2c_rdwr_ioctl_data *>(argument);
         EXPECT_EQ(
@@ -110,22 +110,22 @@ TEST_F(LinuxI2cDeviceTest, ReadsWritesAndPerformsARepeatedStartTransaction) {
 }
 
 TEST_F(LinuxI2cDeviceTest, ReportsInvalidAndFailedTransfers) {
-  I2cDevice i2cDevice(1, 0x50U, linuxCalls_);
+  I2cDevice i2cDevice(1, 0x50U, m_linuxCalls);
 
   EXPECT_THROW(i2cDevice.write({}), std::invalid_argument);
   EXPECT_THROW(i2cDevice.read(0U), std::invalid_argument);
   EXPECT_THROW(i2cDevice.writeRead({}, 1U), std::invalid_argument);
   EXPECT_THROW(i2cDevice.writeThenRead({0x01U}, 1U, std::chrono::microseconds(-1)), std::invalid_argument);
 
-  EXPECT_CALL(linuxCalls_, writeBytes(_, _, 2U)).WillOnce(Return(1));
+  EXPECT_CALL(m_linuxCalls, writeBytes(_, _, 2U)).WillOnce(Return(1));
   EXPECT_THROW(i2cDevice.write({0xaaU, 0xbbU}), std::runtime_error);
 
-  EXPECT_CALL(linuxCalls_, readBytes(_, _, 1U)).WillOnce(Return(-1));
+  EXPECT_CALL(m_linuxCalls, readBytes(_, _, 1U)).WillOnce(Return(-1));
   errno = EIO;
   EXPECT_THROW(i2cDevice.read(1U), std::runtime_error);
 
-  adapterFunctions_ = 0;
-  I2cDevice deviceWithoutRepeatedStart(1, 0x50U, linuxCalls_);
+  m_adapterFunctions = 0;
+  I2cDevice deviceWithoutRepeatedStart(1, 0x50U, m_linuxCalls);
   EXPECT_THROW(deviceWithoutRepeatedStart.writeRead({0x01U}, 1U), std::runtime_error);
 }
 

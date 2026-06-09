@@ -36,7 +36,6 @@ add_executable(iot_unit_tests
   test_micropython_runtime.cpp
   test_micropython_device_module.cpp
   test_micropython_input_module.cpp
-  test_python_application_runner.cpp
   test_python_application_loader.cpp
   test_python_application_manager.cpp
   test_runtime_config.cpp

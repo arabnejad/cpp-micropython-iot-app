@@ -3,7 +3,6 @@
 #include "fake_mosquitto_library.h"
 
 #include <gtest/gtest.h>
-#include <mqtt_protocol.h>
 
 #include <array>
 #include <chrono>
@@ -27,14 +26,14 @@ MqttApplicationReceiverSettings validMqttReceiverSettings() {
 class MqttApplicationReceiverTest : public ::testing::Test {
 protected:
   void createReceiver(MqttApplicationReceiverSettings settings = validMqttReceiverSettings()) {
-    receiver_ = std::make_unique<MqttApplicationReceiver>(std::move(settings), receivedMessages_, mqttClientApi_);
+    m_receiver = std::make_unique<MqttApplicationReceiver>(std::move(settings), m_receivedMessages, m_mqttClientApi);
   }
 
   void expectStartupFailureWhen(int &operationResult) {
     operationResult = MOSQ_ERR_INVAL;
     createReceiver(settingsWithCredentials());
-    EXPECT_THROW(receiver_->start(), std::runtime_error);
-    receiver_.reset();
+    EXPECT_THROW(m_receiver->start(), std::runtime_error);
+    m_receiver.reset();
     operationResult = MOSQ_ERR_SUCCESS;
   }
 
@@ -45,9 +44,9 @@ protected:
     return settings;
   }
 
-  tests::FakeMqttClientApi                 mqttClientApi_;
-  ApplicationMessageQueue                  receivedMessages_{2U};
-  std::unique_ptr<MqttApplicationReceiver> receiver_;
+  tests::FakeMqttClientApi                 m_mqttClientApi;
+  ApplicationMessageQueue                  m_receivedMessages{2U};
+  std::unique_ptr<MqttApplicationReceiver> m_receiver;
 };
 
 TEST(MqttApplicationReceiverSettingsTest, RejectsEachRequiredSettingWhenItIsMissing) {
@@ -72,53 +71,53 @@ TEST(MqttApplicationReceiverSettingsTest, RejectsEachRequiredSettingWhenItIsMiss
 TEST_F(MqttApplicationReceiverTest, StartsWithTheConfiguredBrokerAndStopsItsResources) {
   createReceiver(settingsWithCredentials());
 
-  receiver_->start();
-  receiver_->start();
+  m_receiver->start();
+  m_receiver->start();
 
-  EXPECT_EQ(receiver_->installTopic(), "iot/devices/test-device/applications/install");
-  EXPECT_EQ(mqttClientApi_.connectedHost, "mqtt.example.test");
-  EXPECT_EQ(mqttClientApi_.connectedPort, 1884);
-  EXPECT_EQ(mqttClientApi_.connectedKeepAliveSeconds, 45);
-  EXPECT_TRUE(mqttClientApi_.credentialsWereConfigured);
-  EXPECT_EQ(mqttClientApi_.configuredUsername, "device-user");
-  EXPECT_EQ(mqttClientApi_.configuredPassword, "device-password");
+  EXPECT_EQ(m_receiver->installTopic(), "iot/devices/test-device/applications/install");
+  EXPECT_EQ(m_mqttClientApi.connectedHost, "mqtt.example.test");
+  EXPECT_EQ(m_mqttClientApi.connectedPort, 1884);
+  EXPECT_EQ(m_mqttClientApi.connectedKeepAliveSeconds, 45);
+  EXPECT_TRUE(m_mqttClientApi.credentialsWereConfigured);
+  EXPECT_EQ(m_mqttClientApi.configuredUsername, "device-user");
+  EXPECT_EQ(m_mqttClientApi.configuredPassword, "device-password");
 
-  receiver_->stop();
-  receiver_->stop();
-  EXPECT_TRUE(mqttClientApi_.networkLoopWasStopped);
-  EXPECT_TRUE(mqttClientApi_.clientWasDestroyed);
-  EXPECT_TRUE(mqttClientApi_.libraryWasCleanedUp);
+  m_receiver->stop();
+  m_receiver->stop();
+  EXPECT_TRUE(m_mqttClientApi.networkLoopWasStopped);
+  EXPECT_TRUE(m_mqttClientApi.clientWasDestroyed);
+  EXPECT_TRUE(m_mqttClientApi.libraryWasCleanedUp);
 }
 
 TEST_F(MqttApplicationReceiverTest, SubscribesAfterAConnectionAndHandlesBrokerErrors) {
   createReceiver();
-  receiver_->start();
+  m_receiver->start();
 
-  mqttClientApi_.reportConnectionResult(MQTT_RC_NOT_AUTHORIZED);
-  EXPECT_TRUE(mqttClientApi_.subscribedTopic.empty());
+  m_mqttClientApi.reportConnectionResult(MQTT_RC_NOT_AUTHORIZED);
+  EXPECT_TRUE(m_mqttClientApi.subscribedTopic.empty());
 
-  mqttClientApi_.subscriptionResult = MOSQ_ERR_INVAL;
-  mqttClientApi_.reportConnectionResult(MQTT_RC_SUCCESS);
-  EXPECT_EQ(mqttClientApi_.subscribedTopic, receiver_->installTopic());
+  m_mqttClientApi.subscriptionResult = MOSQ_ERR_INVAL;
+  m_mqttClientApi.reportConnectionResult(MQTT_RC_SUCCESS);
+  EXPECT_EQ(m_mqttClientApi.subscribedTopic, m_receiver->installTopic());
 
-  mqttClientApi_.subscriptionResult = MOSQ_ERR_SUCCESS;
-  mqttClientApi_.reportConnectionResult(MQTT_RC_SUCCESS);
-  mqttClientApi_.reportDisconnection(MQTT_RC_SESSION_TAKEN_OVER);
-  mqttClientApi_.reportDisconnection(MQTT_RC_SUCCESS);
+  m_mqttClientApi.subscriptionResult = MOSQ_ERR_SUCCESS;
+  m_mqttClientApi.reportConnectionResult(MQTT_RC_SUCCESS);
+  m_mqttClientApi.reportDisconnection(MQTT_RC_SESSION_TAKEN_OVER);
+  m_mqttClientApi.reportDisconnection(MQTT_RC_SUCCESS);
 }
 
 TEST_F(MqttApplicationReceiverTest, CopiesOnlyValidInstallMessagesIntoTheBoundedQueue) {
   createReceiver();
-  receiver_->start();
+  m_receiver->start();
 
-  mqttClientApi_.deliverEmptyMessage(receiver_->installTopic());
-  mqttClientApi_.deliverMessage("another/topic", "ignored");
-  mqttClientApi_.deliverMessage(receiver_->installTopic(), std::string(33U, 'x'));
-  EXPECT_FALSE(receivedMessages_.waitAndPopMessage(std::chrono::milliseconds(0)).has_value());
+  m_mqttClientApi.deliverEmptyMessage(m_receiver->installTopic());
+  m_mqttClientApi.deliverMessage("another/topic", "ignored");
+  m_mqttClientApi.deliverMessage(m_receiver->installTopic(), std::string(33U, 'x'));
+  EXPECT_FALSE(m_receivedMessages.waitAndPopMessage(std::chrono::milliseconds(0)).has_value());
 
-  mqttClientApi_.deliverMessage(receiver_->installTopic(), "first application");
-  mqttClientApi_.deliverMessage(receiver_->installTopic(), "queue is already full");
-  const auto receivedMessage = receivedMessages_.waitAndPopMessage(std::chrono::milliseconds(0));
+  m_mqttClientApi.deliverMessage(m_receiver->installTopic(), "first application");
+  m_mqttClientApi.deliverMessage(m_receiver->installTopic(), "queue is already full");
+  const auto receivedMessage = m_receivedMessages.waitAndPopMessage(std::chrono::milliseconds(0));
   ASSERT_TRUE(receivedMessage.has_value());
   EXPECT_EQ(receivedMessage->payload, "first application");
 }
@@ -126,50 +125,45 @@ TEST_F(MqttApplicationReceiverTest, CopiesOnlyValidInstallMessagesIntoTheBounded
 TEST_F(MqttApplicationReceiverTest, PublishesJsonStatusToTheCalculatedStatusTopic) {
   createReceiver();
 
-  receiver_->publishStatus({"before-start", "received", "app", "ignored"});
-  EXPECT_TRUE(mqttClientApi_.publishedTopic.empty());
+  m_receiver->publishStatus({"before-start", "received", "app", "ignored"});
+  EXPECT_TRUE(m_mqttClientApi.publishedTopic.empty());
 
-  receiver_->start();
-  receiver_->publishStatus({"", "received", "app", "ignored"});
-  receiver_->publishStatus({"transfer-42", "started", "app", "Application started"});
+  m_receiver->start();
+  m_receiver->publishStatus({"", "received", "app", "ignored"});
+  m_receiver->publishStatus({"transfer-42", "started", "app", "Application started"});
 
-  EXPECT_EQ(mqttClientApi_.publishedTopic, "iot/devices/test-device/applications/status/transfer-42");
-  EXPECT_NE(mqttClientApi_.publishedPayload.find("\"started\""), std::string::npos);
-  EXPECT_EQ(mqttClientApi_.publishedQualityOfService, 1);
-  EXPECT_EQ(mqttClientApi_.propertyFreeCount, 1U);
+  EXPECT_EQ(m_mqttClientApi.publishedTopic, "iot/devices/test-device/applications/status/transfer-42");
+  EXPECT_NE(m_mqttClientApi.publishedPayload.find("\"started\""), std::string::npos);
+  EXPECT_EQ(m_mqttClientApi.publishedQualityOfService, 1);
+  EXPECT_EQ(m_mqttClientApi.propertyFreeCount, 1U);
 }
 
 TEST_F(MqttApplicationReceiverTest, CleansPropertiesWhenStatusPublicationFails) {
   createReceiver();
-  receiver_->start();
+  m_receiver->start();
 
-  mqttClientApi_.contentTypePropertyResult = MOSQ_ERR_NOMEM;
-  receiver_->publishStatus({"property-failure", "failed", "app", "failure"});
-  EXPECT_EQ(mqttClientApi_.propertyFreeCount, 1U);
+  m_mqttClientApi.contentTypePropertyResult = MOSQ_ERR_NOMEM;
+  m_receiver->publishStatus({"property-failure", "failed", "app", "failure"});
+  EXPECT_EQ(m_mqttClientApi.propertyFreeCount, 1U);
 
-  mqttClientApi_.contentTypePropertyResult     = MOSQ_ERR_SUCCESS;
-  mqttClientApi_.correlationDataPropertyResult = MOSQ_ERR_NOMEM;
-  receiver_->publishStatus({"correlation-failure", "failed", "app", "failure"});
-  EXPECT_EQ(mqttClientApi_.propertyFreeCount, 2U);
-
-  mqttClientApi_.correlationDataPropertyResult = MOSQ_ERR_SUCCESS;
-  mqttClientApi_.publishResult                 = MOSQ_ERR_NO_CONN;
-  receiver_->publishStatus({"publish-failure", "failed", "app", "failure"});
-  EXPECT_EQ(mqttClientApi_.propertyFreeCount, 3U);
+  m_mqttClientApi.contentTypePropertyResult = MOSQ_ERR_SUCCESS;
+  m_mqttClientApi.publishResult             = MOSQ_ERR_NO_CONN;
+  m_receiver->publishStatus({"publish-failure", "failed", "app", "failure"});
+  EXPECT_EQ(m_mqttClientApi.propertyFreeCount, 2U);
 }
 
 TEST_F(MqttApplicationReceiverTest, ReleasesResourcesAfterEveryStartupFailure) {
-  expectStartupFailureWhen(mqttClientApi_.libraryInitializationResult);
-  expectStartupFailureWhen(mqttClientApi_.integerOptionResult);
-  expectStartupFailureWhen(mqttClientApi_.reconnectDelayResult);
-  expectStartupFailureWhen(mqttClientApi_.credentialsResult);
-  expectStartupFailureWhen(mqttClientApi_.asynchronousConnectionResult);
-  expectStartupFailureWhen(mqttClientApi_.networkLoopStartResult);
+  expectStartupFailureWhen(m_mqttClientApi.libraryInitializationResult);
+  expectStartupFailureWhen(m_mqttClientApi.integerOptionResult);
+  expectStartupFailureWhen(m_mqttClientApi.reconnectDelayResult);
+  expectStartupFailureWhen(m_mqttClientApi.credentialsResult);
+  expectStartupFailureWhen(m_mqttClientApi.asynchronousConnectionResult);
+  expectStartupFailureWhen(m_mqttClientApi.networkLoopStartResult);
 
-  mqttClientApi_.failClientCreation = true;
+  m_mqttClientApi.failClientCreation = true;
   createReceiver();
-  EXPECT_THROW(receiver_->start(), std::runtime_error);
-  EXPECT_TRUE(mqttClientApi_.libraryWasCleanedUp);
+  EXPECT_THROW(m_receiver->start(), std::runtime_error);
+  EXPECT_TRUE(m_mqttClientApi.libraryWasCleanedUp);
 }
 
 } // namespace

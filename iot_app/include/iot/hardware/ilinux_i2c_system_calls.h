@@ -6,11 +6,11 @@
 namespace iot {
 namespace hardware {
 
-/**
- * Linux operations used by `I2cDevice`.
+/*
+ * Internal Linux operations used by I2cDevice.
  *
- * This small boundary keeps operating-system calls separate from the I2C
- * transaction logic.
+ * Hardware drivers use II2cDevice. This lower-level wrapper only separates the
+ * operating-system calls from the I2C transaction code.
  */
 class ILinuxI2cSystemCalls {
 public:
@@ -22,9 +22,6 @@ public:
   virtual std::ptrdiff_t writeBytes(int fileDescriptor, const std::uint8_t *bytes, std::size_t byteCount) = 0;
   virtual std::ptrdiff_t readBytes(int fileDescriptor, std::uint8_t *bytes, std::size_t byteCount)        = 0;
 };
-
-/** Returns the Linux implementation used by the application. */
-ILinuxI2cSystemCalls &linuxI2cSystemCalls();
 
 } // namespace hardware
 } // namespace iot

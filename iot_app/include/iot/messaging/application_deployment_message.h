@@ -8,7 +8,7 @@
 namespace iot {
 namespace messaging {
 
-/** Application details and Python source read from one MQTT install message. */
+/* Application details and Python source read from an MQTT install message. */
 struct ApplicationDeploymentRequest {
   std::string transferId;
   std::string deviceId;
@@ -18,7 +18,7 @@ struct ApplicationDeploymentRequest {
   std::string sourceCode;
 };
 
-/** Progress or final result sent back to the Ubuntu sender. */
+/* Deployment progress or final result returned to the sender. */
 struct ApplicationDeploymentStatus {
   std::string transferId;
   std::string deploymentState;
@@ -26,33 +26,32 @@ struct ApplicationDeploymentStatus {
   std::string message;
 };
 
-/**
- * Reads the JSON message created by `iot_app_sender/send_app.py` and checks
- * that it is safe and complete.
+/*
+ * Reads the JSON message created by iot_app_sender/send_app.py and checks
+ * its fields, source size, and hash.
  */
 class ApplicationDeploymentMessageParser {
 public:
   explicit ApplicationDeploymentMessageParser(std::size_t maximumSourceSizeInBytes);
 
-  /**
-   * Reads one deployment request. It throws if a field, byte count, SHA-256
-   * hash, or target device ID is wrong.
+  /*
+   * Parses one request. Invalid fields, sizes, hashes, and device IDs cause an
+   * exception.
    */
   ApplicationDeploymentRequest parse(const std::string &messagePayload, const std::string &expectedDeviceId) const;
 
-  /**
-   * Tries to recover the transfer ID from a message that failed validation.
+  /*
+   * Reads the transfer ID without validating the complete request.
    *
-   * The ID lets the device calculate the correct status topic even when the
-   * rest of the message cannot be used.
+   * This is used to report a rejection when the rest of the message is bad.
    */
   std::optional<std::string> tryReadTransferId(const std::string &messagePayload) const noexcept;
 
-  /** Converts a deployment status into the JSON expected by the sender. */
+  /* Converts a deployment status into the JSON expected by the sender. */
   static std::string serializeStatusPayload(const ApplicationDeploymentStatus &deploymentStatus);
 
 private:
-  std::size_t maximumSourceSizeInBytes_{0};
+  std::size_t m_maximumSourceSizeInBytes{0};
 };
 
 } // namespace messaging

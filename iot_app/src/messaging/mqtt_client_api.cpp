@@ -1,7 +1,6 @@
 #include "iot/messaging/imqtt_client_api.h"
 
 #include <mosquitto.h>
-#include <mqtt_protocol.h>
 
 namespace iot {
 namespace messaging {
@@ -71,10 +70,6 @@ public:
 
   int addJsonContentType(mosquitto_property **mqttProperties) override {
     return mosquitto_property_add_string(mqttProperties, MQTT_PROP_CONTENT_TYPE, "application/json");
-  }
-
-  int addCorrelationData(mosquitto_property **mqttProperties, const void *data, std::uint16_t size) override {
-    return mosquitto_property_add_binary(mqttProperties, MQTT_PROP_CORRELATION_DATA, data, size);
   }
 
   int publish(struct mosquitto *mqttClient, const char *topic, const void *payload, int payloadSize,

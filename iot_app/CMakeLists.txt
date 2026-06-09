@@ -86,7 +86,6 @@ add_library(iot_runtime STATIC
   src/python/micropython_runtime.cpp
   src/python/micropython_application_context.cpp
   src/python/python_application_manager.cpp
-  src/python/python_application_runner.cpp
   src/python/temporary_python_application_installer.cpp
 )
 add_dependencies(iot_runtime generate_micropython_embed)

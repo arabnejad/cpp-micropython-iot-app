@@ -9,7 +9,7 @@
 extern "C" {
 #endif
 
-/** System values copied from C++ into plain C fields. */
+/* System values copied from C++ into plain C fields. */
 typedef struct {
   const char *hostname;
   const char *device_model;
@@ -42,7 +42,7 @@ typedef struct {
   const char *lvgl_version;
 } iot_system_information_t;
 
-/** One network interface copied from C++ into plain C fields. */
+/* One network interface copied from C++ into plain C fields. */
 typedef struct {
   const char *name;
   int         connected;
@@ -51,15 +51,15 @@ typedef struct {
   uint64_t    speed_megabits_per_second;
 } iot_network_interface_information_t;
 
-/** Copies the startup system information into `system_information`. */
+/* Copies the startup snapshot into system_information. */
 iot_native_result_t iot_system_read_information(iot_system_information_t *system_information);
-/** Gets the current local time as `YYYY-MM-DD HH:MM:SS`. */
+/* Reads local time as YYYY-MM-DD HH:MM:SS. */
 iot_native_result_t iot_system_current_time(const char **formatted_time);
-/** Reads the current Linux uptime without rebuilding all system information. */
+/* Reads the current Linux uptime without rebuilding all system information. */
 iot_native_result_t iot_system_uptime_seconds(uint64_t *uptime_seconds);
-/** Reads the current interfaces and returns the number that were found. */
+/* Reads the current interfaces and returns the number that were found. */
 iot_native_result_t iot_system_network_interface_count(size_t *count);
-/** Copies one interface from the latest reading selected by its index. */
+/* Copies one interface from the latest reading selected by its index. */
 iot_native_result_t
 iot_system_read_network_interface(size_t index, iot_network_interface_information_t *network_interface_information);
 

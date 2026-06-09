@@ -14,14 +14,14 @@ public:
     return "Test gamepad";
   }
   void connect() override {
-    connected_ = true;
+    m_connected = true;
   }
   void calibrateJoystick(std::size_t, int joystickDeadZone) override {
     setJoystickCalibration({500, 500}, joystickDeadZone);
   }
   void refreshInputState() override {}
   bool isConnected() const noexcept override {
-    return connected_;
+    return m_connected;
   }
 
   void setJoystickPosition(JoystickPosition joystickPosition) {
@@ -32,7 +32,7 @@ public:
   }
 
 private:
-  bool connected_{false};
+  bool m_connected{false};
 };
 
 TEST(GameControllerTest, ReportsEveryPressedButtonFromTheDriverMask) {

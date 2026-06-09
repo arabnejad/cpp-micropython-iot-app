@@ -5,13 +5,12 @@
 #include <mosquitto.h>
 
 #include <cstddef>
-#include <cstdint>
 #include <string>
 
 namespace iot {
 namespace tests {
 
-/**
+/*
  * In-memory MQTT API used by MqttApplicationReceiver tests.
  *
  * The receiver calls this object instead of opening a real broker connection.
@@ -27,7 +26,6 @@ public:
   int  networkLoopStartResult{MOSQ_ERR_SUCCESS};
   int  subscriptionResult{MOSQ_ERR_SUCCESS};
   int  contentTypePropertyResult{MOSQ_ERR_SUCCESS};
-  int  correlationDataPropertyResult{MOSQ_ERR_SUCCESS};
   int  publishResult{MOSQ_ERR_SUCCESS};
   bool failClientCreation{false};
 
@@ -62,7 +60,6 @@ public:
   int  stopNetworkLoop(struct mosquitto *mqttClient) override;
   int  subscribe(struct mosquitto *mqttClient, const char *topic) override;
   int  addJsonContentType(mosquitto_property **mqttProperties) override;
-  int  addCorrelationData(mosquitto_property **mqttProperties, const void *data, std::uint16_t size) override;
   int  publish(struct mosquitto *mqttClient, const char *topic, const void *payload, int payloadSize,
                const mosquitto_property *mqttProperties) override;
   void freeProperties(mosquitto_property **mqttProperties) override;
@@ -75,11 +72,11 @@ public:
   void deliverEmptyMessage(const std::string &topic);
 
 private:
-  struct mosquitto                   *client_{reinterpret_cast<struct mosquitto *>(this)};
-  void                               *userData_{nullptr};
-  messaging::MqttConnectedCallback    connectedCallback_{nullptr};
-  messaging::MqttDisconnectedCallback disconnectedCallback_{nullptr};
-  messaging::MqttMessageCallback      messageCallback_{nullptr};
+  struct mosquitto                   *m_client{reinterpret_cast<struct mosquitto *>(this)};
+  void                               *m_userData{nullptr};
+  messaging::MqttConnectedCallback    m_connectedCallback{nullptr};
+  messaging::MqttDisconnectedCallback m_disconnectedCallback{nullptr};
+  messaging::MqttMessageCallback      m_messageCallback{nullptr};
 };
 
 } // namespace tests

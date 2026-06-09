@@ -9,11 +9,11 @@
 namespace iot {
 namespace hardware {
 
-/**
- * The I2C operations used by hardware drivers.
+/*
+ * I2C operations available to hardware drivers.
  *
- * Hardware drivers depend on this interface instead of a particular operating
- * system implementation. The Linux application supplies `I2cDevice`.
+ * Hardware drivers use this interface to read and write I2C data. On Linux,
+ * I2cDevice implements the interface and manages the connection to the bus.
  */
 class II2cDevice {
 public:
