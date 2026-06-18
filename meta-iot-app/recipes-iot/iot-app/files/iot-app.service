@@ -1,0 +1,18 @@
+[Unit]
+Description=IoT App MicroPython runtime
+After=iot-app-storage.service network.target mosquitto.service
+Wants=iot-app-storage.service mosquitto.service
+
+[Service]
+Type=simple
+User=iot-app
+Group=iot-app
+SupplementaryGroups=video render i2c input
+ExecStartPre=+/usr/libexec/iot-app-hide-tty1-cursor
+ExecStartPre=/usr/libexec/iot-app-wait-ready 30
+ExecStart=/usr/libexec/iot-app-launcher
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

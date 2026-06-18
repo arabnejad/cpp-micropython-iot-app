@@ -10,7 +10,7 @@ User=iot-app
 Group=iot-app
 SupplementaryGroups=video render i2c input
 ExecStartPre=/usr/libexec/iot-app-wait-ready 30
-ExecStart=/usr/bin/iot_app
+ExecStart=/usr/libexec/iot-app-launcher
 Restart=on-failure
 RestartSec=2
 

@@ -1,9 +1,9 @@
 # Raspberry Pi OS development notes
 
 These notes describe development on Raspberry Pi OS. They do not describe the
-final Buildroot image. See
-[Buildroot guide](../buildroot/README.md) for the
-Buildroot workflow.
+complete images produced by Buildroot or Yocto. See the
+[Buildroot guide](../buildroot/README.md) or
+[Yocto guide](../yocto/README.md) for those workflows.
 
 ## 1. Can you compile locally and copy the binary?
 
@@ -81,7 +81,8 @@ version `GLIBC_2.xx' not found
 ```
 
 A reliable cross-build needs a Raspberry Pi OS-compatible sysroot and CMake
-toolchain file. Buildroot provides both for the final image.
+toolchain file. Buildroot and Yocto create their own matched toolchains and
+system images.
 
 ### Practical recommendation
 
@@ -90,7 +91,7 @@ Use this progression:
 1. Compile directly on the Pi during initial development.
 2. Develop over SSH or VS Code Remote SSH.
 3. Optionally establish a Raspberry Pi OS cross-toolchain after the application works.
-4. Use Buildroot’s cross-toolchain as the authoritative final build.
+4. Use the selected Buildroot or Yocto image build for final testing.
 
 Once you have an ARM-compatible binary, copying it is fine:
 

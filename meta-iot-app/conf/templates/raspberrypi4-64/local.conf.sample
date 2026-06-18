@@ -1,0 +1,53 @@
+MACHINE ??= "raspberrypi4-64"
+DISTRO ?= "iot-app-linux"
+
+# make yocto-prepare creates this file with the selected Poky, download, and
+# shared-state cache paths. Keeping those machine-specific paths in a generated
+# file lets this template contain only project settings.
+require conf/iot-app-build-paths.conf
+
+PACKAGE_CLASSES ?= "package_ipk"
+PATCHRESOLVE = "noop"
+
+# Build-statistics reports are not used by this project.
+USER_CLASSES = ""
+
+# Raspberry Pi Imager can write the compressed image directly, so a separate
+# bmap file is not generated.
+IMAGE_FSTYPES = "wic.xz"
+
+# make yocto-prepare creates this Wic file from storage_layout.conf. It keeps
+# the Linux root partition at a known size and adds an expandable data
+# partition for files that must survive a reboot.
+WKS_FILE = "iot-app-raspberrypi.wks"
+WKS_SEARCH_PATH:prepend = "${TOPDIR}/conf:"
+
+# Raspberry Pi hardware used by IoT App.
+ENABLE_I2C = "1"
+# Load the I2C character-device driver and the Raspberry Pi Wi-Fi driver during
+# boot. The image contains only selected kernel modules, so these drivers are
+# listed explicitly rather than relying on the complete kernel-modules package.
+KERNEL_MODULE_AUTOLOAD:rpi += "brcmfmac i2c-dev"
+
+# meta-raspberrypi marks the Raspberry Pi Wi-Fi firmware with this license
+# flag. Accepting it allows the image to include the firmware needed by wlan0.
+LICENSE_FLAGS_ACCEPTED += "synaptics-killswitch"
+
+# IoT App uses the existing framebuffer mode and does not change resolution at
+# runtime. Linux creates a 1920x1080 framebuffer during boot. quiet and
+# loglevel=4 keep normal kernel messages from being printed over the dashboard.
+# The messages are still available through dmesg and journalctl.
+CMDLINE:append = " quiet loglevel=4 video=HDMI-A-1:1920x1080@60"
+
+RPI_EXTRA_CONFIG:append = " \
+\n disable_overscan=1 \
+\n max_framebuffers=2 \
+\n dtparam=i2c_arm=on,i2c_arm_baudrate=400000 \
+"
+
+# Raspberry Pi has no battery-backed clock. systemd-timesyncd corrects the
+# clock after a network connection becomes available.
+DEFAULT_TIMEZONE = "Europe/London"
+hostname:pn-base-files = "rspi-iot-app"
+
+CONF_VERSION = "2"

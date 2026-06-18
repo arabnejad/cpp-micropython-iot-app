@@ -1,0 +1,3 @@
+# Copy one or more public SSH keys into a root-level file named
+# ssh_authorized_keys. Put each key on its own line. For example:
+# ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA... developer@example.com

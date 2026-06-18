@@ -35,8 +35,11 @@
 *.pyc
 sender_config.json
 
-# Local Buildroot credentials
-/iot_app/buildroot_external/board/raspberrypi4/wpa_supplicant.conf
+# Local Wi-Fi credentials used by Buildroot and Yocto
+/wpa_supplicant.conf
+
+# Optional personal SSH public keys included in development images
+/ssh_authorized_keys
 
 # Editor and operating-system files
 *.swp

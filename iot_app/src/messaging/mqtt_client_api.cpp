@@ -2,6 +2,21 @@
 
 #include <mosquitto.h>
 
+/*
+ * Buildroot currently provides Mosquitto 2.1.2, while the Yocto Scarthgap
+ * recipe provides 2.0.22 by default. Mosquitto 2.0 keeps some MQTT constants
+ * used below in mqtt_protocol.h, so the Yocto build needs that extra header.
+ *
+ * Starting with Mosquitto 2.1, mosquitto.h includes those definitions itself
+ * and the old mqtt_protocol.h compatibility header prints a warning when it
+ * is included directly. LIBMOSQUITTO_VERSION_NUMBER uses 2001000 for version
+ * 2.1.0, so only older versions include the separate header. This also keeps
+ * native Raspberry Pi OS builds working when they provide Mosquitto 2.0.
+ */
+#if LIBMOSQUITTO_VERSION_NUMBER < 2001000
+#include <mqtt_protocol.h>
+#endif
+
 namespace iot {
 namespace messaging {
 namespace {

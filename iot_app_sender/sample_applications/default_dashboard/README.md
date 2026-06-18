@@ -14,7 +14,7 @@ iot_app/default_python_application/
 
 This sample directory contains only this guide. It does not contain another
 copy of the application, so the version sent over MQTT is always the same one
-that CMake and Buildroot install on the Raspberry Pi.
+that CMake, Buildroot, and Yocto install on the Raspberry Pi.
 
 ## Restore the dashboard over MQTT
 

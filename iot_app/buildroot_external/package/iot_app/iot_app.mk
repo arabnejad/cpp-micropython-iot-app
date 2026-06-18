@@ -23,6 +23,20 @@ define IOT_APP_INSTALL_READY_CHECK
 endef
 IOT_APP_POST_INSTALL_TARGET_HOOKS += IOT_APP_INSTALL_READY_CHECK
 
+define IOT_APP_INSTALL_DATA_STORAGE_PREPARATION
+	$(INSTALL) -D -m 0755 \
+		$(BR2_EXTERNAL_IOT_PROJECT_PATH)/../image_support/iot-app-prepare-data-storage \
+		$(TARGET_DIR)/usr/libexec/iot-app-prepare-data-storage
+endef
+IOT_APP_POST_INSTALL_TARGET_HOOKS += IOT_APP_INSTALL_DATA_STORAGE_PREPARATION
+
+define IOT_APP_INSTALL_LAUNCHER
+	$(INSTALL) -D -m 0755 \
+		$(BR2_EXTERNAL_IOT_PROJECT_PATH)/../image_support/iot-app-launcher \
+		$(TARGET_DIR)/usr/libexec/iot-app-launcher
+endef
+IOT_APP_POST_INSTALL_TARGET_HOOKS += IOT_APP_INSTALL_LAUNCHER
+
 define IOT_APP_INSTALL_INIT_SYSV
 	$(RM) $(TARGET_DIR)/etc/init.d/S90iot-app \
 		$(TARGET_DIR)/etc/init.d/iot-app

@@ -1,0 +1,13 @@
+IoT App Yocto build
+
+Build the complete Raspberry Pi image with:
+
+    bitbake iot-app-image
+
+Build only the application package with:
+
+    bitbake iot-app
+
+The root Makefile runs these commands with the correct build directory. See:
+
+    iot_app/docs/yocto/README.md

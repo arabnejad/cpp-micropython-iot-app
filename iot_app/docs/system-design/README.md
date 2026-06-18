@@ -26,6 +26,8 @@ deployment. The shorter guides are better for day-to-day tasks:
 - [Sender guide](../../../iot_app_sender/README.md) for deploying an
   application over MQTT.
 - [Buildroot guide](../buildroot/README.md) for building and flashing an image.
+- [Yocto guide](../yocto/README.md) for building the equivalent image with
+  Yocto and the project-owned layer.
 
 ## 2. What the system is responsible for
 
@@ -40,7 +42,7 @@ IoT App handles these jobs:
 - Receive a single-file Python application through MQTT.
 - Validate, install, start, and report the result of a deployment.
 - Recover from Python startup and scheduled-callback failures.
-- Build as part of Raspberry Pi OS development or a Buildroot image.
+- Build on Raspberry Pi OS or as part of a Buildroot or Yocto image.
 
 The system does not currently:
 
@@ -634,7 +636,7 @@ from the device when it starts.
 │             System              │             Network             │             Display             │
 │                                 │                                 │                                 │
 │     Raspberry Pi 4 Model B      │         eth0: Connected         │      Connected displays: 1      │
-│         Raspberry Pi OS         │       IPv4: 192.168.0.67        │      HDMI-A-1, AOC U27B3A       │
+│         Raspberry Pi OS         │        IPv4: 192.0.2.10         │      HDMI-A-1, AOC U27B3A       │
 │       Linux 6.12, aarch64       │        Speed: 1000 Mbps         │        1920x1080 @ 60 Hz        │
 ├─────────────────────────────────┼─────────────────────────────────┼─────────────────────────────────┤
 │      Resources at startup       │           Interfaces            │             Devices             │
@@ -1327,7 +1329,7 @@ A successful deployment produces output similar to this:
 ```text
 Application: .../sample_applications/moving_text_in_frame
 Python source: .../sample_applications/moving_text_in_frame/main.py
-MQTT broker: 192.168.0.67:1883
+MQTT broker: rspi-iot-app.local:1883
 Install topic: iot/devices/raspberrypi-01/applications/install
 Transfer ID: 71b84271630a467aa16ee7b4a0c39632
 Message size: 6657 bytes
@@ -1586,7 +1588,37 @@ The package recipe:
 - Creates a dedicated `iot-app` runtime user.
 - Adds the user to `video`, `render`, `i2c`, and `input` groups.
 - Installs either a SysV startup script or systemd service.
+- Installs the launcher that selects the installed or development executable.
 - Installs device-access rules for systemd/udev builds.
+
+### Why helper programs are installed under `/usr/libexec`
+
+`/usr/bin` is used for programs that a user may run directly. The main
+application is therefore installed as:
+
+```text
+/usr/bin/iot_app
+```
+
+`/usr/libexec` is commonly used for executable helper programs that belong to
+an application or service. These files are executable programs, not shared
+libraries. They are kept out of `/usr/bin` because users do not normally call
+them directly. The startup scripts and systemd services use their complete
+paths instead of looking for them through `PATH`.
+
+Buildroot and Yocto create `/usr/libexec` while installing these helpers:
+
+| Helper | Purpose |
+|---|---|
+| `/usr/libexec/iot-app-launcher` | Chooses the development executable from `/data`, or uses `/usr/bin/iot_app` |
+| `/usr/libexec/iot-app-wait-ready` | Waits briefly for networking and the MQTT broker before startup |
+| `/usr/libexec/iot-app-prepare-data-storage` | Expands, mounts, and prepares the persistent `/data` partition |
+| `/usr/libexec/iot-app-hide-tty1-cursor` | Hides the Yocto console cursor before the framebuffer dashboard starts |
+
+The GNU build-system documentation describes
+[`libexecdir`](https://www.gnu.org/prep/standards/html_node/Directory-Variables.html#index-libexecdir)
+as the location for executable programs intended to be run by other programs
+rather than by users.
 
 The external tree contains two project configurations. `iot_rpi4_defconfig`
 targets a Raspberry Pi 4 Model B development system, while
@@ -1603,7 +1635,38 @@ also waits for
 `/dev/fb0` and restarts after failure. The SysV script uses
 `start-stop-daemon` with the same runtime account.
 
-## 25. Source layout by responsibility
+The Raspberry Pi 4 image mounts persistent storage at `/data`. During normal
+startup, `/usr/libexec/iot-app-launcher` checks for
+`/data/iot-app/development/iot_app`. A regular executable at that path is used
+for development testing. Otherwise, the launcher runs `/usr/bin/iot_app` from
+the image. Removing the development file restores the installed executable on
+the next service start.
+
+## 25. Yocto integration
+
+`meta-iot-app` is the project-owned Yocto layer. The upstream Poky,
+OpenEmbedded, and Raspberry Pi layers remain unmodified submodules.
+
+The application recipe builds the same `iot_app` CMake target used by native
+and Buildroot builds. It points CMake at the pinned LVGL and MicroPython source
+trees, creates the `iot-app` account, installs the systemd service, and adds
+the launcher and device-access rules.
+
+The system configuration package installs the Ethernet and Wi-Fi network
+units, enables network and time services, reserves `tty1` for the dashboard,
+and provides an emergency login on `tty2`.
+The root `wpa_supplicant.conf` is the private Wi-Fi configuration shared by
+Buildroot and Yocto. The preparation command copies it into the Yocto build
+directory, and an append file installs that copy in the image. A separate
+append file applies the development Mosquitto listener without making two
+packages own the same file.
+
+`iot-app-image.bb` creates the complete Raspberry Pi image. It includes SSH,
+Mosquitto, Wi-Fi firmware, I2C tools, time-zone information, and the IoT App
+packages. The generated Wic image contains boot, root, and expandable data
+partitions and can be written to a microSD card with Raspberry Pi Imager.
+
+## 26. Source layout by responsibility
 
 ```text
 src/runtime/

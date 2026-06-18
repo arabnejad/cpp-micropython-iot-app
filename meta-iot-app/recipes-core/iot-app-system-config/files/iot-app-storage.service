@@ -1,0 +1,11 @@
+[Unit]
+Description=Expand and mount IoT App persistent storage
+Before=iot-app.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/iot-app-prepare-data-storage
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
