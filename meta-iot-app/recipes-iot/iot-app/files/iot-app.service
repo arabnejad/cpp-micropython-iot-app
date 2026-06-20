@@ -1,6 +1,9 @@
 [Unit]
 Description=IoT App MicroPython runtime
-After=iot-app-storage.service network.target mosquitto.service
+# The dashboard requires the framebuffer. Network access and MQTT are optional
+# because the dashboard works offline and the MQTT client reconnects.
+Requires=dev-fb0.device
+After=dev-fb0.device iot-app-storage.service mosquitto.service
 Wants=iot-app-storage.service mosquitto.service
 
 [Service]
@@ -9,7 +12,6 @@ User=iot-app
 Group=iot-app
 SupplementaryGroups=video render i2c input
 ExecStartPre=+/usr/libexec/iot-app-hide-tty1-cursor
-ExecStartPre=/usr/libexec/iot-app-wait-ready 30
 ExecStart=/usr/libexec/iot-app-launcher
 Restart=on-failure
 RestartSec=2

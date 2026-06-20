@@ -9,7 +9,8 @@ PROCESS_NAME="iot_app"
 PIDFILE="/var/run/iot_app.pid"
 LOGFILE="/var/log/iot_app.log"
 RUNTIME_USER="iot-app"
-STARTUP_WAIT_SECONDS=30
+FRAMEBUFFER_DEVICE="/dev/fb0"
+FRAMEBUFFER_WAIT_SECONDS=10
 
 iot_app_is_running() {
 	[ -r "$PIDFILE" ] || return 1
@@ -17,10 +18,17 @@ iot_app_is_running() {
 	[ -n "$iot_app_pid" ] && kill -0 "$iot_app_pid" 2>/dev/null
 }
 
-wait_for_startup_services() {
-	printf "Waiting for network and MQTT for up to %s seconds: " "$STARTUP_WAIT_SECONDS"
-	/usr/libexec/iot-app-wait-ready "$STARTUP_WAIT_SECONDS"
-	echo "ready or continuing offline"
+wait_for_framebuffer() {
+	# Network access and MQTT are optional. Only the framebuffer must be ready
+	# before the application can draw its first screen.
+	waited_seconds=0
+	while [ ! -c "$FRAMEBUFFER_DEVICE" ] &&
+	      [ "$waited_seconds" -lt "$FRAMEBUFFER_WAIT_SECONDS" ]; do
+		sleep 1
+		waited_seconds=$((waited_seconds + 1))
+	done
+
+	[ -c "$FRAMEBUFFER_DEVICE" ]
 }
 
 start() {
@@ -45,7 +53,10 @@ start() {
 		printf '\033[?25l' > /dev/tty1
 	fi
 
-	wait_for_startup_services
+	if ! wait_for_framebuffer; then
+		echo "Cannot start iot_app: $FRAMEBUFFER_DEVICE is not available"
+		return 1
+	fi
 
 	printf "Starting iot_app: "
 	touch "$LOGFILE"

@@ -1606,12 +1606,13 @@ libraries. They are kept out of `/usr/bin` because users do not normally call
 them directly. The startup scripts and systemd services use their complete
 paths instead of looking for them through `PATH`.
 
-Buildroot and Yocto create `/usr/libexec` while installing these helpers:
+Buildroot and Yocto create `/usr/libexec` while installing their service
+helpers. Both install the launcher and storage helper. Yocto also installs the
+cursor helper used by its systemd service:
 
 | Helper | Purpose |
 |---|---|
 | `/usr/libexec/iot-app-launcher` | Chooses the development executable from `/data`, or uses `/usr/bin/iot_app` |
-| `/usr/libexec/iot-app-wait-ready` | Waits briefly for networking and the MQTT broker before startup |
 | `/usr/libexec/iot-app-prepare-data-storage` | Expands, mounts, and prepares the persistent `/data` partition |
 | `/usr/libexec/iot-app-hide-tty1-cursor` | Hides the Yocto console cursor before the framebuffer dashboard starts |
 
@@ -1626,14 +1627,13 @@ targets a Raspberry Pi 4 Model B development system, while
 architecture and build an aarch64 Linux image with the required display and
 runtime support.
 
-Both service types run the same readiness check before starting IoT App. It
-waits up to 30 seconds for Ethernet or Wi-Fi to receive an IPv4 address and for
-the local Mosquitto process to start. The local-only `lo` interface does not
-count as a network connection. IoT App still starts after the timeout, so the
-offline dashboard can appear and MQTT can reconnect later. The systemd service
-also waits for
-`/dev/fb0` and restarts after failure. The SysV script uses
-`start-stop-daemon` with the same runtime account.
+The framebuffer is the only service dependency required before IoT App can
+start. Systemd expresses that dependency through `dev-fb0.device`. The
+Buildroot SysV script starts near the end of boot and waits up to 10 seconds
+only if `/dev/fb0` has not appeared yet. Neither service waits for an IP
+address or a working MQTT connection. The default dashboard can run offline,
+and libmosquitto reconnects when the local broker becomes available. The SysV
+script uses `start-stop-daemon` with the same runtime account.
 
 The Raspberry Pi 4 image mounts persistent storage at `/data`. During normal
 startup, `/usr/libexec/iot-app-launcher` checks for

@@ -43,7 +43,6 @@ SRC_URI = " \
     file://iot-app-launcher \
     file://iot-app.service \
     file://iot-app-hide-tty1-cursor \
-    file://iot-app-wait-ready \
     file://70-iot-app-access.rules \
 "
 
@@ -61,8 +60,6 @@ do_install:append() {
         "${D}${libexecdir}/iot-app-launcher"
     install -D -m 0755 "${WORKDIR}/iot-app-hide-tty1-cursor" \
         "${D}${libexecdir}/iot-app-hide-tty1-cursor"
-    install -D -m 0755 "${WORKDIR}/iot-app-wait-ready" \
-        "${D}${libexecdir}/iot-app-wait-ready"
     install -D -m 0644 "${WORKDIR}/iot-app.service" \
         "${D}${systemd_system_unitdir}/iot-app.service"
     install -D -m 0644 "${WORKDIR}/70-iot-app-access.rules" \
@@ -72,9 +69,6 @@ do_install:append() {
 FILES:${PN} += " \
     ${libexecdir}/iot-app-launcher \
     ${libexecdir}/iot-app-hide-tty1-cursor \
-    ${libexecdir}/iot-app-wait-ready \
     ${systemd_system_unitdir}/iot-app.service \
     ${nonarch_base_libdir}/udev/rules.d/70-iot-app-access.rules \
 "
-
-RDEPENDS:${PN} += "iproute2"

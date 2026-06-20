@@ -37,9 +37,8 @@ The Yocto image is configured to:
 - run a local Mosquitto broker on IPv4 port 1883;
 - expand and mount the persistent data partition at `/data`;
 - start IoT App automatically after the framebuffer is available;
-- wait up to 30 seconds for an IPv4 address and Mosquitto before starting IoT
-  App; and
-- keep running offline if the network is unavailable.
+- keep running offline if the network is unavailable; and
+- reconnect to Mosquitto when the broker becomes available.
 
 The development SSH login is:
 
@@ -611,23 +610,22 @@ Kernel and systemd start
         +--> Start time synchronization
         |
         v
-Start the IoT App service after the network stack and Mosquitto units
-        |
-        v
-Readiness helper waits up to 30 seconds for /dev/fb0, IPv4, and MQTT
+Start IoT App when /dev/fb0 is available
         |
         v
 Default Python dashboard appears on /dev/fb0
 ```
 
-The readiness helper will not launch IoT App until `/dev/fb0` exists. IoT App
-uses the active 1920x1080 framebuffer and does not change the monitor
-resolution. Raspberry Pi documents the `video=` syntax used by this image in
-its [KMS command-line guide](https://www.raspberrypi.com/documentation/computers/configuration.html#set-the-kms-display-mode).
+The systemd service requires `/dev/fb0`, so it starts as soon as the
+framebuffer device is available. It does not wait for an IPv4 address or a
+working MQTT connection. IoT App uses the active 1920x1080 framebuffer and
+does not change the monitor resolution. Raspberry Pi documents the `video=`
+syntax used by this image in its
+[KMS command-line guide](https://www.raspberrypi.com/documentation/computers/configuration.html#set-the-kms-display-mode).
 
-If networking is unavailable, the readiness check finishes after 30 seconds
-and IoT App still starts. The dashboard can show an offline state, and the MQTT
-receiver reconnects when the broker becomes reachable.
+If networking is unavailable, the dashboard starts in offline mode. Its
+network panel refreshes after startup, and the MQTT receiver reconnects when
+the broker becomes reachable.
 
 ## 13. Find the Raspberry Pi address
 
@@ -1171,13 +1169,13 @@ id iot-app
 ls -l /dev/fb0 /dev/dri /dev/i2c-1
 ```
 
-The application needs `/dev/fb0` to draw the screen. Its startup helper waits
-up to 30 seconds for the framebuffer, network, and MQTT broker. Network and
-MQTT are optional, but startup fails and systemd retries if the framebuffer is
-still missing. If `/dev/fb0` never appears, inspect the kernel log and
-Raspberry Pi KMS configuration:
+The application needs `/dev/fb0` to draw the screen. The systemd service
+therefore requires `dev-fb0.device`; it does not wait for network access or an
+MQTT connection. If `/dev/fb0` never appears, inspect the device unit, kernel
+log, and Raspberry Pi KMS configuration:
 
 ```sh
+systemctl status dev-fb0.device --no-pager
 dmesg | grep -Ei 'drm|vc4|framebuffer|fb0'
 cat /proc/cmdline
 ```
@@ -1205,62 +1203,24 @@ journalctl -b -u iot-app --no-pager
 The expected result is an enabled service and a link from
 `multi-user.target.wants` to `iot-app.service`.
 
-An older image may contain `Requires=dev-fb0.device` in the service. That
-dependency can miss the framebuffer during early boot and systemd will not
-retry the skipped service when the device appears later. Remove the strict
-device dependency on the running image with:
-
-```sh
-sed -i \
-  -e '/^Requires=dev-fb0.device$/d' \
-  -e 's/^After=dev-fb0.device /After=/' \
-  /usr/lib/systemd/system/iot-app.service
-
-systemctl daemon-reload
-systemctl enable iot-app.service
-systemctl restart iot-app
-```
-
-The current project service uses the startup helper instead of the strict
-device dependency, so newly built images do not need this repair.
-
 ### IoT App starts later than it does on Buildroot
 
-Buildroot starts Wi-Fi, networking, Mosquitto, and then the `S90iot-app` script
-in that order. Its Mosquitto service does not wait for a fully configured
-network, so the local broker is normally running by the time IoT App starts.
+Buildroot starts the `S90iot-app` script near the end of its sequential boot
+process. The script waits for `/dev/fb0` only when that device has not appeared
+yet, with a maximum wait of 10 seconds.
 
-The original Yocto setup behaved differently. Its packaged Mosquitto service
-waited for `network-online.target`, and IoT App was configured to start after
-Mosquitto. This meant IoT App could remain queued for about a minute while
-systemd waited for Wi-Fi and DHCP. That wait happened before
-`iot-app-wait-ready` was called. Starting services in parallel was part of the
-boot environment, but it was not the main cause of the delay.
+Yocto lets systemd start independent services in parallel. Its IoT App unit
+requires `dev-fb0.device` and is ordered after storage and Mosquitto, but it
+does not wait for Wi-Fi, DHCP, or `network-online.target`. A missing network
+address therefore does not delay the dashboard. The MQTT client connects
+through `127.0.0.1` and reconnects if the local broker is not ready.
 
-This image replaces the packaged Mosquitto unit with a local version that does
-not wait for `network-online.target`. IoT App connects to the broker through
-`127.0.0.1`, and the broker's wildcard listener can be opened before Wi-Fi or
-Ethernet has an address. This makes the Yocto startup order closer to
-Buildroot. A complete unit override is used because systemd does not allow an
-existing `After=` or `Wants=` dependency to be removed with a drop-in file.
 The [systemd network-target notes](https://systemd.io/NETWORK_ONLINE/)
-explain why `network.target` does not mean that an interface already has an
-address.
+explain why normal services should not wait for `network-online.target` unless
+they cannot work without a configured network.
 
-After systemd starts the IoT App service, `iot-app-wait-ready` checks for
-`/dev/fb0`, an IPv4 address other than `127.0.0.1`, and Mosquitto. It returns
-immediately when all three are ready. If networking is still unavailable, it
-waits for up to 30 seconds and then lets IoT App start in offline mode. The
-MQTT client reconnects later. If `/dev/fb0` is missing, startup fails and
-systemd retries the service because the application cannot draw without the
-framebuffer.
-
-The journal helps separate the two types of delay. If the `Starting IoT App`
-message appears late, systemd was waiting for an earlier unit. If `Starting`
-appears promptly but `Started` appears later, the readiness helper was waiting
-for one of its checks.
-
-Use these commands to see which service took time during the current boot:
+If startup is still delayed, use these commands to see which required or
+ordered unit took time:
 
 ```sh
 systemd-analyze critical-chain iot-app.service

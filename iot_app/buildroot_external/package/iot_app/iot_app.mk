@@ -17,12 +17,6 @@ define IOT_APP_USERS
 	iot-app -1 iot-app -1 * - - video,render,i2c,input IoT App runtime user
 endef
 
-define IOT_APP_INSTALL_READY_CHECK
-	$(INSTALL) -D -m 0755 $(IOT_APP_PKGDIR)/iot-app-wait-ready \
-		$(TARGET_DIR)/usr/libexec/iot-app-wait-ready
-endef
-IOT_APP_POST_INSTALL_TARGET_HOOKS += IOT_APP_INSTALL_READY_CHECK
-
 define IOT_APP_INSTALL_DATA_STORAGE_PREPARATION
 	$(INSTALL) -D -m 0755 \
 		$(BR2_EXTERNAL_IOT_PROJECT_PATH)/../image_support/iot-app-prepare-data-storage \
