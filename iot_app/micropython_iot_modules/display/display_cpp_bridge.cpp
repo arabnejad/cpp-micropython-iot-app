@@ -171,7 +171,7 @@ extern "C" iot_native_result_t iot_display_information(iot_display_information_t
     }
 
     const auto &activeDisplay                   = context().activeDisplay();
-    displayInformation->connected_display_count = context().connectedDisplays().size();
+    displayInformation->connected_display_count = context().connectedDisplayCount();
     displayInformation->connector_name          = activeDisplay.display().displayId.connectorName.c_str();
     displayInformation->manufacturer            = activeDisplay.display().manufacturer.c_str();
     displayInformation->model                   = activeDisplay.display().model.c_str();

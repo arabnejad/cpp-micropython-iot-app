@@ -54,8 +54,8 @@ protected:
     m_screenManager.stop();
   }
 
-  PythonApplicationManager createApplicationManager() {
-    return PythonApplicationManager(m_screenManager, tests::testActiveDisplay(), m_displayManager,
+  PythonApplicationManager createApplicationManager(std::size_t connectedDisplayCount = 1U) {
+    return PythonApplicationManager(m_screenManager, tests::testActiveDisplay(), connectedDisplayCount,
                                     m_systemInformationProvider, 256U * 1024U);
   }
 
@@ -74,7 +74,6 @@ protected:
   std::unique_ptr<tests::RecordingRenderBackend> m_recordingRenderBackend;
   tests::RecordingRenderBackend                 *m_recordingRenderBackendView;
   ui::ScreenManager                              m_screenManager;
-  tests::TestDisplayManager                      m_displayManager;
   tests::TestSystemInformationProvider           m_systemInformationProvider;
 };
 
@@ -133,12 +132,12 @@ TEST_F(PythonApplicationManagerTest, LetsPythonUseDisplayAndSystemModulesThrough
 }
 
 TEST_F(PythonApplicationManagerTest, LetsPythonUseEveryDisplayAndSystemFunction) {
-  auto pythonApplicationManager = createApplicationManager();
+  auto pythonApplicationManager = createApplicationManager(2U);
 
   const auto activationResult = pythonApplicationManager.activateExternalApplication(createPythonApplication(
       "Native module test", "import iot\n"
                             "display_information = iot.display.information()\n"
-                            "assert display_information['connected_display_count'] == 1\n"
+                            "assert display_information['connected_display_count'] == 2\n"
                             "assert display_information['connector_name'] == 'HDMI-A-1'\n"
                             "assert display_information['width'] == 1920\n"
                             "assert display_information['height'] == 1080\n"
@@ -251,8 +250,8 @@ TEST_F(PythonApplicationManagerTest, ReportsAndRunsTheNextScheduledCallback) {
 
 TEST_F(PythonApplicationManagerTest, ShowsTheEmergencyScreenWhenReadingSystemInformationFails) {
   ThrowingSystemInformationProvider throwingSystemInformationProvider;
-  PythonApplicationManager pythonApplicationManager(m_screenManager, tests::testActiveDisplay(), m_displayManager,
-                                                    throwingSystemInformationProvider, 256U * 1024U);
+  PythonApplicationManager          pythonApplicationManager(m_screenManager, tests::testActiveDisplay(), 1U,
+                                                             throwingSystemInformationProvider, 256U * 1024U);
 
   const auto activationResult =
       pythonApplicationManager.activateExternalApplication(createPythonApplication("External", "value = 2\n"));
@@ -271,7 +270,7 @@ TEST_F(PythonApplicationManagerTest, RejectsAnEmptyDefaultApplication) {
 }
 
 TEST_F(PythonApplicationManagerTest, RejectsAZeroByteMicroPythonHeap) {
-  EXPECT_THROW(static_cast<void>(PythonApplicationManager(m_screenManager, tests::testActiveDisplay(), m_displayManager,
+  EXPECT_THROW(static_cast<void>(PythonApplicationManager(m_screenManager, tests::testActiveDisplay(), 1U,
                                                           m_systemInformationProvider, 0U)),
                std::invalid_argument);
 }
