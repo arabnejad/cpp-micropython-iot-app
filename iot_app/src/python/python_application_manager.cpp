@@ -65,11 +65,11 @@ std::string tracebackSummaryForLog(const std::string &traceback) {
 
 PythonApplicationManager::PythonApplicationManager(ui::ScreenManager                        &screenManager,
                                                    display::ActiveDisplay                    activeDisplay,
-                                                   std::size_t                               connectedDisplayCount,
+                                                   std::vector<display::DisplayInfo>         connectedDisplays,
                                                    const system::ISystemInformationProvider &systemInformationProvider,
                                                    std::size_t                               pythonHeapSizeInBytes)
     : m_screenManager(screenManager), m_activeDisplay(std::move(activeDisplay)),
-      m_connectedDisplayCount(connectedDisplayCount), m_systemInformationProvider(systemInformationProvider),
+      m_connectedDisplays(std::move(connectedDisplays)), m_systemInformationProvider(systemInformationProvider),
       m_pythonHeapSizeInBytes(pythonHeapSizeInBytes) {
   if (m_pythonHeapSizeInBytes == 0U) {
     IOT_LOG_ERROR(m_logger, "Cannot create the Python application manager because pythonHeapSizeInBytes is zero");
@@ -161,7 +161,7 @@ PythonApplicationManager::startApplicationInNewInterpreter(const PythonApplicati
   m_screenManager.throwIfRenderThreadFailed();
   try {
     m_microPythonApplicationContext = std::make_unique<MicroPythonApplicationContext>(
-        m_screenManager, m_activeDisplay, m_connectedDisplayCount, m_systemInformationProvider,
+        m_screenManager, m_activeDisplay, m_connectedDisplays, m_systemInformationProvider,
         m_systemInformationProvider.readSystemInformation(), pythonApplication.applicationName);
     m_microPythonRuntime = std::make_unique<MicroPythonRuntime>(m_pythonHeapSizeInBytes);
 

@@ -29,7 +29,8 @@ buttons = gamepad.buttons()
 
 system_information = system.information()
 network_interfaces = system.network_interfaces()
-display_information = display.information()
+active_monitor = display.active_monitor()
+active_monitor_mode = active_monitor["current_mode"]
 
 selected_item_index = 0
 joystick_is_ready_for_another_move = True
@@ -61,12 +62,12 @@ def details_for_selected_item():
 
     if selected_item_index == 2:
         return "%s\n%s %s\n%dx%d @ %d Hz" % (
-            display_information["connector_name"],
-            display_information["manufacturer"],
-            display_information["model"],
-            display_information["width"],
-            display_information["height"],
-            display_information["refresh_rate_hz"],
+            active_monitor["connector_name"],
+            active_monitor["manufacturer"],
+            active_monitor["model"],
+            active_monitor_mode["width"],
+            active_monitor_mode["height"],
+            active_monitor_mode["refresh_rate_hz"],
         )
 
     return "%s\nProduct ID: %d\nI2C bus %d at 0x%02X" % (

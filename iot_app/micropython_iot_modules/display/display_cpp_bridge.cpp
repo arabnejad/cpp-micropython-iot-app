@@ -86,6 +86,15 @@ void applyOptionalUint16Value(int32_t suppliedValue, int32_t minimum, uint16_t &
   }
 }
 
+void copyDisplayMode(const iot::display::DisplayMode &displayMode, iot_display_mode_information_t &modeInformation) {
+  modeInformation.name            = displayMode.name.c_str();
+  modeInformation.width           = displayMode.width;
+  modeInformation.height          = displayMode.height;
+  modeInformation.refresh_rate_hz = displayMode.refreshRateHz;
+  modeInformation.preferred       = displayMode.preferred ? 1 : 0;
+  modeInformation.interlaced      = displayMode.interlaced ? 1 : 0;
+}
+
 } // namespace
 
 extern "C" iot_native_result_t iot_display_clear(uint8_t red, uint8_t green, uint8_t blue) {
@@ -164,19 +173,58 @@ extern "C" iot_native_result_t iot_display_size(uint32_t *width, uint32_t *heigh
   });
 }
 
-extern "C" iot_native_result_t iot_display_information(iot_display_information_t *displayInformation) {
+extern "C" iot_native_result_t iot_display_monitor_count(size_t *monitorCount) {
   return runSafely([=] {
-    if (displayInformation == nullptr) {
-      throw std::invalid_argument("Display-information output is missing");
+    if (monitorCount == nullptr) {
+      throw std::invalid_argument("Monitor-count output is missing");
+    }
+    *monitorCount = context().connectedDisplays().size();
+  });
+}
+
+extern "C" iot_native_result_t iot_display_monitor_information(size_t                     monitorIndex,
+                                                               iot_monitor_information_t *monitorInformation) {
+  return runSafely([=] {
+    if (monitorInformation == nullptr) {
+      throw std::invalid_argument("Monitor-information output is missing");
     }
 
-    const auto &activeDisplay                   = context().activeDisplay();
-    displayInformation->connected_display_count = context().connectedDisplayCount();
-    displayInformation->connector_name          = activeDisplay.display().displayId.connectorName.c_str();
-    displayInformation->manufacturer            = activeDisplay.display().manufacturer.c_str();
-    displayInformation->model                   = activeDisplay.display().model.c_str();
-    displayInformation->width                   = activeDisplay.mode().width;
-    displayInformation->height                  = activeDisplay.mode().height;
-    displayInformation->refresh_rate_hz         = activeDisplay.mode().refreshRateHz;
+    const auto &connectedDisplays = context().connectedDisplays();
+    if (monitorIndex >= connectedDisplays.size()) {
+      throw std::out_of_range("Monitor index is outside the startup monitor list");
+    }
+
+    const auto &displayInformation         = connectedDisplays[monitorIndex];
+    monitorInformation->connector_name     = displayInformation.displayId.connectorName.c_str();
+    monitorInformation->manufacturer       = displayInformation.manufacturer.c_str();
+    monitorInformation->model              = displayInformation.model.c_str();
+    monitorInformation->serial_number      = displayInformation.serialNumber.c_str();
+    monitorInformation->physical_width_mm  = displayInformation.physicalWidthMm;
+    monitorInformation->physical_height_mm = displayInformation.physicalHeightMm;
+    monitorInformation->active = displayInformation.displayId == context().activeDisplay().display().displayId ? 1 : 0;
+    monitorInformation->has_current_mode = displayInformation.currentMode.has_value() ? 1 : 0;
+    if (displayInformation.currentMode) {
+      copyDisplayMode(*displayInformation.currentMode, monitorInformation->current_mode);
+    }
+    monitorInformation->supported_mode_count = displayInformation.supportedModes.size();
+  });
+}
+
+extern "C" iot_native_result_t iot_display_supported_mode_information(size_t monitorIndex, size_t modeIndex,
+                                                                      iot_display_mode_information_t *modeInformation) {
+  return runSafely([=] {
+    if (modeInformation == nullptr) {
+      throw std::invalid_argument("Display-mode output is missing");
+    }
+
+    const auto &connectedDisplays = context().connectedDisplays();
+    if (monitorIndex >= connectedDisplays.size()) {
+      throw std::out_of_range("Monitor index is outside the startup monitor list");
+    }
+    const auto &supportedModes = connectedDisplays[monitorIndex].supportedModes;
+    if (modeIndex >= supportedModes.size()) {
+      throw std::out_of_range("Mode index is outside the monitor's supported-mode list");
+    }
+    copyDisplayMode(supportedModes[modeIndex], *modeInformation);
   });
 }

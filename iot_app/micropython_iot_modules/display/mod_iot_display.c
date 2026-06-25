@@ -213,25 +213,76 @@ static void store_information_string(mp_obj_t dictionary, qstr key, const char *
   store_information_value(dictionary, key, mp_obj_new_str(value, strlen(value)));
 }
 
-static mp_obj_t display_information(void) {
-  iot_display_information_t displayInformation = {0};
-  raise_native_error(iot_display_information(&displayInformation));
-
-  mp_obj_t displayInformationDictionary = mp_obj_new_dict(7);
-  store_information_value(displayInformationDictionary, MP_QSTR_connected_display_count,
-                          mp_obj_new_int_from_ull(displayInformation.connected_display_count));
-  store_information_string(displayInformationDictionary, MP_QSTR_connector_name, displayInformation.connector_name);
-  store_information_string(displayInformationDictionary, MP_QSTR_manufacturer, displayInformation.manufacturer);
-  store_information_string(displayInformationDictionary, MP_QSTR_model, displayInformation.model);
-  store_information_value(displayInformationDictionary, MP_QSTR_width,
-                          mp_obj_new_int_from_uint(displayInformation.width));
-  store_information_value(displayInformationDictionary, MP_QSTR_height,
-                          mp_obj_new_int_from_uint(displayInformation.height));
-  store_information_value(displayInformationDictionary, MP_QSTR_refresh_rate_hz,
-                          mp_obj_new_int_from_uint(displayInformation.refresh_rate_hz));
-  return displayInformationDictionary;
+static mp_obj_t display_mode_dictionary(const iot_display_mode_information_t *displayModeInformation) {
+  mp_obj_t displayModeDictionary = mp_obj_new_dict(6);
+  store_information_string(displayModeDictionary, MP_QSTR_name, displayModeInformation->name);
+  store_information_value(displayModeDictionary, MP_QSTR_width,
+                          mp_obj_new_int_from_uint(displayModeInformation->width));
+  store_information_value(displayModeDictionary, MP_QSTR_height,
+                          mp_obj_new_int_from_uint(displayModeInformation->height));
+  store_information_value(displayModeDictionary, MP_QSTR_refresh_rate_hz,
+                          mp_obj_new_int_from_uint(displayModeInformation->refresh_rate_hz));
+  store_information_value(displayModeDictionary, MP_QSTR_preferred, mp_obj_new_bool(displayModeInformation->preferred));
+  store_information_value(displayModeDictionary, MP_QSTR_interlaced,
+                          mp_obj_new_bool(displayModeInformation->interlaced));
+  return displayModeDictionary;
 }
-static MP_DEFINE_CONST_FUN_OBJ_0(display_information_object, display_information);
+
+static mp_obj_t monitor_dictionary(size_t monitorIndex) {
+  iot_monitor_information_t monitorInformation = {0};
+  raise_native_error(iot_display_monitor_information(monitorIndex, &monitorInformation));
+
+  mp_obj_t supportedModes = mp_obj_new_list(0, NULL);
+  for (size_t modeIndex = 0; modeIndex < monitorInformation.supported_mode_count; ++modeIndex) {
+    iot_display_mode_information_t modeInformation = {0};
+    raise_native_error(iot_display_supported_mode_information(monitorIndex, modeIndex, &modeInformation));
+    mp_obj_list_append(supportedModes, display_mode_dictionary(&modeInformation));
+  }
+
+  mp_obj_t monitorDictionary = mp_obj_new_dict(9);
+  store_information_string(monitorDictionary, MP_QSTR_connector_name, monitorInformation.connector_name);
+  store_information_string(monitorDictionary, MP_QSTR_manufacturer, monitorInformation.manufacturer);
+  store_information_string(monitorDictionary, MP_QSTR_model, monitorInformation.model);
+  store_information_string(monitorDictionary, MP_QSTR_serial_number, monitorInformation.serial_number);
+  store_information_value(monitorDictionary, MP_QSTR_physical_width_mm,
+                          mp_obj_new_int_from_uint(monitorInformation.physical_width_mm));
+  store_information_value(monitorDictionary, MP_QSTR_physical_height_mm,
+                          mp_obj_new_int_from_uint(monitorInformation.physical_height_mm));
+  store_information_value(monitorDictionary, MP_QSTR_active, mp_obj_new_bool(monitorInformation.active));
+  store_information_value(
+      monitorDictionary, MP_QSTR_current_mode,
+      monitorInformation.has_current_mode ? display_mode_dictionary(&monitorInformation.current_mode) : mp_const_none);
+  store_information_value(monitorDictionary, MP_QSTR_supported_modes, supportedModes);
+  return monitorDictionary;
+}
+
+static mp_obj_t display_monitors(void) {
+  size_t monitorCount = 0U;
+  raise_native_error(iot_display_monitor_count(&monitorCount));
+
+  mp_obj_t monitors = mp_obj_new_list(0, NULL);
+  for (size_t monitorIndex = 0; monitorIndex < monitorCount; ++monitorIndex) {
+    mp_obj_list_append(monitors, monitor_dictionary(monitorIndex));
+  }
+  return monitors;
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(display_monitors_object, display_monitors);
+
+static mp_obj_t display_active_monitor(void) {
+  size_t monitorCount = 0U;
+  raise_native_error(iot_display_monitor_count(&monitorCount));
+
+  for (size_t monitorIndex = 0; monitorIndex < monitorCount; ++monitorIndex) {
+    iot_monitor_information_t monitorInformation = {0};
+    raise_native_error(iot_display_monitor_information(monitorIndex, &monitorInformation));
+    if (monitorInformation.active) {
+      return monitor_dictionary(monitorIndex);
+    }
+  }
+
+  mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("active monitor is missing from the startup monitor list"));
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(display_active_monitor_object, display_active_monitor);
 
 static const mp_rom_map_elem_t display_module_globals_table[] = {
     {MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR__iot_display)},
@@ -242,7 +293,8 @@ static const mp_rom_map_elem_t display_module_globals_table[] = {
     {MP_ROM_QSTR(MP_QSTR_delete_text_box), MP_ROM_PTR(&display_delete_text_box_object)},
     {MP_ROM_QSTR(MP_QSTR_fill_area), MP_ROM_PTR(&display_fill_area_object)},
     {MP_ROM_QSTR(MP_QSTR_size), MP_ROM_PTR(&display_size_object)},
-    {MP_ROM_QSTR(MP_QSTR_information), MP_ROM_PTR(&display_information_object)},
+    {MP_ROM_QSTR(MP_QSTR_monitors), MP_ROM_PTR(&display_monitors_object)},
+    {MP_ROM_QSTR(MP_QSTR_active_monitor), MP_ROM_PTR(&display_active_monitor_object)},
 };
 static MP_DEFINE_CONST_DICT(display_module_globals, display_module_globals_table);
 

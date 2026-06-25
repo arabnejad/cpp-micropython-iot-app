@@ -8,7 +8,9 @@ resource_information = system.resources()
 network_interfaces = system.network_interfaces()
 system_interfaces = system.interfaces()
 connected_devices = system.devices()
-display_information = display.information()
+connected_monitors = display.monitors()
+active_monitor = display.active_monitor()
+active_mode = active_monitor["current_mode"]
 
 
 def format_megabytes(number_of_bytes):
@@ -48,13 +50,13 @@ pages = (
     "Network\n\n%s" % ("\n\n".join(network_lines) if network_lines else "No interfaces"),
     "Display\n\nConnected displays: %d\n%s\n%s %s\n%dx%d @ %d Hz"
     % (
-        display_information["connected_display_count"],
-        display_information["connector_name"],
-        display_information["manufacturer"],
-        display_information["model"],
-        display_information["width"],
-        display_information["height"],
-        display_information["refresh_rate_hz"],
+        len(connected_monitors),
+        active_monitor["connector_name"],
+        active_monitor["manufacturer"],
+        active_monitor["model"],
+        active_mode["width"],
+        active_mode["height"],
+        active_mode["refresh_rate_hz"],
     ),
     "Interfaces and devices\n\nI2C: %d\nGPIO controllers: %d\nSPI: %d\nSerial: %d\n\nUSB: %d\nInput: %d\nBlock: %d"
     % (

@@ -18,7 +18,7 @@ The public modules are:
 
 | Module | What it provides |
 |---|---|
-| `iot.display` | Screen size, display information, text boxes, and filled areas |
+| `iot.display` | Screen size, monitor details, text boxes, and filled areas |
 | `iot.input` | The Adafruit Mini I2C STEMMA QT Gamepad driver |
 | `iot.scheduler` | Repeating callbacks for live applications |
 | `iot.system` | Linux, resource, network, device, and runtime information |
@@ -233,30 +233,77 @@ Takes no arguments and returns the active display size as a `(width, height)`
 tuple. IoT App uses the Linux display mode that was already active; this
 function does not change the resolution.
 
-### `display.information()`
+### `display.monitors()`
 
 ```python
 from iot import display
 
-information = display.information()
+monitors = display.monitors()
+print("Connected monitors:", len(monitors))
 ```
 
-Takes no arguments and returns:
+Takes no arguments and returns a list containing every monitor found when IoT
+App started. For example:
 
 ```python
-{
-    "connected_display_count": 1,
-    "connector_name": "HDMI-A-1",
-    "manufacturer": "AOC",
-    "model": "U27B3A",
-    "width": 1920,
-    "height": 1080,
-    "refresh_rate_hz": 60,
-}
+[
+    {
+        "connector_name": "HDMI-A-1",
+        "manufacturer": "AOC",
+        "model": "U27B3A",
+        "serial_number": "123456",
+        "physical_width_mm": 600,
+        "physical_height_mm": 340,
+        "active": True,
+        "current_mode": {
+            "name": "1920x1080",
+            "width": 1920,
+            "height": 1080,
+            "refresh_rate_hz": 60,
+            "preferred": True,
+            "interlaced": False,
+        },
+        "supported_modes": [
+            {
+                "name": "1920x1080",
+                "width": 1920,
+                "height": 1080,
+                "refresh_rate_hz": 60,
+                "preferred": True,
+                "interlaced": False,
+            },
+        ],
+    },
+]
 ```
 
-The connector, manufacturer, and model may be empty strings when Linux or the
-monitor does not provide them.
+`active` identifies the monitor used by IoT App. `current_mode` is `None` when
+the monitor is connected but does not have an active DRM mode. A preferred mode
+is the mode recommended by the monitor. An interlaced mode draws alternating
+sets of lines rather than a complete frame at once.
+
+The manufacturer, model, serial number, and mode name may be empty strings when
+Linux or the monitor does not provide them. Physical width and height may be
+zero for the same reason.
+
+The list is a startup snapshot. Connecting or disconnecting a monitor later
+does not update it. Restart IoT App to scan the displays again.
+
+### `display.active_monitor()`
+
+```python
+from iot import display
+
+monitor = display.active_monitor()
+current_mode = monitor["current_mode"]
+
+print(monitor["connector_name"])
+print(current_mode["width"], current_mode["height"])
+```
+
+Takes no arguments and returns the monitor dictionary marked as active in
+`display.monitors()`. IoT App always has an active monitor while a Python
+application is running, so `current_mode` is available in this result.
 
 ### Display example
 

@@ -214,7 +214,8 @@ network_interfaces = system.network_interfaces()
 system_interface_counts = system.interfaces()
 connected_device_counts = system.devices()
 application_information = system.app_information()
-active_display = display.information()
+connected_monitors = display.monitors()
+active_monitor = display.active_monitor()
 ```
 
 The complete [MicroPython API guide](docs/micropython-api/README.md) lists every

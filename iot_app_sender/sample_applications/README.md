@@ -26,6 +26,7 @@ recovery use one authoritative copy.
 | Directory | Purpose | Timers | Extra hardware |
 |---|---|---|---|
 | `clock` | Updates one text box with local time | 1000 ms | None |
+| `connected_monitors` | Lists every monitor found during startup | None | None |
 | `moving_text_in_frame` | Moves text continuously and relocates a live clock | 30 ms and 1000 ms | None |
 | `gamepad_diagnostics` | Shows live joystick, buttons, and hardware details | 50 ms | Adafruit I2C gamepad |
 | `button_counter` | Counts new button presses using edge detection | 50 ms | Adafruit I2C gamepad |

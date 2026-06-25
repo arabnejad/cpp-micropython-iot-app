@@ -16,7 +16,9 @@ TEST(NativeDisplayCppBridgeTest, ReturnsErrorsInsteadOfThrowingAcrossTheCMicroPy
   EXPECT_FALSE(iot_display_delete_text_box(0U).succeeded);
   EXPECT_FALSE(iot_display_fill_area(0, 0, 10, 10, 0U, 0U, 0U).succeeded);
   EXPECT_FALSE(iot_display_size(nullptr, nullptr).succeeded);
-  EXPECT_FALSE(iot_display_information(nullptr).succeeded);
+  EXPECT_FALSE(iot_display_monitor_count(nullptr).succeeded);
+  EXPECT_FALSE(iot_display_monitor_information(0U, nullptr).succeeded);
+  EXPECT_FALSE(iot_display_supported_mode_information(0U, 0U, nullptr).succeeded);
 }
 
 TEST(NativeSystemCppBridgeTest, ValidatesOutputPointersAndKeepsTimeAvailableOutsideAnApplication) {
