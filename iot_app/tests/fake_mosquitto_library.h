@@ -1,6 +1,6 @@
 #pragma once
 
-#include "iot/messaging/imqtt_client_api.h"
+#include "messaging/internal/imqtt_client_api.h"
 
 #include <mosquitto.h>
 
@@ -16,7 +16,7 @@ namespace tests {
  * The receiver calls this object instead of opening a real broker connection.
  * Tests can choose the result of each operation and inspect what was sent.
  */
-class FakeMqttClientApi final : public messaging::IMqttClientApi {
+class FakeMqttClientApi final : public messaging::internal::IMqttClientApi {
 public:
   int  libraryInitializationResult{MOSQ_ERR_SUCCESS};
   int  integerOptionResult{MOSQ_ERR_SUCCESS};
@@ -51,9 +51,10 @@ public:
   int               selectMqtt5(struct mosquitto *mqttClient) override;
   int               setReconnectDelay(struct mosquitto *mqttClient) override;
   int               setCredentials(struct mosquitto *mqttClient, const char *username, const char *password) override;
-  void setConnectedCallback(struct mosquitto *mqttClient, messaging::MqttConnectedCallback callback) override;
-  void setDisconnectedCallback(struct mosquitto *mqttClient, messaging::MqttDisconnectedCallback callback) override;
-  void setMessageCallback(struct mosquitto *mqttClient, messaging::MqttMessageCallback callback) override;
+  void setConnectedCallback(struct mosquitto *mqttClient, messaging::internal::MqttConnectedCallback callback) override;
+  void setDisconnectedCallback(struct mosquitto                             *mqttClient,
+                               messaging::internal::MqttDisconnectedCallback callback) override;
+  void setMessageCallback(struct mosquitto *mqttClient, messaging::internal::MqttMessageCallback callback) override;
   int  connectAsync(struct mosquitto *mqttClient, const char *host, int port, int keepAliveSeconds) override;
   int  startNetworkLoop(struct mosquitto *mqttClient) override;
   int  disconnect(struct mosquitto *mqttClient) override;
@@ -72,11 +73,11 @@ public:
   void deliverEmptyMessage(const std::string &topic);
 
 private:
-  struct mosquitto                   *m_client{reinterpret_cast<struct mosquitto *>(this)};
-  void                               *m_userData{nullptr};
-  messaging::MqttConnectedCallback    m_connectedCallback{nullptr};
-  messaging::MqttDisconnectedCallback m_disconnectedCallback{nullptr};
-  messaging::MqttMessageCallback      m_messageCallback{nullptr};
+  struct mosquitto                             *m_client{reinterpret_cast<struct mosquitto *>(this)};
+  void                                         *m_userData{nullptr};
+  messaging::internal::MqttConnectedCallback    m_connectedCallback{nullptr};
+  messaging::internal::MqttDisconnectedCallback m_disconnectedCallback{nullptr};
+  messaging::internal::MqttMessageCallback      m_messageCallback{nullptr};
 };
 
 } // namespace tests

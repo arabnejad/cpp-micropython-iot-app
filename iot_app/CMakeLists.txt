@@ -119,6 +119,9 @@ add_executable(iot_app
   src/runtime/main.cpp
   src/runtime/runtime_config.cpp
 )
+# main.cpp creates the internal libmosquitto adapter, but that header is not
+# part of the public include directory.
+target_include_directories(iot_app PRIVATE "${PROJECT_SOURCE_DIR}/src")
 target_link_libraries(iot_app PRIVATE iot_platform iot_runtime)
 target_compile_definitions(iot_app PRIVATE
   IOT_INSTALL_DATA_DIRECTORY="${CMAKE_INSTALL_DATADIR}"

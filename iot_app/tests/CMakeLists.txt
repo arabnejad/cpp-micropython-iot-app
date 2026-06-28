@@ -44,7 +44,10 @@ add_executable(iot_unit_tests
   test_system_information.cpp
 )
 
+# Tests can replace the internal Linux, LVGL, and libmosquitto adapters without
+# exposing those headers as application interfaces.
 target_include_directories(iot_unit_tests PRIVATE
+  "${PROJECT_SOURCE_DIR}/src"
   "${PROJECT_SOURCE_DIR}/src/platform/linux"
   "${PROJECT_SOURCE_DIR}/src/runtime"
   "${PROJECT_SOURCE_DIR}/micropython_iot_modules/common"

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "iot/hardware/ii2c_device.h"
-#include "iot/hardware/ilinux_i2c_system_calls.h"
 
 #include <chrono>
 #include <cstddef>
@@ -12,6 +11,10 @@
 
 namespace iot {
 namespace hardware {
+
+namespace internal {
+class ILinuxI2cSystemCalls;
+}
 
 /*
  * Opens one device on a Linux I2C bus and provides basic read/write operations.
@@ -25,7 +28,7 @@ public:
   /* Opens the Linux I2C device using the normal system calls. */
   I2cDevice(int i2cBusNumber, std::uint8_t i2cAddress);
   /* Opens the device using the supplied Linux-call implementation. */
-  I2cDevice(int i2cBusNumber, std::uint8_t i2cAddress, ILinuxI2cSystemCalls &linuxSystemCalls);
+  I2cDevice(int i2cBusNumber, std::uint8_t i2cAddress, internal::ILinuxI2cSystemCalls &linuxSystemCalls);
   ~I2cDevice() override;
 
   // Owns one open file descriptor; copying and moving are disabled.
@@ -81,9 +84,9 @@ private:
   int          m_i2cBusNumber{0};
   std::uint8_t m_i2cAddress{0};
   /* Feature flags reported by the Linux adapter through I2C_FUNCS. */
-  unsigned long         m_adapterFunctions{0};
-  ILinuxI2cSystemCalls *m_linuxSystemCalls{nullptr};
-  std::mutex            m_transactionMutex;
+  unsigned long                   m_adapterFunctions{0};
+  internal::ILinuxI2cSystemCalls *m_linuxSystemCalls{nullptr};
+  std::mutex                      m_transactionMutex;
 };
 
 } // namespace hardware

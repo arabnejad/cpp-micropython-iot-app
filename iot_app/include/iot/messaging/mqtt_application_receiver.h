@@ -4,7 +4,6 @@
 #include "iot/messaging/application_deployment_message.h"
 #include "iot/messaging/application_message_queue.h"
 #include "iot/messaging/imqtt_application_receiver.h"
-#include "iot/messaging/imqtt_client_api.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -21,6 +20,10 @@ typedef struct mqtt5__property mosquitto_property;
 
 namespace iot {
 namespace messaging {
+
+namespace internal {
+class IMqttClientApi;
+}
 
 /* MQTT connection settings for this Raspberry Pi. */
 struct MqttApplicationReceiverSettings {
@@ -43,7 +46,7 @@ struct MqttApplicationReceiverSettings {
 class MqttApplicationReceiver : public IMqttApplicationReceiver {
 public:
   MqttApplicationReceiver(MqttApplicationReceiverSettings mqttReceiverSettings,
-                          ApplicationMessageQueue &applicationMessageQueue, IMqttClientApi &mqttClientApi);
+                          ApplicationMessageQueue &applicationMessageQueue, internal::IMqttClientApi &mqttClientApi);
   ~MqttApplicationReceiver();
 
   // Owns one MQTT client and network loop; copying and moving are disabled.
@@ -74,7 +77,7 @@ private:
   logging::Logger                 m_logger{"MqttApplicationReceiver"};
   MqttApplicationReceiverSettings m_mqttReceiverSettings;
   ApplicationMessageQueue        &m_applicationMessageQueue;
-  IMqttClientApi                 &m_mqttClientApi;
+  internal::IMqttClientApi       &m_mqttClientApi;
   std::string                     m_installTopic;
   struct mosquitto               *m_mqttClient{nullptr};
   bool                            m_libraryIsInitialized{false};

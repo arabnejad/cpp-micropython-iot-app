@@ -1,4 +1,4 @@
-#include "iot/messaging/imqtt_client_api.h"
+#include "internal/imqtt_client_api.h"
 
 #include <mosquitto.h>
 
@@ -19,6 +19,7 @@
 
 namespace iot {
 namespace messaging {
+namespace internal {
 namespace {
 
 class MqttClientApi final : public IMqttClientApi {
@@ -112,5 +113,6 @@ IMqttClientApi &mqttClientApi() {
   return api;
 }
 
+} // namespace internal
 } // namespace messaging
 } // namespace iot

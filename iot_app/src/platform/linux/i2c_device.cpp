@@ -1,5 +1,7 @@
 #include "iot/hardware/i2c_device.h"
 
+#include "internal/ilinux_i2c_system_calls.h"
+
 #include <fcntl.h>
 #include <unistd.h>
 
@@ -48,7 +50,7 @@ void validateTransferSize(std::size_t size, const std::string &operation) {
   }
 }
 
-class LinuxI2cSystemCalls final : public ILinuxI2cSystemCalls {
+class LinuxI2cSystemCalls final : public internal::ILinuxI2cSystemCalls {
 public:
   int openDevice(const char *path, int flags) override {
     return ::open(path, flags);
@@ -71,7 +73,7 @@ public:
   }
 };
 
-ILinuxI2cSystemCalls &defaultLinuxI2cSystemCalls() {
+internal::ILinuxI2cSystemCalls &defaultLinuxI2cSystemCalls() {
   static LinuxI2cSystemCalls systemCalls;
   return systemCalls;
 }
@@ -81,7 +83,7 @@ ILinuxI2cSystemCalls &defaultLinuxI2cSystemCalls() {
 I2cDevice::I2cDevice(int i2cBusNumber, std::uint8_t i2cAddress)
     : I2cDevice(i2cBusNumber, i2cAddress, defaultLinuxI2cSystemCalls()) {}
 
-I2cDevice::I2cDevice(int i2cBusNumber, std::uint8_t i2cAddress, ILinuxI2cSystemCalls &linuxSystemCalls)
+I2cDevice::I2cDevice(int i2cBusNumber, std::uint8_t i2cAddress, internal::ILinuxI2cSystemCalls &linuxSystemCalls)
     : m_i2cDevicePath("/dev/i2c-" + std::to_string(i2cBusNumber)), m_i2cBusNumber(i2cBusNumber),
       m_i2cAddress(i2cAddress), m_linuxSystemCalls(&linuxSystemCalls) {
   if (i2cBusNumber < 0 || i2cBusNumber > 255) {

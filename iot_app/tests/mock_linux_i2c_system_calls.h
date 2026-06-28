@@ -1,13 +1,13 @@
 #pragma once
 
-#include "iot/hardware/ilinux_i2c_system_calls.h"
+#include "platform/linux/internal/ilinux_i2c_system_calls.h"
 
 #include <gmock/gmock.h>
 
 namespace iot {
 namespace tests {
 
-class MockLinuxI2cSystemCalls : public hardware::ILinuxI2cSystemCalls {
+class MockLinuxI2cSystemCalls : public hardware::internal::ILinuxI2cSystemCalls {
 public:
   MOCK_METHOD(int, openDevice, (const char *path, int flags), (override));
   MOCK_METHOD(int, closeDevice, (int fileDescriptor), (override));

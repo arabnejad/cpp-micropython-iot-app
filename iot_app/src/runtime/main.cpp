@@ -12,6 +12,8 @@
 #include "iot/ui/render_backend.h"
 #include "iot/ui/screen_manager.h"
 
+#include "messaging/internal/imqtt_client_api.h"
+
 #include <algorithm>
 #include <chrono>
 #include <csignal>
@@ -116,7 +118,7 @@ int main(int argc, char **argv) {
     mqttSettings.maximumMessageSizeInBytes = iot::runtime::maximumMqttMessageSizeInBytes;
 
     iot::messaging::MqttApplicationReceiver mqttApplicationReceiver{std::move(mqttSettings), applicationMessageQueue,
-                                                                    iot::messaging::mqttClientApi()};
+                                                                    iot::messaging::internal::mqttClientApi()};
     iot::python::TemporaryPythonApplicationInstaller temporaryApplicationInstaller{
         iot::python::defaultTemporaryApplicationRoot()};
     iot::messaging::ApplicationDeploymentController deploymentController{

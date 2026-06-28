@@ -7,7 +7,9 @@
 namespace iot {
 namespace display {
 
+namespace internal {
 class IDrmDisplayApi;
+}
 
 /* Monitor discovery used by the rest of the application. */
 class IDisplayManager {
@@ -25,13 +27,13 @@ public:
 class DisplayManager final : public IDisplayManager {
 public:
   DisplayManager();
-  explicit DisplayManager(IDrmDisplayApi &drmDisplayApi);
+  explicit DisplayManager(internal::IDrmDisplayApi &drmDisplayApi);
 
   std::vector<DisplayInfo> connectedDisplays() const override;
   ActiveDisplay            readActiveDisplay(const DisplayId &displayId) const override;
 
 private:
-  IDrmDisplayApi &m_drmDisplayApi;
+  internal::IDrmDisplayApi &m_drmDisplayApi;
 };
 
 } // namespace display

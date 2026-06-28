@@ -1,6 +1,6 @@
 #pragma once
 
-#include "iot/hardware/ilinux_i2c_system_calls.h"
+#include "platform/linux/internal/ilinux_i2c_system_calls.h"
 
 namespace iot {
 namespace tests {
@@ -14,7 +14,7 @@ namespace tests {
  */
 class ScopedLinuxI2cSystemCalls {
 public:
-  explicit ScopedLinuxI2cSystemCalls(hardware::ILinuxI2cSystemCalls &systemCalls);
+  explicit ScopedLinuxI2cSystemCalls(hardware::internal::ILinuxI2cSystemCalls &systemCalls);
   ~ScopedLinuxI2cSystemCalls();
 
   ScopedLinuxI2cSystemCalls(const ScopedLinuxI2cSystemCalls &)            = delete;
