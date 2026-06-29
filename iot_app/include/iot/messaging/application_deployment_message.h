@@ -8,10 +8,9 @@
 namespace iot {
 namespace messaging {
 
-/* Application details and Python source read from an MQTT install message. */
+/* Validated application details kept after an MQTT install message is parsed. */
 struct ApplicationDeploymentRequest {
   std::string transferId;
-  std::string deviceId;
   std::string applicationId;
   std::string applicationName;
   std::string entryPoint;
