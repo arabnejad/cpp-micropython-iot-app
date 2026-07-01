@@ -29,6 +29,17 @@ typedef struct {
   uint32_t pressed_buttons_mask;
 } iot_gamepad_state_t;
 
+/*
+ * Linux I2C connection selected when the gamepad was created. The native
+ * gamepad owns device_path; the MicroPython module copies it into a Python
+ * string before returning.
+ */
+typedef struct {
+  int         bus_number;
+  uint8_t     address;
+  const char *device_path;
+} iot_gamepad_connection_information_t;
+
 /* Hardware and firmware information reported by the gamepad. */
 typedef struct {
   uint8_t  processor_hardware_id;

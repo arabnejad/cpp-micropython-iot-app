@@ -859,6 +859,34 @@ the driver's state and does not send a new probe transaction.
 
 Takes no arguments and returns `"Adafruit Mini I2C STEMMA QT Gamepad"`.
 
+#### `gamepad.connection_information()`
+
+Returns the Linux I2C connection selected when the gamepad was created:
+
+```python
+from iot import input
+
+gamepad = input.AdafruitMiniI2cGamepad(
+    i2c_bus_number=1,
+    i2c_address=0x50,
+)
+
+connection = gamepad.connection_information()
+
+print(connection["bus_number"])   # 1
+print(connection["address"])      # 80, which is 0x50
+print(connection["device_path"])  # /dev/i2c-1
+```
+
+| Dictionary field | Meaning |
+|---|---|
+| `bus_number` | Linux I2C bus number passed to the constructor |
+| `address` | Seven-bit I2C address passed to the constructor, returned as an integer |
+| `device_path` | Linux device opened for that bus, such as `/dev/i2c-1` |
+
+This method does not contact the gamepad, so `connect()` is not required. It is
+mainly useful in logs and hardware diagnostic screens.
+
 #### `gamepad.joystick()`
 
 Takes no arguments and returns a `GamepadJoystick` view connected to this

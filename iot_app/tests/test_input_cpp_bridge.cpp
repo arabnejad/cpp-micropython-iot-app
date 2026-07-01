@@ -18,11 +18,12 @@ TEST(InputCppBridgeTest, ConvertsInvalidGamepadConstructionIntoAnErrorResult) {
 }
 
 TEST(InputCppBridgeTest, RejectsEveryOperationWhenTheGamepadHandleIsNull) {
-  const char                      *gamepadModelName   = nullptr;
-  const char                      *joystickDirection  = nullptr;
-  int                              gamepadIsConnected = 0;
-  iot_gamepad_state_t              gamepadState{};
-  iot_gamepad_device_information_t gamepadDeviceInformation{};
+  const char                          *gamepadModelName   = nullptr;
+  const char                          *joystickDirection  = nullptr;
+  int                                  gamepadIsConnected = 0;
+  iot_gamepad_state_t                  gamepadState{};
+  iot_gamepad_connection_information_t gamepadConnectionInformation{};
+  iot_gamepad_device_information_t     gamepadDeviceInformation{};
 
   EXPECT_FALSE(iot_gamepad_model_name(nullptr, &gamepadModelName).succeeded);
   EXPECT_FALSE(iot_gamepad_connect(nullptr).succeeded);
@@ -31,6 +32,7 @@ TEST(InputCppBridgeTest, RejectsEveryOperationWhenTheGamepadHandleIsNull) {
   EXPECT_FALSE(iot_gamepad_is_connected(nullptr, &gamepadIsConnected).succeeded);
   EXPECT_FALSE(iot_gamepad_read_state(nullptr, &gamepadState).succeeded);
   EXPECT_FALSE(iot_gamepad_joystick_direction(nullptr, &joystickDirection).succeeded);
+  EXPECT_FALSE(iot_gamepad_read_connection_information(nullptr, &gamepadConnectionInformation).succeeded);
   EXPECT_FALSE(iot_gamepad_read_diagnostics(nullptr, &gamepadDeviceInformation).succeeded);
 }
 
@@ -44,6 +46,7 @@ TEST(InputCppBridgeTest, ChecksEveryRequiredOutputPointer) {
   EXPECT_FALSE(iot_gamepad_is_connected(gamepadCreationResult.value, nullptr).succeeded);
   EXPECT_FALSE(iot_gamepad_read_state(gamepadCreationResult.value, nullptr).succeeded);
   EXPECT_FALSE(iot_gamepad_joystick_direction(gamepadCreationResult.value, nullptr).succeeded);
+  EXPECT_FALSE(iot_gamepad_read_connection_information(gamepadCreationResult.value, nullptr).succeeded);
   EXPECT_FALSE(iot_gamepad_read_diagnostics(gamepadCreationResult.value, nullptr).succeeded);
   iot_gamepad_destroy(gamepadCreationResult.value);
 }
@@ -62,6 +65,14 @@ TEST(InputCppBridgeTest, UsesEveryBridgeOperationWithARealDriverAndASimulatedGam
   const char *gamepadModelName = nullptr;
   ASSERT_TRUE(iot_gamepad_model_name(gamepadCreationResult.value, &gamepadModelName).succeeded);
   EXPECT_STREQ(gamepadModelName, "Adafruit Mini I2C STEMMA QT Gamepad");
+
+  iot_gamepad_connection_information_t gamepadConnectionInformation{};
+  ASSERT_TRUE(
+      iot_gamepad_read_connection_information(gamepadCreationResult.value, &gamepadConnectionInformation).succeeded);
+  EXPECT_EQ(gamepadConnectionInformation.bus_number, 1);
+  EXPECT_EQ(gamepadConnectionInformation.address, 0x50U);
+  EXPECT_STREQ(gamepadConnectionInformation.device_path, "/dev/i2c-1");
+
   ASSERT_TRUE(iot_gamepad_connect(gamepadCreationResult.value).succeeded);
 
   int gamepadIsConnected = 0;

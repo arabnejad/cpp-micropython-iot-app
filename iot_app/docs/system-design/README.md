@@ -1049,6 +1049,8 @@ view objects keep their Python gamepad owner alive.
 
 The binding requires the I2C bus and address. The default
 dashboard does not guess an address or probe every I2C device.
+`gamepad.connection_information()` returns the selected bus, address, and
+Linux device path for diagnostics without contacting the hardware again.
 
 ## 15. Python scheduler and application updates
 
