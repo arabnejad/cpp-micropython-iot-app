@@ -1,0 +1,59 @@
+# This file gives the unprivileged iot-app user access to the hardware devices
+# used by the runtime:
+#
+# Linux detects hardware
+#        |
+#        v
+# Kernel creates a device such as /dev/fb0
+#        |
+#        v
+# udev reads 70-iot-app-access.rules
+#        |
+#        v
+# udev assigns the correct group and permissions
+#        |
+#        v
+# iot-app accesses the device through its group membership
+#
+# Buildroot creates the user and adds it to the required groups through
+# IOT_APP_USERS in buildroot_external/package/iot_app/iot_app.mk:
+#
+# define IOT_APP_USERS
+#     iot-app -1 iot-app -1 * - - video,render,i2c,input IoT App runtime user
+# endef
+#
+# Yocto creates the project-owned groups through GROUPADD_PARAM in
+# meta-iot-app/recipes-iot/iot-app/iot-app_0.1.0.bb. The base system already
+# provides the video group:
+#
+# GROUPADD_PARAM:${PN} = "--system iot-app; --system render; --system i2c; --system input"
+#
+# USERADD_PARAM in the same recipe adds the iot-app user to those groups:
+#
+# USERADD_PARAM:${PN} = "--system --no-create-home --home-dir /nonexistent \
+#                        --shell /sbin/nologin --gid iot-app \
+#                        --groups video,render,i2c,input iot-app"
+#
+# The group names in the rules below must match these recipe declarations.
+
+# Framebuffer devices appear as /dev/fb0, /dev/fb1, and so on. IoT App writes
+# the LVGL screen to /dev/fb0 through its video-group membership. The systemd
+# tag also lets iot-app.service wait for the corresponding dev-fb0.device unit.
+SUBSYSTEM=="graphics", KERNEL=="fb[0-9]*", GROUP="video", MODE="0660", TAG+="systemd"
+
+# DRM card devices appear as /dev/dri/card0 and similar names. DisplayManager
+# reads these devices to discover connected monitors and their active modes.
+SUBSYSTEM=="drm", KERNEL=="card[0-9]*", GROUP="video", MODE="0660"
+
+# DRM render devices appear as /dev/dri/renderD128 and similar names. Assigning
+# them to the render group keeps the runtime ready for rendering APIs that use
+# a render node instead of the primary DRM card.
+SUBSYSTEM=="drm", KERNEL=="renderD[0-9]*", GROUP="render", MODE="0660"
+
+# Linux I2C buses appear as /dev/i2c-1 and similar names. Python gamepad
+# applications use these files to communicate with an I2C gamepad.
+SUBSYSTEM=="i2c-dev", KERNEL=="i2c-[0-9]*", GROUP="i2c", MODE="0660"
+
+# Linux input events appear as /dev/input/event0 and similar names. The input
+# group allows present or future native input drivers to read those events.
+SUBSYSTEM=="input", KERNEL=="event[0-9]*", GROUP="input", MODE="0660"

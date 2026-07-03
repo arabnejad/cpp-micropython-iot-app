@@ -7,8 +7,8 @@
 #
 # Configuration flow:
 #
-#   This Yocto layer:
-#   files/iot-app-mosquitto.conf
+#   Shared image support:
+#   iot_app/image_support/mosquitto.conf
 #           |
 #           | mosquitto_%.bbappend adds and installs the file
 #           v
@@ -18,11 +18,11 @@
 #           v
 #   mosquitto.service reads it when the MQTT broker starts
 
-# Allow SRC_URI to find files stored in the files directory beside this file.
-FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
+# Read the same broker configuration used by the Buildroot image.
+FILESEXTRAPATHS:prepend := "${IOT_APP_PROJECT_ROOT}/iot_app/image_support:"
 
 # Add the IoT App broker configuration to Mosquitto's build inputs.
-SRC_URI += "file://iot-app-mosquitto.conf"
+SRC_URI += "file://mosquitto.conf"
 
 # IoT App uses normal MQTT over TCP. Leaving WebSocket support out avoids
 # pulling an unused web networking stack into the image.
@@ -32,6 +32,6 @@ PACKAGECONFIG:remove = "websockets"
 # It opens port 1883 on every IPv4 interface so iot_app_sender can reach the
 # broker from another computer on the same development network.
 do_install:append() {
-    install -D -m 0644 "${WORKDIR}/iot-app-mosquitto.conf" \
+    install -D -m 0644 "${WORKDIR}/mosquitto.conf" \
         "${D}${sysconfdir}/mosquitto/mosquitto.conf"
 }
