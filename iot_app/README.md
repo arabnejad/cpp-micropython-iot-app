@@ -536,9 +536,8 @@ flashing a microSD card, SSH access, and runtime checks, see the
 make buildroot-prepare
 ```
 
-This command selects the Raspberry Pi 4 Model B development image. The
-separate `iot_cm4_defconfig` remains available for a Compute Module 4 target.
-The root Makefile keeps the output in
+This command selects the Raspberry Pi 4 Model B development image. The root
+Makefile keeps the output in
 `/opt/iot-app-builds/buildroot-raspberry-pi-4`. This directory survives a
 reboot and avoids the `@` character found in some home-directory paths.
 

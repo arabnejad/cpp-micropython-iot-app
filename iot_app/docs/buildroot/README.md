@@ -1105,14 +1105,12 @@ git -C buildroot diff \
   NEW_BUILDROOT_COMMIT \
   -- \
   configs/raspberrypi4_64_defconfig \
-  configs/raspberrypicm4io_64_defconfig \
   board/raspberrypi4-64 \
-  board/raspberrypicm4io-64 \
   board/raspberrypi/patches/linux/linux.hash
 ```
 
-Review that output and update the project-owned `iot_rpi4_defconfig` and
-`iot_cm4_defconfig` where needed. In particular, check:
+Review that output and update the project-owned `iot_rpi4_defconfig` where
+needed. In particular, check:
 
 - architecture and toolchain selections;
 - Raspberry Pi firmware options;
@@ -1143,11 +1141,9 @@ When adopting the kernel selected by a newer Buildroot release:
 1. Read the kernel commit from the new built-in
    `configs/raspberrypi4_64_defconfig`.
 2. Copy that commit into the project `iot_rpi4_defconfig`.
-3. Update `iot_cm4_defconfig` from the matching built-in CM4 configuration if
-   CM4 support is still required.
-4. Confirm the new archive filename has a SHA-256 entry in
+3. Confirm the new archive filename has a SHA-256 entry in
    `board/raspberrypi/patches/linux/linux.hash`.
-5. Do a clean build.
+4. Do a clean build.
 
 Do not replace the Linux commit with the Buildroot submodule commit. If the old
 Linux version is intentionally retained, its matching hash must also be kept
