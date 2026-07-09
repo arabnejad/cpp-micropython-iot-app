@@ -528,9 +528,10 @@ I2C speed recommended for this Adafruit gamepad.
 
 ## Configure Buildroot
 
-For the complete Raspberry Pi 4 workflow, including Wi-Fi setup, building,
-flashing a microSD card, SSH access, and runtime checks, see the
-[Buildroot image guide](docs/buildroot/README.md).
+For Buildroot preparation, image creation, flashing, and incremental rebuilds,
+see the [Buildroot image guide](docs/buildroot/README.md). Wi-Fi, SSH, service
+commands, and troubleshooting are in the
+[shared device-image guide](docs/device-image/README.md).
 
 ```bash
 make buildroot-prepare
@@ -579,5 +580,6 @@ password to that file before building either image. Git ignores the private
 file.
 
 See the [Yocto image guide](docs/yocto/README.md) for host dependencies,
-building, Raspberry Pi Imager, SSH, services, incremental updates, and
-troubleshooting.
+building, Raspberry Pi Imager, and incremental updates. Shared Wi-Fi, SSH,
+service, and troubleshooting instructions are in the
+[device-image guide](docs/device-image/README.md).

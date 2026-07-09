@@ -60,7 +60,7 @@ make yocto-app
 ```
 
 Use the executable from the recipe's `do_install` directory, as described in
-the [Yocto build guide](../yocto/README.md#19-deploy-a-rebuilt-application-without-flashing).
+the [Yocto build guide](../yocto/README.md#13-deploy-a-rebuilt-application-without-flashing).
 
 Buildroot and Yocto use different toolchains. Build the executable for the
 image that is currently running on the Raspberry Pi.

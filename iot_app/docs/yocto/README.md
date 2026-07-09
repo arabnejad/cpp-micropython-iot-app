@@ -61,23 +61,8 @@ topic ACLs, and signed application packages.
 ### Change the root password
 
 This image recipe uses Yocto's `extrausers` class to set an already-calculated
-Linux password hash. Generate one on the Ubuntu build computer with:
-
-```bash
-openssl passwd -6
-```
-
-The command asks for the password without putting it in the shell history. Its
-output has this form:
-
-```text
-$6$random-salt$password-hash
-```
-
-The `$6$` prefix selects the SHA-512 `crypt` password format. The middle part
-is a random salt, and the final part is the calculated password hash. The salt
-means that generating the same password twice can produce different text;
-both results still accept the same password.
+Linux password hash. Generate one using the
+[shared password instructions](../device-image/README.md#change-the-development-password).
 
 Open `meta-iot-app/recipes-core/images/iot-app-image.bb` and replace
 `ROOT_PASSWORD_HASH` with the generated value. Add a backslash before every
@@ -96,19 +81,6 @@ sets it as the root account password in the generated image.
 
 The [Yocto `extrausers` class documentation](https://docs.yoctoproject.org/scarthgap/ref-manual/classes.html#extrausers)
 shows the same escaped-hash pattern.
-
-The checked-in development hash for the password `root` can be reproduced
-with:
-
-```bash
-openssl passwd -6 -salt iot-app root
-```
-
-Use the interactive command for a real password. Supplying a password on the
-command line can leave it in the shell history and briefly expose it through
-the process list. A password hash also does not make a weak password safe in a
-public repository. Production images should normally use SSH keys and disable
-password-based root login.
 
 ## 2. Yocto sources used by this project
 
@@ -312,95 +284,12 @@ from the tracked template and writes the selected output and cache paths to
 
 ## 7. Configure Wi-Fi
 
-Open the shared private configuration created by the preparation command:
+`make yocto-prepare` copies the root-level `wpa_supplicant.conf` and optional
+`ssh_authorized_keys` files into the private build configuration. Do not edit
+the generated copies because the next preparation command replaces them.
 
-```bash
-nano wpa_supplicant.conf
-```
-
-Replace the example values:
-
-```conf
-update_config=0
-country=GB
-
-network={
-    ssid="YOUR_WIFI_NAME"
-    psk="YOUR_WIFI_PASSWORD"
-}
-```
-
-Set `country` to the correct two-letter wireless country code. Git ignores the
-private file, and `make wifi-prepare` gives it mode `0600`. Buildroot and Yocto
-both use this file, so the network details only need to be maintained once.
-
-Check its permissions without printing the password:
-
-```bash
-stat -c '%a %U:%G %n' wpa_supplicant.conf
-```
-
-The first value should be `600`.
-
-`make yocto-prepare` copies this file to
-`/opt/iot-app-builds/yocto-raspberry-pi-4/build/conf/wpa_supplicant.conf` for
-BitBake. Do not edit that generated copy because the next preparation command
-replaces it.
-
-`make yocto-image` stops before BitBake starts if the shared file still
-contains `YOUR_WIFI_NAME` or `YOUR_WIFI_PASSWORD`. This avoids accidentally
-building an image with the example network settings. The current development
-workflow requires a completed file even when the device will normally use
-Ethernet.
-
-### Optional passwordless SSH access
-
-To include your SSH public key in the image, copy it to the optional
-root-level file. If you already have a key that you want to use, run:
-
-```bash
-cp ~/.ssh/id_ed25519.pub ssh_authorized_keys
-```
-
-Replace the source path if your public key has a different name. If you have
-several keys and prefer a separate one for IoT App, create it and copy its
-public half:
-
-```bash
-ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_iot_app
-cp ~/.ssh/id_ed25519_iot_app.pub ssh_authorized_keys
-```
-
-Never copy a private key into the repository. The `ssh_authorized_keys` file
-may contain several public keys, with one key on each line.
-
-When several private keys exist on the Ubuntu computer, tell SSH exactly which
-one belongs to this device. Add this entry to `~/.ssh/config`:
-
-```sshconfig
-Host rspi-iot-app.local
-    User root
-    IdentityFile ~/.ssh/id_ed25519_iot_app
-    IdentitiesOnly yes
-```
-
-Change `IdentityFile` if you selected a different existing key. You can then
-connect without specifying the user or key on every command:
-
-```bash
-ssh rspi-iot-app.local
-```
-
-`make yocto-prepare` checks whether `ssh_authorized_keys` exists and is not
-empty. It copies a non-empty file into the private Yocto build configuration,
-and the image installs those keys for the root account. When the file is
-missing or empty, no authorized key is installed and the `root` password
-remains available.
-
-The personal `ssh_authorized_keys` file is ignored by Git. It is not the same
-as `known_hosts`: `authorized_keys` controls who may log in to the Pi, while
-`known_hosts` belongs to the SSH client and records which server it connected
-to.
+The [shared device-image guide](../device-image/README.md#2-configure-wi-fi)
+explains how to configure Wi-Fi and add an SSH public key.
 
 ## 8. Check the layers without building
 
@@ -596,223 +485,14 @@ Wi-Fi or a user. Those settings are already part of the image.
 is optional for this project. Raspberry Pi Imager can write the `.img.xz`
 artifact directly.
 
-## 12. First boot
+## 12. Start and troubleshoot the device
 
-Connect HDMI and power, then boot the Raspberry Pi. The first startup can take
-longer while systemd initializes the machine and SSH creates host keys.
+After flashing, use the [shared device-image guide](../device-image/README.md)
+for first boot, mDNS, SSH, service commands, hardware checks, MQTT, and runtime
+troubleshooting. That guide shows the appropriate Buildroot and Yocto commands
+side by side.
 
-Several services start at the same time. The relevant order is:
-
-```text
-Kernel and systemd start
-        |
-        +--> Create /dev/fb0
-        +--> Start Wi-Fi and Ethernet; request DHCP addresses
-        +--> Start Mosquitto
-        +--> Start time synchronization
-        |
-        v
-Start IoT App when /dev/fb0 is available
-        |
-        v
-Default Python dashboard appears on /dev/fb0
-```
-
-The systemd service requires `/dev/fb0`, so it starts as soon as the
-framebuffer device is available. It does not wait for an IPv4 address or a
-working MQTT connection. IoT App uses the active 1920x1080 framebuffer and
-does not change the monitor resolution. Raspberry Pi documents the `video=`
-syntax used by this image in its
-[KMS command-line guide](https://www.raspberrypi.com/documentation/computers/configuration.html#set-the-kms-display-mode).
-
-If networking is unavailable, the dashboard starts in offline mode. Its
-network panel refreshes after startup, and the MQTT receiver reconnects when
-the broker becomes reachable.
-
-## 13. Find the Raspberry Pi address
-
-The image uses `rspi-iot-app` as its hostname and runs Avahi. Avahi advertises
-this mDNS address on the local network:
-
-```bash
-getent hosts rspi-iot-app.local
-ping rspi-iot-app.local
-```
-
-The `.local` suffix tells Ubuntu to use mDNS. The name keeps working when DHCP
-assigns a different IP address. Some routers may also resolve the shorter
-`rspi-iot-app` hostname, but that behaviour depends on the router.
-
-Other ways to find the address are:
-
-- open the router's DHCP client list and look for `rspi-iot-app`;
-- connect a keyboard, stop IoT App if necessary, and run `ip -4 address`; or
-- scan the local subnet from Ubuntu with a network tool you already trust.
-
-When a shell is available on the Pi, run:
-
-```sh
-ip -4 address show
-hostname -I
-```
-
-Ignore `127.0.0.1`; it is the local loopback address and cannot be reached from
-Ubuntu.
-
-## 14. Connect through SSH
-
-The preferred SSH command uses mDNS:
-
-```bash
-ssh root@rspi-iot-app.local
-```
-
-When the image contains your public key, SSH uses the matching private key
-from the Ubuntu computer and does not ask for a password. Otherwise, the
-development password is:
-
-```text
-root
-```
-
-After reflashing, the image creates a new SSH host key. If SSH reports that the
-stored key has changed, remove only the old entry for this device and connect
-again:
-
-```bash
-ssh-keygen -R rspi-iot-app.local
-```
-
-### Use the emergency console without a network
-
-The image keeps a normal login on `tty2`. Connect a keyboard and press
-`Alt+F2`. Some keyboards require `Ctrl+Alt+F2` instead. Log in as `root` with
-the development password.
-
-If IoT App makes the emergency terminal difficult to read, stop it first:
-
-```sh
-systemctl stop iot-app
-```
-
-After finishing the repair, restart IoT App and switch back to its terminal:
-
-```sh
-systemctl start iot-app
-chvt 1
-```
-
-## 15. Check the system services
-
-Check the main services:
-
-```sh
-systemctl status iot-app --no-pager
-systemctl status iot-app-wifi --no-pager
-systemctl status avahi-daemon --no-pager
-systemctl status systemd-networkd --no-pager
-systemctl status systemd-timesyncd --no-pager
-systemctl status mosquitto --no-pager
-systemctl status sshd.socket --no-pager
-```
-
-Follow IoT App logs:
-
-```sh
-journalctl -u iot-app -f
-```
-
-Show logs from the current boot:
-
-```sh
-journalctl -b -u iot-app --no-pager
-```
-
-Stop, start, or restart the application:
-
-```sh
-systemctl stop iot-app
-systemctl start iot-app
-systemctl restart iot-app
-```
-
-Stopping the service stops dashboard updates, but it does not start a shell on
-`tty1`. Use SSH or the `tty2` emergency console for command-line work. Pressing
-`Ctrl+C` in an SSH terminal does not stop the background service.
-
-## 16. Check the display and I2C
-
-Check the framebuffer:
-
-```sh
-ls -l /dev/fb0
-cat /sys/class/graphics/fb0/virtual_size
-cat /sys/class/graphics/fb0/bits_per_pixel
-```
-
-The expected size is:
-
-```text
-1920,1080
-```
-
-Check the I2C bus and scan it:
-
-```sh
-ls -l /dev/i2c-1
-i2cdetect -y 1
-```
-
-The Adafruit Mini I2C gamepad normally appears as `50`.
-
-The `iot-app` account belongs to the `video`, `render`, `i2c`, and `input`
-groups. Check it with:
-
-```sh
-id iot-app
-```
-
-## 17. Check time synchronization
-
-Raspberry Pi 4 does not have a battery-backed real-time clock by default. The
-image uses `systemd-timesyncd` after the network comes up.
-
-Check it with:
-
-```sh
-timedatectl status
-systemctl status systemd-timesyncd --no-pager
-journalctl -b -u systemd-timesyncd --no-pager
-```
-
-The configured time zone is `Europe/London`.
-
-## 18. Check MQTT deployment
-
-Confirm that Mosquitto listens on every IPv4 interface:
-
-```sh
-ss -lntp | grep ':1883'
-```
-
-The expected local address is:
-
-```text
-0.0.0.0:1883
-```
-
-From Ubuntu, test the port:
-
-```bash
-nc -vz rspi-iot-app.local 1883
-```
-
-Use `rspi-iot-app.local` as the broker host in
-`iot_app_sender/sender_config.json`, then send a sample application as
-described in the
-[sender guide](../../../iot_app_sender/README.md).
-
-## 19. Deploy a rebuilt application without flashing
+## 13. Deploy a rebuilt application without flashing
 
 Build the updated application package:
 
@@ -906,7 +586,7 @@ describes the standard workspace and deployment process.
 Reflash a complete image before final testing so the device is tested from a
 clean, reproducible filesystem.
 
-## 20. Rebuild the image after source changes
+## 14. Rebuild the image after source changes
 
 For normal C++ or Python source changes, run:
 
@@ -938,7 +618,7 @@ bitbake iot-app-image
 Do not delete `yocto-downloads` or `yocto-sstate-cache` for an ordinary source
 change.
 
-## 21. Change generated configuration
+## 15. Change generated configuration
 
 `make yocto-prepare` recreates `local.conf` from
 `meta-iot-app/conf/templates/raspberrypi4-64/local.conf.sample`. This makes the
@@ -958,7 +638,7 @@ make yocto-prepare \
 
 Use the same values for later commands that use this build directory.
 
-## 22. Update the Yocto submodules
+## 16. Update the Yocto submodules
 
 Poky, `meta-openembedded`, and `meta-raspberrypi` must stay on compatible
 release series. This project currently uses `scarthgap` for all three.
@@ -1013,7 +693,7 @@ Changing from one Yocto release series to another also requires updating:
 - image and package configuration changed by the new release; and
 - this guide after a clean image test.
 
-## 23. Troubleshooting
+## 17. Yocto build troubleshooting
 
 ### Missing host tools
 
@@ -1067,213 +747,12 @@ The generated `local.conf` should contain:
 LICENSE_FLAGS_ACCEPTED += "synaptics-killswitch"
 ```
 
-### Wi-Fi does not connect
+### Device startup and runtime problems
 
-On the Raspberry Pi, run:
-
-```sh
-systemctl status iot-app-wifi --no-pager
-journalctl -b -u iot-app-wifi --no-pager
-ip link show wlan0
-ip -4 address show wlan0
-```
-
-Check the country code, network name, password, signal, and power supply. The
-private configuration used by both image builders is:
-
-```text
-wpa_supplicant.conf
-```
-
-After correcting it, rebuild and reflash the image.
-
-If `wlan0` does not exist at all, check the driver before checking the Wi-Fi
-name or password:
-
-```sh
-modprobe brcmfmac
-lsmod | grep -E 'brcmfmac|brcmutil|cfg80211|rfkill'
-ls -la /sys/bus/sdio/devices/
-dmesg | grep -Ei 'brcm|brcmfmac|mmc|sdio|firmware|cfg80211'
-```
-
-The Raspberry Pi 4 used during development reported this error when the main
-driver was present but its small WCC vendor module was missing:
-
-```text
-brcmf_fwvid_request_module: mod=wcc: failed 256
-brcmf_fwvid_attach failed
-```
-
-The image recipe installs both `kernel-module-brcmfmac` and
-`kernel-module-brcmfmac-wcc`. It also loads `brcmfmac` during boot. Rebuild and
-reflash an older image if it shows the error above.
-
-### SSH connection is refused
-
-Check the target from its local console:
-
-```sh
-systemctl status sshd.socket --no-pager
-ss -lntp | grep ':22'
-ip -4 address
-```
-
-Also confirm that the Ubuntu computer can resolve `rspi-iot-app.local`.
-
-The Yocto image contains the `root` login and the non-login `iot-app` service
-account. It does not copy user accounts from Raspberry Pi OS. Connect with:
-
-```sh
-ssh root@rspi-iot-app.local
-```
-
-If mDNS is unavailable, use the current address shown by `ip -4 address` as a
-temporary fallback.
-
-If an older image rejects the documented `root` password, use the automatic
-root console login to replace it:
-
-```sh
-passwd root
-```
-
-Enter `root` twice. The current image recipe escapes the password hash
-correctly, so newly generated images do not need this repair.
-
-### MQTT connection is refused
-
-Check the broker:
-
-```sh
-systemctl status mosquitto --no-pager
-journalctl -b -u mosquitto --no-pager
-ss -lntp | grep ':1883'
-```
-
-The project configuration should produce `0.0.0.0:1883`, not only
-`127.0.0.1:1883`.
-
-### IoT App does not start
-
-Check the framebuffer and service:
-
-```sh
-ls -l /dev/fb0
-systemctl status iot-app --no-pager
-journalctl -b -u iot-app --no-pager
-```
-
-Check the runtime account:
-
-```sh
-id iot-app
-ls -l /dev/fb0 /dev/dri /dev/i2c-1
-```
-
-The application needs `/dev/fb0` to draw the screen. The systemd service
-therefore requires `dev-fb0.device`; it does not wait for network access or an
-MQTT connection. If `/dev/fb0` never appears, inspect the device unit, kernel
-log, and Raspberry Pi KMS configuration:
-
-```sh
-systemctl status dev-fb0.device --no-pager
-dmesg | grep -Ei 'drm|vc4|framebuffer|fb0'
-cat /proc/cmdline
-```
-
-If `/usr/bin/iot_app` runs successfully from the terminal but the service does
-not start automatically, first check whether the launcher is selecting a
-development executable:
-
-```sh
-ls -l /data/iot-app/development/iot_app
-journalctl -b -u iot-app --no-pager
-```
-
-Remove a broken development executable to return to the installed copy. If no
-override is active, check that the service belongs to the normal boot target:
-
-```sh
-systemctl get-default
-systemctl is-active multi-user.target
-systemctl is-enabled iot-app.service
-ls -l /etc/systemd/system/multi-user.target.wants/iot-app.service
-journalctl -b -u iot-app --no-pager
-```
-
-The expected result is an enabled service and a link from
-`multi-user.target.wants` to `iot-app.service`.
-
-### IoT App starts later than it does on Buildroot
-
-Buildroot starts the `S90iot-app` script near the end of its sequential boot
-process. The script waits for `/dev/fb0` only when that device has not appeared
-yet, with a maximum wait of 10 seconds.
-
-Yocto lets systemd start independent services in parallel. Its IoT App unit
-requires `dev-fb0.device` and is ordered after storage and Mosquitto, but it
-does not wait for Wi-Fi, DHCP, or `network-online.target`. A missing network
-address therefore does not delay the dashboard. The MQTT client connects
-through `127.0.0.1` and reconnects if the local broker is not ready.
-
-The [systemd network-target notes](https://systemd.io/NETWORK_ONLINE/)
-explain why normal services should not wait for `network-online.target` unless
-they cannot work without a configured network.
-
-If startup is still delayed, use these commands to see which required or
-ordered unit took time:
-
-```sh
-systemd-analyze critical-chain iot-app.service
-journalctl -b -o short-monotonic \
-  -u iot-app-wifi.service \
-  -u systemd-networkd.service \
-  -u mosquitto.service \
-  -u iot-app.service
-```
-
-### Clock starts near 1970
-
-Check network access and time synchronization:
-
-```sh
-timedatectl status
-systemctl restart systemd-timesyncd
-journalctl -b -u systemd-timesyncd --no-pager
-```
-
-The clock cannot become correct until the Raspberry Pi reaches an NTP server,
-unless an external real-time clock has been fitted.
-
-### Kernel messages appear over the dashboard
-
-LVGL and the Linux console both use `/dev/fb0`. A kernel message printed on
-the console can therefore appear over the dashboard.
-
-The image adds `quiet loglevel=4` to the kernel command line. This keeps normal
-kernel status messages off the display. Serious kernel messages may still
-appear. All messages remain available in the kernel log; inspect it over SSH
-with:
-
-```sh
-dmesg
-journalctl -k
-```
-
-On an older image, apply the same console filter until the next reboot with:
-
-```sh
-dmesg -n 4
-```
-
-This command changes what is printed on the console. It does not delete the
-kernel messages.
-
-The [Linux kernel parameter reference](https://docs.kernel.org/admin-guide/kernel-parameters.html)
-documents `quiet` and `loglevel=`. The kernel's
-[`printk` guide](https://docs.kernel.org/core-api/printk-basics.html)
-explains how the console log level decides which messages appear on screen.
+The [shared device-image troubleshooting guide](../device-image/README.md#10-troubleshooting)
+covers Wi-Fi, SSH, MQTT, IoT App startup, time synchronization, console
+messages, persistent storage, and differences in Buildroot and Yocto startup
+timing.
 
 ### The image file is missing
 
@@ -1297,17 +776,17 @@ The expected Raspberry Pi Imager file is:
 /opt/iot-app-builds/images/iot-app-yocto-rpi4.img.xz
 ```
 
-## 24. Files that implement the Yocto image
+## 18. Files that implement the Yocto image
 
 | Path | Purpose |
 |---|---|
 | `meta-iot-app/conf/layer.conf` | Registers the project layer and local source root |
 | `meta-iot-app/conf/distro/iot-app-linux.conf` | Selects Poky policy and systemd |
 | `meta-iot-app/conf/templates/raspberrypi4-64/` | Creates `local.conf` and `bblayers.conf` |
-| `meta-iot-app/recipes-iot/iot-app/` | Builds and installs the C++ runtime and service |
-| `meta-iot-app/recipes-core/iot-app-system-config/` | Adds network units, Wi-Fi startup, time services, and console login |
-| `meta-iot-app/recipes-connectivity/` | Applies the development Mosquitto and private Wi-Fi configurations |
-| `meta-iot-app/recipes-core/images/iot-app-image.bb` | Selects packages and creates the bootable image |
+| `meta-iot-app/recipes-iot/iot-app/` | Builds the C++ runtime, creates its service account and device groups, and installs the systemd unit and shared image-support files |
+| `meta-iot-app/recipes-core/iot-app-system-config/` | Adds network units, Wi-Fi startup, time services, and the `tty2` emergency login |
+| `meta-iot-app/recipes-connectivity/` | Installs the private Wi-Fi file and shared development Mosquitto configuration without making two recipes own the same files |
+| `meta-iot-app/recipes-core/images/iot-app-image.bb` | Selects SSH, Mosquitto, Wi-Fi firmware, I2C tools, timezone data, and IoT App packages for the bootable image |
 | `Makefile` | Creates persistent paths and provides the short build commands |
 | `scripts/build/prepare-yocto.sh` | Creates the build directories and generated configuration files |
 
