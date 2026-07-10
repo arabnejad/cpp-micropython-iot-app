@@ -235,9 +235,11 @@ iot_app
   main() and process lifecycle
 ```
 
-`iot_app` links both libraries. There is no library for every directory. The
-two-library split is enough to separate Linux and hardware support from
-application-runtime behavior.
+`iot_runtime` publicly links `iot_platform`, so the `iot_app` executable only
+needs to link `iot_runtime`. CMake carries the platform dependency through
+automatically. There is no library for every directory. The two-library split
+is enough to separate Linux and hardware support from application-runtime
+behavior.
 
 ### 5.1 Third-party components
 
