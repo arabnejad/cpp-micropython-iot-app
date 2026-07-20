@@ -1,6 +1,9 @@
 #pragma once
 
+#include "iot/ui/jpeg_limits.h"
+
 #include <cstdint>
+#include <filesystem>
 #include <string>
 
 namespace iot {
@@ -42,6 +45,33 @@ struct TextBoxSpec {
 struct FilledAreaSpec {
   Rect  bounds;
   Color color;
+};
+
+/* Controls how a JPEG is placed behind the other screen content. */
+enum class BackgroundImageMode {
+  /* Keep the decoded size, centre it, and crop anything outside the screen. */
+  Center,
+  /* Reduce a large image until all of it fits. Small images stay unchanged. */
+  Fit,
+  /* Repeat the image across the screen. */
+  Tile,
+};
+
+/* File, position, and scale used for a normal JPEG image widget. */
+struct JpegImageSpec {
+  std::filesystem::path filePath;
+  std::int32_t          x{0};
+  std::int32_t          y{0};
+  /* 100 keeps the original size. A smaller value reduces the image. */
+  std::uint16_t scalePercent{maximumJpegScalePercent};
+};
+
+/* File and placement used for a JPEG behind all normal widgets. */
+struct BackgroundJpegImageSpec {
+  std::filesystem::path filePath;
+  BackgroundImageMode   mode{BackgroundImageMode::Center};
+  /* Fit may reduce the image further when it is larger than the screen. */
+  std::uint16_t scalePercent{maximumJpegScalePercent};
 };
 
 } // namespace ui

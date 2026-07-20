@@ -36,12 +36,5 @@ private:
   std::filesystem::path m_temporaryRootDirectory;
 };
 
-/*
- * Returns the directory used to store applications received through MQTT.
- * Each Linux user gets a separate directory. For example, user ID 1000 uses
- * /tmp/iot-app-1000/applications.
- */
-std::filesystem::path defaultTemporaryApplicationRoot();
-
 } // namespace python
 } // namespace iot

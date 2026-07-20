@@ -1,15 +1,18 @@
 #pragma once
 
 #include "iot/display/display_types.h"
+#include "iot/network/ifile_downloader.h"
 #include "iot/system/system_information.h"
 #include "iot/ui/render_backend.h"
 
 #include <chrono>
+#include <condition_variable>
 #include <cstdlib>
 #include <filesystem>
 #include <functional>
 #include <map>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <thread>
 #include <vector>
@@ -90,7 +93,7 @@ private:
 };
 
 /* Small renderer used to check commands without opening /dev/fb0. */
-class RecordingRenderBackend final : public ui::IRenderBackend {
+class RecordingRenderBackend : public ui::IRenderBackend {
 public:
   void initialize(const display::ActiveDisplay &) override {
     wasInitialized = true;
@@ -115,28 +118,117 @@ public:
     std::lock_guard<std::mutex> lock(renderStateMutex);
     textBoxesById.erase(textBoxId);
   }
+  void createJpegImage(ui::WidgetId imageId, const ui::DecodedJpegImageSpec &decodedJpegImageSpec) override {
+    std::lock_guard<std::mutex> lock(renderStateMutex);
+    jpegImagesById[imageId] = decodedJpegImageSpec;
+  }
+  void replaceJpegImage(ui::WidgetId imageId, std::shared_ptr<const ui::DecodedJpegImage> decodedJpegImage) override {
+    std::lock_guard<std::mutex> lock(renderStateMutex);
+    jpegImagesById.at(imageId).decodedImage = std::move(decodedJpegImage);
+  }
+  void moveJpegImage(ui::WidgetId imageId, std::int32_t x, std::int32_t y) override {
+    std::lock_guard<std::mutex> lock(renderStateMutex);
+    jpegImagesById.at(imageId).x = x;
+    jpegImagesById.at(imageId).y = y;
+  }
+  void deleteJpegImage(ui::WidgetId imageId) override {
+    std::lock_guard<std::mutex> lock(renderStateMutex);
+    jpegImagesById.erase(imageId);
+  }
+  void setBackgroundJpegImage(const ui::DecodedBackgroundJpegImageSpec &backgroundJpegImageSpec) override {
+    std::lock_guard<std::mutex> lock(renderStateMutex);
+    backgroundJpegImage = backgroundJpegImageSpec;
+  }
+  void clearBackgroundJpegImage() override {
+    std::lock_guard<std::mutex> lock(renderStateMutex);
+    backgroundJpegImage.reset();
+  }
   void fillArea(const ui::FilledAreaSpec &filledAreaSpec) override {
     std::lock_guard<std::mutex> lock(renderStateMutex);
     drawnAreas.push_back(filledAreaSpec);
   }
   void showErrorScreen(const ui::TextBoxSpec &errorBoxSpec) override {
     std::lock_guard<std::mutex> lock(renderStateMutex);
+    textBoxesById.clear();
+    jpegImagesById.clear();
+    backgroundJpegImage.reset();
     lastErrorScreenText = errorBoxSpec.text;
   }
   void clear(ui::Color) override {
     std::lock_guard<std::mutex> lock(renderStateMutex);
     textBoxesById.clear();
+    jpegImagesById.clear();
+    backgroundJpegImage.reset();
+    lastErrorScreenText.clear();
   }
   std::uint32_t processEventsAndGetWaitMilliseconds() override {
     return 1U;
   }
 
-  bool                                    wasInitialized{false};
-  bool                                    shutdownWasCalled{false};
-  std::mutex                              renderStateMutex;
-  std::map<ui::WidgetId, ui::TextBoxSpec> textBoxesById;
-  std::vector<ui::FilledAreaSpec>         drawnAreas;
-  std::string                             lastErrorScreenText;
+  bool                                              wasInitialized{false};
+  bool                                              shutdownWasCalled{false};
+  std::mutex                                        renderStateMutex;
+  std::map<ui::WidgetId, ui::TextBoxSpec>           textBoxesById;
+  std::map<ui::WidgetId, ui::DecodedJpegImageSpec>  jpegImagesById;
+  std::optional<ui::DecodedBackgroundJpegImageSpec> backgroundJpegImage;
+  std::vector<ui::FilledAreaSpec>                   drawnAreas;
+  std::string                                       lastErrorScreenText;
+};
+
+/* Keeps the render thread busy so a test can fill its command queue. */
+class PausedRecordingRenderBackend final : public RecordingRenderBackend {
+public:
+  std::uint32_t processEventsAndGetWaitMilliseconds() override {
+    std::unique_lock<std::mutex> pauseLock(m_pauseMutex);
+    m_renderThreadIsPaused = true;
+    m_pauseStateChanged.notify_all();
+    m_pauseStateChanged.wait(pauseLock, [this] { return m_renderThreadMayContinue; });
+    return 1U;
+  }
+
+  bool waitUntilRenderThreadIsPaused() {
+    std::unique_lock<std::mutex> pauseLock(m_pauseMutex);
+    return m_pauseStateChanged.wait_for(pauseLock, std::chrono::seconds(2), [this] { return m_renderThreadIsPaused; });
+  }
+
+  void letRenderThreadContinue() {
+    {
+      std::lock_guard<std::mutex> pauseLock(m_pauseMutex);
+      m_renderThreadMayContinue = true;
+    }
+    m_pauseStateChanged.notify_all();
+  }
+
+private:
+  std::mutex              m_pauseMutex;
+  std::condition_variable m_pauseStateChanged;
+  bool                    m_renderThreadIsPaused{false};
+  bool                    m_renderThreadMayContinue{false};
+};
+
+/* Returns fixed download details without opening a network connection. */
+class TestFileDownloader final : public network::IFileDownloader {
+public:
+  network::DownloadedFile downloadFile(const network::FileDownloadRequest &fileDownloadRequest) override {
+    lastRequest = fileDownloadRequest;
+    if (!downloadErrorMessage.empty()) {
+      throw std::runtime_error(downloadErrorMessage);
+    }
+    return downloadedFile;
+  }
+
+  void clearDownloadedFiles() override {
+    ++numberOfClearCalls;
+    if (!clearErrorMessage.empty()) {
+      throw std::runtime_error(clearErrorMessage);
+    }
+  }
+
+  network::FileDownloadRequest lastRequest;
+  network::DownloadedFile      downloadedFile{"/tmp/test-download.jpg", "test-sha256", 123U, "image/jpeg", false};
+  std::size_t                  numberOfClearCalls{0U};
+  std::string                  downloadErrorMessage;
+  std::string                  clearErrorMessage;
 };
 
 inline display::ActiveDisplay testActiveDisplay() {

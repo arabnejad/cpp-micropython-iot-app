@@ -25,6 +25,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -69,6 +70,34 @@ void validateBounds(const Rect &bounds) {
 struct TextBoxWidgets {
   lv_obj_t *box{nullptr};
   lv_obj_t *label{nullptr};
+};
+
+/* Keeps decoded pixels alive for as long as LVGL uses the descriptor. */
+struct LvglDecodedJpegSource {
+  explicit LvglDecodedJpegSource(std::shared_ptr<const DecodedJpegImage> decodedJpegImage)
+      : decodedImage(std::move(decodedJpegImage)) {
+    if (!decodedImage || decodedImage->bgrPixelBytes.empty()) {
+      throw std::invalid_argument("LVGL requires a decoded image with pixel data");
+    }
+
+    descriptor.header.magic  = LV_IMAGE_HEADER_MAGIC;
+    descriptor.header.cf     = LV_COLOR_FORMAT_RGB888;
+    descriptor.header.flags  = 0;
+    descriptor.header.w      = static_cast<std::uint16_t>(decodedImage->width);
+    descriptor.header.h      = static_cast<std::uint16_t>(decodedImage->height);
+    descriptor.header.stride = static_cast<std::uint16_t>(decodedImage->rowStrideInBytes);
+    descriptor.data_size     = static_cast<std::uint32_t>(decodedImage->bgrPixelBytes.size());
+    descriptor.data          = decodedImage->bgrPixelBytes.data();
+  }
+
+  std::shared_ptr<const DecodedJpegImage> decodedImage;
+  lv_image_dsc_t                          descriptor{};
+};
+
+/* Keeps one LVGL image object and its pixel source together. */
+struct JpegImageWidget {
+  lv_obj_t                              *imageObject{nullptr};
+  std::unique_ptr<LvglDecodedJpegSource> imageSource;
 };
 
 /* Draws LVGL widgets into the framebuffer already set up by Linux. */
@@ -129,12 +158,14 @@ public:
   }
 
   void shutdown() noexcept override {
-    m_textBoxes.clear();
-    m_errorScreenLayer = nullptr;
     if (m_lvglDisplay != nullptr) {
       lv_display_delete(m_lvglDisplay);
       m_lvglDisplay = nullptr;
     }
+    m_textBoxes.clear();
+    m_jpegImageWidgetsById.clear();
+    m_backgroundJpegImageWidget.reset();
+    m_errorScreenLayer = nullptr;
     if (m_isInitialized) {
       lv_deinit();
       m_isInitialized = false;
@@ -183,6 +214,74 @@ public:
     m_textBoxes.erase(textBox);
   }
 
+  void createJpegImage(WidgetId imageId, const DecodedJpegImageSpec &decodedJpegImageSpec) override {
+    throwIfNotInitialized();
+    if (m_jpegImageWidgetsById.find(imageId) != m_jpegImageWidgetsById.end()) {
+      throw std::invalid_argument("The requested image widget ID already exists");
+    }
+
+    JpegImageWidget jpegImageWidget;
+    jpegImageWidget.imageSource = std::make_unique<LvglDecodedJpegSource>(decodedJpegImageSpec.decodedImage);
+    jpegImageWidget.imageObject = lv_image_create(lv_screen_active());
+    lv_image_set_src(jpegImageWidget.imageObject, &jpegImageWidget.imageSource->descriptor);
+    lv_image_set_pivot(jpegImageWidget.imageObject, 0, 0);
+    lv_obj_set_pos(jpegImageWidget.imageObject, decodedJpegImageSpec.x, decodedJpegImageSpec.y);
+    m_jpegImageWidgetsById.emplace(imageId, std::move(jpegImageWidget));
+  }
+
+  void replaceJpegImage(WidgetId imageId, std::shared_ptr<const DecodedJpegImage> decodedJpegImage) override {
+    throwIfNotInitialized();
+    JpegImageWidget &jpegImageWidget    = findJpegImageWidgetById(imageId);
+    auto             updatedImageSource = std::make_unique<LvglDecodedJpegSource>(std::move(decodedJpegImage));
+    lv_image_set_src(jpegImageWidget.imageObject, &updatedImageSource->descriptor);
+    jpegImageWidget.imageSource = std::move(updatedImageSource);
+  }
+
+  void moveJpegImage(WidgetId imageId, std::int32_t x, std::int32_t y) override {
+    throwIfNotInitialized();
+    lv_obj_set_pos(findJpegImageWidgetById(imageId).imageObject, x, y);
+  }
+
+  void deleteJpegImage(WidgetId imageId) override {
+    throwIfNotInitialized();
+    const auto jpegImageWidget = m_jpegImageWidgetsById.find(imageId);
+    if (jpegImageWidget == m_jpegImageWidgetsById.end()) {
+      throw std::invalid_argument("The requested image widget does not exist");
+    }
+    lv_obj_delete(jpegImageWidget->second.imageObject);
+    m_jpegImageWidgetsById.erase(jpegImageWidget);
+  }
+
+  void setBackgroundJpegImage(const DecodedBackgroundJpegImageSpec &decodedBackgroundJpegImageSpec) override {
+    throwIfNotInitialized();
+    clearBackgroundJpegImage();
+
+    JpegImageWidget backgroundJpegImageWidget;
+    backgroundJpegImageWidget.imageSource =
+        std::make_unique<LvglDecodedJpegSource>(decodedBackgroundJpegImageSpec.decodedImage);
+    backgroundJpegImageWidget.imageObject = lv_image_create(lv_screen_active());
+    lv_obj_set_pos(backgroundJpegImageWidget.imageObject, 0, 0);
+    lv_obj_set_size(backgroundJpegImageWidget.imageObject, LV_PCT(100), LV_PCT(100));
+    lv_obj_remove_flag(backgroundJpegImageWidget.imageObject, LV_OBJ_FLAG_SCROLLABLE);
+    lv_image_set_src(backgroundJpegImageWidget.imageObject, &backgroundJpegImageWidget.imageSource->descriptor);
+    lv_image_set_inner_align(backgroundJpegImageWidget.imageObject, decodedBackgroundJpegImageSpec.repeatImageAsTiles
+                                                                        ? LV_IMAGE_ALIGN_TILE
+                                                                        : LV_IMAGE_ALIGN_CENTER);
+
+    // Keep the background behind text boxes and normal image widgets.
+    // https://docs.lvgl.io/master/details/common-widget-features/layers.html
+    lv_obj_move_to_index(backgroundJpegImageWidget.imageObject, 0);
+    m_backgroundJpegImageWidget = std::move(backgroundJpegImageWidget);
+  }
+
+  void clearBackgroundJpegImage() override {
+    throwIfNotInitialized();
+    if (m_backgroundJpegImageWidget) {
+      lv_obj_delete(m_backgroundJpegImageWidget->imageObject);
+      m_backgroundJpegImageWidget.reset();
+    }
+  }
+
   void fillArea(const FilledAreaSpec &filledAreaSpec) override {
     throwIfNotInitialized();
     validateBounds(filledAreaSpec.bounds);
@@ -219,13 +318,15 @@ public:
 
   void clear(Color screenBackgroundColor) override {
     throwIfNotInitialized();
-    m_textBoxes.clear();
     if (m_errorScreenLayer != nullptr) {
       lv_obj_delete(m_errorScreenLayer);
       m_errorScreenLayer = nullptr;
     }
     lv_obj_t *activeScreen = lv_screen_active();
     lv_obj_clean(activeScreen);
+    m_textBoxes.clear();
+    m_jpegImageWidgetsById.clear();
+    m_backgroundJpegImageWidget.reset();
     lv_obj_set_style_bg_color(activeScreen, toLvglColor(screenBackgroundColor), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(activeScreen, LV_OPA_COVER, LV_PART_MAIN);
   }
@@ -236,6 +337,14 @@ public:
   }
 
 private:
+  JpegImageWidget &findJpegImageWidgetById(WidgetId imageId) {
+    const auto jpegImageWidget = m_jpegImageWidgetsById.find(imageId);
+    if (jpegImageWidget == m_jpegImageWidgetsById.end()) {
+      throw std::invalid_argument("The requested image widget does not exist");
+    }
+    return jpegImageWidget->second;
+  }
+
   TextBoxWidgets createTextBoxWidgets(lv_obj_t *container, const TextBoxSpec &textBoxSpec) {
     validateBounds(textBoxSpec.bounds);
 
@@ -270,7 +379,9 @@ private:
   std::unique_ptr<internal::ILvglFramebufferDriver> m_framebufferDriver;
   lv_display_t                                     *m_lvglDisplay{nullptr};
   lv_obj_t                                         *m_errorScreenLayer{nullptr};
+  std::optional<JpegImageWidget>                    m_backgroundJpegImageWidget;
   std::unordered_map<WidgetId, TextBoxWidgets>      m_textBoxes;
+  std::unordered_map<WidgetId, JpegImageWidget>     m_jpegImageWidgetsById;
 };
 
 } // namespace

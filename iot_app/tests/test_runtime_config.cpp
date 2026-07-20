@@ -22,6 +22,8 @@ TEST(RuntimeConfigTest, UsesTheDocumentedDefaultsWhenNoEnvironmentOverridesExist
   EXPECT_EQ(runtimeConfig.deviceId, "raspberrypi-01");
   EXPECT_EQ(runtimeConfig.mqttBrokerHost, "127.0.0.1");
   EXPECT_EQ(runtimeConfig.mqttBrokerPort, 1883U);
+  EXPECT_EQ(downloadConnectionTimeout, std::chrono::seconds(10));
+  EXPECT_EQ(downloadTotalTimeout, std::chrono::seconds(30));
 }
 
 TEST(RuntimeConfigTest, ReadsMqttSettingsFromEnvironmentVariables) {

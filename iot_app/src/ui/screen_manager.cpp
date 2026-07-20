@@ -1,5 +1,8 @@
 #include "iot/ui/screen_manager.h"
 
+#include "internal/jpeg_image_loader.h"
+#include "iot/ui/jpeg_limits.h"
+
 #include <algorithm>
 #include <chrono>
 #include <stdexcept>
@@ -37,7 +40,9 @@ void logTextBoxRequest(logging::Logger &logger, WidgetId textBoxId, const TextBo
 ScreenManager::ScreenManager(display::ActiveDisplay activeDisplay, std::unique_ptr<IRenderBackend> renderBackend,
                              std::size_t maximumPendingCommands)
     : m_activeDisplay(std::move(activeDisplay)), m_renderBackend(std::move(renderBackend)),
-      m_maximumPendingCommands(maximumPendingCommands) {
+      m_maximumPendingCommands(maximumPendingCommands),
+      m_jpegImageLoader(std::make_unique<internal::JpegImageLoader>(internal::makeLibjpegTurboJpegImageDecoder(),
+                                                                    decodedJpegCacheCapacityInBytes)) {
   if (!m_renderBackend) {
     IOT_LOG_ERROR(m_logger, "Cannot create ScreenManager because the render backend is null");
     throw std::invalid_argument("ScreenManager requires a render backend");
@@ -126,7 +131,10 @@ void ScreenManager::showErrorScreen(const TextBoxSpec &errorBoxSpec) {
                 "}, backgroundColor=rgb(", static_cast<unsigned int>(errorBoxSpec.backgroundColor.red), ',',
                 static_cast<unsigned int>(errorBoxSpec.backgroundColor.green), ',',
                 static_cast<unsigned int>(errorBoxSpec.backgroundColor.blue), ')');
-  enqueueRenderCommand([errorBoxSpec](IRenderBackend &backend) { backend.showErrorScreen(errorBoxSpec); });
+  m_jpegImageSourceStatesById.clear();
+  m_jpegImageLoader->clearCache();
+  replacePendingRenderCommandsWith(
+      [errorBoxSpec](IRenderBackend &renderBackend) { renderBackend.showErrorScreen(errorBoxSpec); });
 }
 
 void ScreenManager::updateTextBox(WidgetId textBoxId, std::string updatedText) {
@@ -146,22 +154,111 @@ void ScreenManager::deleteTextBox(WidgetId textBoxId) {
   enqueueRenderCommand([textBoxId](IRenderBackend &backend) { backend.deleteTextBox(textBoxId); });
 }
 
+WidgetId ScreenManager::drawJpegImage(const JpegImageSpec &jpegImageSpec) {
+  validateImageScalePercent(jpegImageSpec.scalePercent);
+  internal::JpegDecodeRequest decodeRequest;
+  decodeRequest.sourceFilePath      = jpegImageSpec.filePath;
+  decodeRequest.maximumScalePercent = jpegImageSpec.scalePercent;
+  const auto decodedJpegImage       = m_jpegImageLoader->loadImage(decodeRequest);
+
+  JpegImageSourceState jpegImageSourceState{decodedJpegImage->sourceFilePath, jpegImageSpec.scalePercent};
+  const WidgetId       imageId = m_nextWidgetId++;
+  m_jpegImageSourceStatesById.emplace(imageId, std::move(jpegImageSourceState));
+  IOT_LOG_DEBUG(m_logger, "Queueing JPEG image id=", imageId, ", file=", decodedJpegImage->sourceFilePath,
+                ", x=", jpegImageSpec.x, ", y=", jpegImageSpec.y, ", scalePercent=", jpegImageSpec.scalePercent);
+  try {
+    enqueueRenderCommand(
+        [imageId, decodedJpegImage, x = jpegImageSpec.x, y = jpegImageSpec.y](IRenderBackend &renderBackend) {
+          renderBackend.createJpegImage(imageId, {decodedJpegImage, x, y});
+        });
+  } catch (...) {
+    m_jpegImageSourceStatesById.erase(imageId);
+    throw;
+  }
+  return imageId;
+}
+
+void ScreenManager::replaceJpegImage(WidgetId imageId, std::filesystem::path jpegFilePath) {
+  JpegImageSourceState &jpegImageSourceState = findJpegImageSourceState(imageId);
+
+  internal::JpegDecodeRequest decodeRequest;
+  decodeRequest.sourceFilePath              = std::move(jpegFilePath);
+  decodeRequest.maximumScalePercent         = jpegImageSourceState.requestedScalePercent;
+  const auto            decodedJpegImage    = m_jpegImageLoader->loadImage(decodeRequest);
+  std::filesystem::path updatedJpegFilePath = decodedJpegImage->sourceFilePath;
+  enqueueRenderCommand([imageId, decodedJpegImage](IRenderBackend &renderBackend) {
+    renderBackend.replaceJpegImage(imageId, decodedJpegImage);
+  });
+  jpegImageSourceState.jpegFilePath = std::move(updatedJpegFilePath);
+}
+
+void ScreenManager::moveJpegImage(WidgetId imageId, std::int32_t x, std::int32_t y) {
+  static_cast<void>(findJpegImageSourceState(imageId));
+  enqueueRenderCommand([imageId, x, y](IRenderBackend &renderBackend) { renderBackend.moveJpegImage(imageId, x, y); });
+}
+
+void ScreenManager::setJpegImageScale(WidgetId imageId, std::uint16_t scalePercent) {
+  validateImageScalePercent(scalePercent);
+  JpegImageSourceState &jpegImageSourceState = findJpegImageSourceState(imageId);
+
+  internal::JpegDecodeRequest decodeRequest;
+  decodeRequest.sourceFilePath      = jpegImageSourceState.jpegFilePath;
+  decodeRequest.maximumScalePercent = scalePercent;
+  const auto decodedJpegImage       = m_jpegImageLoader->loadImage(decodeRequest);
+  enqueueRenderCommand([imageId, decodedJpegImage](IRenderBackend &renderBackend) {
+    renderBackend.replaceJpegImage(imageId, decodedJpegImage);
+  });
+  jpegImageSourceState.requestedScalePercent = scalePercent;
+}
+
+void ScreenManager::deleteJpegImage(WidgetId imageId) {
+  static_cast<void>(findJpegImageSourceState(imageId));
+  enqueueRenderCommand([imageId](IRenderBackend &renderBackend) { renderBackend.deleteJpegImage(imageId); });
+  m_jpegImageSourceStatesById.erase(imageId);
+}
+
+void ScreenManager::setBackgroundJpegImage(const BackgroundJpegImageSpec &backgroundJpegImageSpec) {
+  validateImageScalePercent(backgroundJpegImageSpec.scalePercent);
+  internal::JpegDecodeRequest decodeRequest;
+  decodeRequest.sourceFilePath      = backgroundJpegImageSpec.filePath;
+  decodeRequest.maximumScalePercent = backgroundJpegImageSpec.scalePercent;
+  if (backgroundJpegImageSpec.mode == BackgroundImageMode::Fit) {
+    decodeRequest.maximumWidth  = m_activeDisplay.mode().width;
+    decodeRequest.maximumHeight = m_activeDisplay.mode().height;
+  }
+  const auto decodedJpegImage   = m_jpegImageLoader->loadImage(decodeRequest);
+  const bool repeatImageAsTiles = backgroundJpegImageSpec.mode == BackgroundImageMode::Tile;
+  enqueueRenderCommand([decodedJpegImage, repeatImageAsTiles](IRenderBackend &renderBackend) {
+    renderBackend.setBackgroundJpegImage({decodedJpegImage, repeatImageAsTiles});
+  });
+}
+
+void ScreenManager::clearBackgroundJpegImage() {
+  enqueueRenderCommand([](IRenderBackend &renderBackend) { renderBackend.clearBackgroundJpegImage(); });
+}
+
 void ScreenManager::clear(Color screenBackgroundColor) {
   IOT_LOG_DEBUG(m_logger, "Queueing screen clear; color=rgb(", static_cast<unsigned int>(screenBackgroundColor.red),
                 ',', static_cast<unsigned int>(screenBackgroundColor.green), ',',
                 static_cast<unsigned int>(screenBackgroundColor.blue), ')');
-  {
-    std::lock_guard<std::mutex> lock(m_renderStateMutex);
-    throwIfRenderThreadIsUnavailableWhileLocked();
+  replacePendingRenderCommandsWith(
+      [screenBackgroundColor](IRenderBackend &renderBackend) { renderBackend.clear(screenBackgroundColor); });
+  m_jpegImageSourceStatesById.clear();
+  m_jpegImageLoader->clearCache();
+}
 
-    // A clear starts a new application screen. Drop drawing commands still
-    // waiting from the previous app.
-    std::queue<RenderCommand> discardedCommands;
-    m_pendingRenderCommands.swap(discardedCommands);
-    m_pendingRenderCommands.push(
-        [screenBackgroundColor](IRenderBackend &backend) { backend.clear(screenBackgroundColor); });
+void ScreenManager::validateImageScalePercent(std::uint16_t scalePercent) {
+  if (scalePercent < minimumJpegScalePercent || scalePercent > maximumJpegScalePercent) {
+    throw std::invalid_argument("JPEG image scale must be between 13 and 100 percent");
   }
-  m_renderCommandAvailable.notify_one();
+}
+
+ScreenManager::JpegImageSourceState &ScreenManager::findJpegImageSourceState(WidgetId imageId) {
+  const auto jpegImageSourceState = m_jpegImageSourceStatesById.find(imageId);
+  if (jpegImageSourceState == m_jpegImageSourceStatesById.end()) {
+    throw std::invalid_argument("Image widget ID does not exist");
+  }
+  return jpegImageSourceState->second;
 }
 
 void ScreenManager::throwIfRenderThreadFailed() const {
@@ -194,6 +291,17 @@ void ScreenManager::enqueueRenderCommand(RenderCommand command) {
       throw std::runtime_error("ScreenManager command queue is full; the application is drawing too quickly");
     }
     m_pendingRenderCommands.push(std::move(command));
+  }
+  m_renderCommandAvailable.notify_one();
+}
+
+void ScreenManager::replacePendingRenderCommandsWith(RenderCommand replacementCommand) {
+  {
+    std::lock_guard<std::mutex> lock(m_renderStateMutex);
+    throwIfRenderThreadIsUnavailableWhileLocked();
+    std::queue<RenderCommand> discardedCommands;
+    m_pendingRenderCommands.swap(discardedCommands);
+    m_pendingRenderCommands.push(std::move(replacementCommand));
   }
   m_renderCommandAvailable.notify_one();
 }

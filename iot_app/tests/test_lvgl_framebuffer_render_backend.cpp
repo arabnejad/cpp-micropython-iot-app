@@ -45,6 +45,16 @@ TextBoxSpec createTextBoxSpecificationWithFontSize(std::uint16_t fontSize) {
   return textBoxSpecification;
 }
 
+std::shared_ptr<const DecodedJpegImage> createDecodedTestImage(std::uint8_t pixelValue) {
+  auto decodedImage              = std::make_shared<DecodedJpegImage>();
+  decodedImage->sourceFilePath   = "test.jpg";
+  decodedImage->width            = 16U;
+  decodedImage->height           = 12U;
+  decodedImage->rowStrideInBytes = 16U * 3U;
+  decodedImage->bgrPixelBytes.assign(decodedImage->rowStrideInBytes * decodedImage->height, pixelValue);
+  return decodedImage;
+}
+
 class LvglFramebufferRenderBackendTest : public ::testing::Test {
 protected:
   LvglFramebufferRenderBackendTest()
@@ -83,6 +93,12 @@ TEST_F(LvglFramebufferRenderBackendTest, RejectsDrawingBeforeItIsInitialized) {
   EXPECT_THROW(m_renderBackend->updateTextBox(1U, "text"), std::logic_error);
   EXPECT_THROW(m_renderBackend->moveTextBox(1U, 1, 2), std::logic_error);
   EXPECT_THROW(m_renderBackend->deleteTextBox(1U), std::logic_error);
+  EXPECT_THROW(m_renderBackend->createJpegImage(1U, {}), std::logic_error);
+  EXPECT_THROW(m_renderBackend->replaceJpegImage(1U, createDecodedTestImage(1U)), std::logic_error);
+  EXPECT_THROW(m_renderBackend->moveJpegImage(1U, 1, 2), std::logic_error);
+  EXPECT_THROW(m_renderBackend->deleteJpegImage(1U), std::logic_error);
+  EXPECT_THROW(m_renderBackend->setBackgroundJpegImage({}), std::logic_error);
+  EXPECT_THROW(m_renderBackend->clearBackgroundJpegImage(), std::logic_error);
   EXPECT_THROW(m_renderBackend->fillArea({{0, 0, 10, 10}, {1, 2, 3}}), std::logic_error);
   EXPECT_THROW(m_renderBackend->showErrorScreen(createTextBoxSpecificationWithFontSize(24U)), std::logic_error);
   EXPECT_THROW(m_renderBackend->clear({1, 2, 3}), std::logic_error);
@@ -128,6 +144,27 @@ TEST_F(LvglFramebufferRenderBackendTest, DrawsAreasErrorScreensAndClearsTheScree
   EXPECT_THROW(m_renderBackend->createTextBox(1U, invalidTextBoxSpecification), std::invalid_argument);
   EXPECT_THROW(m_renderBackend->fillArea({{0, 0, -1, 10}, {1, 2, 3}}), std::invalid_argument);
   EXPECT_THROW(m_renderBackend->showErrorScreen(invalidTextBoxSpecification), std::invalid_argument);
+}
+
+TEST_F(LvglFramebufferRenderBackendTest, CreatesChangesMovesAndDeletesDecodedJpegImages) {
+  useFramebufferWithResolution();
+  m_renderBackend->initialize(createActiveDisplayWithResolution(320U, 240U));
+
+  const auto firstDecodedImage  = createDecodedTestImage(10U);
+  const auto secondDecodedImage = createDecodedTestImage(20U);
+  m_renderBackend->createJpegImage(1U, {firstDecodedImage, 10, 20});
+  m_renderBackend->replaceJpegImage(1U, secondDecodedImage);
+  m_renderBackend->moveJpegImage(1U, 30, 40);
+  EXPECT_THROW(m_renderBackend->createJpegImage(1U, {firstDecodedImage, 0, 0}), std::invalid_argument);
+  EXPECT_THROW(m_renderBackend->createJpegImage(2U, {}), std::invalid_argument);
+  EXPECT_THROW(m_renderBackend->replaceJpegImage(99U, firstDecodedImage), std::invalid_argument);
+  EXPECT_THROW(m_renderBackend->moveJpegImage(99U, 0, 0), std::invalid_argument);
+
+  m_renderBackend->setBackgroundJpegImage({firstDecodedImage, false});
+  m_renderBackend->setBackgroundJpegImage({secondDecodedImage, true});
+  m_renderBackend->clearBackgroundJpegImage();
+  m_renderBackend->deleteJpegImage(1U);
+  EXPECT_THROW(m_renderBackend->deleteJpegImage(1U), std::invalid_argument);
 }
 
 TEST_F(LvglFramebufferRenderBackendTest, ReportsWhenLvglCannotCreateADisplay) {

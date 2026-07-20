@@ -16,11 +16,12 @@ MicroPythonApplicationContext *activeContext = nullptr;
 MicroPythonApplicationContext::MicroPythonApplicationContext(
     ui::ScreenManager &screenManager, display::ActiveDisplay activeDisplay,
     const std::vector<display::DisplayInfo>  &connectedDisplays,
-    const system::ISystemInformationProvider &systemInformationProvider, system::SystemInformation systemInformation,
-    std::string applicationName)
+    const system::ISystemInformationProvider &systemInformationProvider, network::IFileDownloader &fileDownloader,
+    system::SystemInformation systemInformation, std::string applicationName)
     : m_screenManager(&screenManager), m_activeDisplay(std::move(activeDisplay)),
       m_connectedDisplays(&connectedDisplays), m_systemInformationProvider(&systemInformationProvider),
-      m_systemInformation(std::move(systemInformation)), m_applicationName(std::move(applicationName)) {
+      m_fileDownloader(&fileDownloader), m_systemInformation(std::move(systemInformation)),
+      m_applicationName(std::move(applicationName)) {
   if (activeContext != nullptr) {
     throw std::logic_error("Only one MicroPython application context can be active");
   }
@@ -63,6 +64,10 @@ std::uint64_t MicroPythonApplicationContext::currentUptimeSeconds() const {
 
 std::vector<system::NetworkInterfaceInformation> MicroPythonApplicationContext::readCurrentNetworkInterfaces() const {
   return m_systemInformationProvider->readNetworkInterfaces();
+}
+
+network::IFileDownloader &MicroPythonApplicationContext::fileDownloader() const noexcept {
+  return *m_fileDownloader;
 }
 
 const std::string &MicroPythonApplicationContext::applicationName() const noexcept {

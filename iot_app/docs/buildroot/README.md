@@ -299,6 +299,15 @@ env -u LD_LIBRARY_PATH \
 The first build takes a while because Buildroot must download and compile the
 cross-toolchain, Linux kernel, libraries, and application dependencies.
 
+IoT App uses libcurl with OpenSSL for HTTP and HTTPS downloads. Buildroot also
+includes CA certificates so HTTPS connections can verify the server's
+certificate. JPEG images are decoded and resized with libjpeg-turbo.
+
+When an existing Buildroot output directory is reused, the root Makefile runs
+Buildroot `olddefconfig` before starting the build. This refreshes the saved
+configuration so any newly required dependencies are enabled before packages
+or the image are built.
+
 `env -u LD_LIBRARY_PATH` removes `LD_LIBRARY_PATH` only for this command. It
 does not change the current terminal. Buildroot needs this because a host
 library path containing the current directory can cause host tools to load the

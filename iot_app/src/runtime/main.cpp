@@ -5,6 +5,7 @@
 #include "iot/messaging/application_deployment_controller.h"
 #include "iot/messaging/application_message_queue.h"
 #include "iot/messaging/mqtt_application_receiver.h"
+#include "iot/network/http_file_downloader.h"
 #include "iot/python/python_application_manager.h"
 #include "iot/python/python_application_loader.h"
 #include "iot/python/temporary_python_application_installer.h"
@@ -18,10 +19,13 @@
 #include <chrono>
 #include <csignal>
 #include <exception>
+#include <filesystem>
 #include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
+
+#include <unistd.h>
 
 namespace {
 
@@ -62,6 +66,10 @@ void printDisplaySummary(const iot::display::ActiveDisplay &activeDisplay) {
                activeDisplayMode.refreshRateHz, " Hz");
 }
 
+std::filesystem::path runtimeTemporaryRootDirectory() {
+  return std::filesystem::path{"/tmp"} / ("iot-app-" + std::to_string(static_cast<unsigned long>(::getuid())));
+}
+
 } // namespace
 
 int main(int argc, char **argv) {
@@ -93,15 +101,24 @@ int main(int argc, char **argv) {
 
     const iot::python::PythonApplicationLoader applicationLoader{iot::runtime::maximumPythonSourceSizeInBytes};
     IOT_LOG_INFO(applicationLogger, "Loading default application: ", runtimeConfig.defaultApplicationDirectory);
-    const auto defaultPythonApplication = applicationLoader.load(runtimeConfig.defaultApplicationDirectory);
+    const auto defaultPythonApplication  = applicationLoader.load(runtimeConfig.defaultApplicationDirectory);
+    const auto temporaryRuntimeDirectory = runtimeTemporaryRootDirectory();
 
     iot::ui::ScreenManager screenManager{activeDisplay, iot::ui::makeLvglFramebufferRenderBackend(),
                                          iot::runtime::maximumPendingRenderCommands};
     screenManager.start();
 
-    iot::python::PythonApplicationManager pythonApplicationManager{
-        screenManager, activeDisplay, std::move(connectedDisplays), systemInformationProvider,
-        iot::runtime::pythonHeapSizeInBytes};
+    iot::network::HttpFileDownloader fileDownloader{
+        temporaryRuntimeDirectory / "downloads",
+        {iot::runtime::maximumDownloadedFileSizeInBytes, iot::runtime::maximumStoredDownloadedFilesSizeInBytes,
+         iot::runtime::downloadConnectionTimeout, iot::runtime::downloadTotalTimeout}};
+
+    iot::python::PythonApplicationManager pythonApplicationManager{screenManager,
+                                                                   activeDisplay,
+                                                                   std::move(connectedDisplays),
+                                                                   systemInformationProvider,
+                                                                   fileDownloader,
+                                                                   iot::runtime::pythonHeapSizeInBytes};
     pythonApplicationManager.startDefaultApplication(defaultPythonApplication);
 
     IOT_LOG_INFO(applicationLogger, "Running Python app '", pythonApplicationManager.activeScreenName(),
@@ -119,9 +136,9 @@ int main(int argc, char **argv) {
 
     iot::messaging::MqttApplicationReceiver mqttApplicationReceiver{std::move(mqttSettings), applicationMessageQueue,
                                                                     iot::messaging::internal::mqttClientApi()};
-    iot::python::TemporaryPythonApplicationInstaller temporaryApplicationInstaller{
-        iot::python::defaultTemporaryApplicationRoot()};
-    iot::messaging::ApplicationDeploymentController deploymentController{
+    iot::python::TemporaryPythonApplicationInstaller temporaryApplicationInstaller{temporaryRuntimeDirectory /
+                                                                                   "applications"};
+    iot::messaging::ApplicationDeploymentController  deploymentController{
         runtimeConfig.deviceId,
         iot::messaging::ApplicationDeploymentMessageParser{iot::runtime::maximumPythonSourceSizeInBytes},
         temporaryApplicationInstaller,

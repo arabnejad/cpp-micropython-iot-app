@@ -1,4 +1,5 @@
 #include "display_cpp_bridge.h"
+#include "iot/ui/jpeg_limits.h"
 
 #include "py/objstr.h"
 #include "py/runtime.h"
@@ -73,6 +74,7 @@ static int32_t signed_32_bit_value(mp_int_t pythonIntegerValue) {
 
 static mp_obj_t display_clear(size_t number_of_arguments, const mp_obj_t *positional_arguments,
                               mp_map_t *keyword_arguments) {
+  /* Gives a readable name to each position in the parsed argument array. */
   enum { ARG_color };
   static const mp_arg_t allowed_arguments[] = {
       {MP_QSTR_color, MP_ARG_KW_ONLY | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL}},
@@ -89,6 +91,7 @@ static MP_DEFINE_CONST_FUN_OBJ_KW(display_clear_object, 0, display_clear);
 
 static mp_obj_t display_draw_text_box(size_t number_of_arguments, const mp_obj_t *positional_arguments,
                                       mp_map_t *keyword_arguments) {
+  /* Gives a readable name to each position in the parsed argument array. */
   enum {
     ARG_x,
     ARG_y,
@@ -173,8 +176,119 @@ static mp_obj_t display_delete_text_box(mp_obj_t widget_id_object) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(display_delete_text_box_object, display_delete_text_box);
 
+static uint16_t image_scale_percent(mp_int_t scale_percent) {
+  if (scale_percent < IOT_MINIMUM_JPEG_SCALE_PERCENT || scale_percent > IOT_MAXIMUM_JPEG_SCALE_PERCENT) {
+    mp_raise_msg_varg(&mp_type_ValueError, MP_ERROR_TEXT("scale_percent must be between %d and %d"),
+                      IOT_MINIMUM_JPEG_SCALE_PERCENT, IOT_MAXIMUM_JPEG_SCALE_PERCENT);
+  }
+  return (uint16_t)scale_percent;
+}
+
+static uint64_t positive_widget_id(mp_obj_t widget_id_object) {
+  const mp_int_t widget_id = mp_obj_get_int(widget_id_object);
+  if (widget_id <= 0) {
+    mp_raise_ValueError(MP_ERROR_TEXT("widget_id must be a positive integer"));
+  }
+  return (uint64_t)widget_id;
+}
+
+static mp_obj_t display_draw_image(size_t number_of_arguments, const mp_obj_t *positional_arguments,
+                                   mp_map_t *keyword_arguments) {
+  /*
+   * MicroPython places the parsed values in an array. These names identify
+   * each array position, so the code can use ARG_path instead of index 0,
+   * ARG_x instead of index 1, and so on.
+   */
+  enum { ARG_path, ARG_x, ARG_y, ARG_scale_percent };
+  static const mp_arg_t allowed_arguments[] = {
+      {MP_QSTR_path, MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL}},
+      {MP_QSTR_x, MP_ARG_REQUIRED | MP_ARG_INT, {.u_int = 0}},
+      {MP_QSTR_y, MP_ARG_REQUIRED | MP_ARG_INT, {.u_int = 0}},
+      {MP_QSTR_scale_percent, MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = IOT_MAXIMUM_JPEG_SCALE_PERCENT}},
+  };
+  mp_arg_val_t arguments[MP_ARRAY_SIZE(allowed_arguments)];
+  mp_arg_parse_all(number_of_arguments, positional_arguments, keyword_arguments, MP_ARRAY_SIZE(allowed_arguments),
+                   allowed_arguments, arguments);
+
+  uint64_t image_widget_id = 0U;
+  raise_native_error(iot_display_draw_image(mp_obj_str_get_str(arguments[ARG_path].u_obj),
+                                            signed_32_bit_value(arguments[ARG_x].u_int),
+                                            signed_32_bit_value(arguments[ARG_y].u_int),
+                                            image_scale_percent(arguments[ARG_scale_percent].u_int), &image_widget_id));
+  return mp_obj_new_int_from_ull(image_widget_id);
+}
+static MP_DEFINE_CONST_FUN_OBJ_KW(display_draw_image_object, 0, display_draw_image);
+
+static mp_obj_t display_update_image(mp_obj_t widget_id_object, mp_obj_t path_object) {
+  raise_native_error(iot_display_update_image(positive_widget_id(widget_id_object), mp_obj_str_get_str(path_object)));
+  return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(display_update_image_object, display_update_image);
+
+static mp_obj_t display_move_image(mp_obj_t widget_id_object, mp_obj_t x_object, mp_obj_t y_object) {
+  raise_native_error(iot_display_move_image(positive_widget_id(widget_id_object),
+                                            signed_32_bit_value(mp_obj_get_int(x_object)),
+                                            signed_32_bit_value(mp_obj_get_int(y_object))));
+  return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(display_move_image_object, display_move_image);
+
+static mp_obj_t display_set_image_scale(mp_obj_t widget_id_object, mp_obj_t scale_percent_object) {
+  raise_native_error(iot_display_set_image_scale(positive_widget_id(widget_id_object),
+                                                 image_scale_percent(mp_obj_get_int(scale_percent_object))));
+  return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(display_set_image_scale_object, display_set_image_scale);
+
+static mp_obj_t display_delete_image(mp_obj_t widget_id_object) {
+  raise_native_error(iot_display_delete_image(positive_widget_id(widget_id_object)));
+  return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(display_delete_image_object, display_delete_image);
+
+static iot_background_image_mode_t background_image_mode(mp_obj_t mode_object) {
+  const char *mode = mp_obj_str_get_str(mode_object);
+  if (strcmp(mode, "center") == 0) {
+    return IOT_BACKGROUND_IMAGE_CENTER;
+  }
+  if (strcmp(mode, "fit") == 0) {
+    return IOT_BACKGROUND_IMAGE_FIT;
+  }
+  if (strcmp(mode, "tile") == 0) {
+    return IOT_BACKGROUND_IMAGE_TILE;
+  }
+  mp_raise_ValueError(MP_ERROR_TEXT("mode must be 'center', 'fit', or 'tile'"));
+}
+
+static mp_obj_t display_set_background_image(size_t number_of_arguments, const mp_obj_t *positional_arguments,
+                                             mp_map_t *keyword_arguments) {
+  /* Gives a readable name to each position in the parsed argument array. */
+  enum { ARG_path, ARG_mode, ARG_scale_percent };
+  static const mp_arg_t allowed_arguments[] = {
+      {MP_QSTR_path, MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL}},
+      {MP_QSTR_mode, MP_ARG_KW_ONLY | MP_ARG_OBJ, {.u_rom_obj = MP_ROM_QSTR(MP_QSTR_center)}},
+      {MP_QSTR_scale_percent, MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = IOT_MAXIMUM_JPEG_SCALE_PERCENT}},
+  };
+  mp_arg_val_t arguments[MP_ARRAY_SIZE(allowed_arguments)];
+  mp_arg_parse_all(number_of_arguments, positional_arguments, keyword_arguments, MP_ARRAY_SIZE(allowed_arguments),
+                   allowed_arguments, arguments);
+
+  raise_native_error(iot_display_set_background_image(mp_obj_str_get_str(arguments[ARG_path].u_obj),
+                                                      background_image_mode(arguments[ARG_mode].u_obj),
+                                                      image_scale_percent(arguments[ARG_scale_percent].u_int)));
+  return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_KW(display_set_background_image_object, 0, display_set_background_image);
+
+static mp_obj_t display_clear_background_image(void) {
+  raise_native_error(iot_display_clear_background_image());
+  return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(display_clear_background_image_object, display_clear_background_image);
+
 static mp_obj_t display_fill_area(size_t number_of_arguments, const mp_obj_t *positional_arguments,
                                   mp_map_t *keyword_arguments) {
+  /* Gives a readable name to each position in the parsed argument array. */
   enum { ARG_x, ARG_y, ARG_width, ARG_height, ARG_color };
   static const mp_arg_t allowed_arguments[] = {
       {MP_QSTR_x, MP_ARG_REQUIRED | MP_ARG_INT, {.u_int = 0}},
@@ -291,6 +405,13 @@ static const mp_rom_map_elem_t display_module_globals_table[] = {
     {MP_ROM_QSTR(MP_QSTR_update_text_box), MP_ROM_PTR(&display_update_text_box_object)},
     {MP_ROM_QSTR(MP_QSTR_move_text_box), MP_ROM_PTR(&display_move_text_box_object)},
     {MP_ROM_QSTR(MP_QSTR_delete_text_box), MP_ROM_PTR(&display_delete_text_box_object)},
+    {MP_ROM_QSTR(MP_QSTR_draw_image), MP_ROM_PTR(&display_draw_image_object)},
+    {MP_ROM_QSTR(MP_QSTR_update_image), MP_ROM_PTR(&display_update_image_object)},
+    {MP_ROM_QSTR(MP_QSTR_move_image), MP_ROM_PTR(&display_move_image_object)},
+    {MP_ROM_QSTR(MP_QSTR_set_image_scale), MP_ROM_PTR(&display_set_image_scale_object)},
+    {MP_ROM_QSTR(MP_QSTR_delete_image), MP_ROM_PTR(&display_delete_image_object)},
+    {MP_ROM_QSTR(MP_QSTR_set_background_image), MP_ROM_PTR(&display_set_background_image_object)},
+    {MP_ROM_QSTR(MP_QSTR_clear_background_image), MP_ROM_PTR(&display_clear_background_image_object)},
     {MP_ROM_QSTR(MP_QSTR_fill_area), MP_ROM_PTR(&display_fill_area_object)},
     {MP_ROM_QSTR(MP_QSTR_size), MP_ROM_PTR(&display_size_object)},
     {MP_ROM_QSTR(MP_QSTR_monitors), MP_ROM_PTR(&display_monitors_object)},

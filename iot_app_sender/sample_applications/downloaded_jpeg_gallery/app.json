@@ -1,0 +1,5 @@
+{
+  "id": "downloaded-jpeg-gallery",
+  "name": "Downloaded JPEG gallery",
+  "entry_point": "main.py"
+}

@@ -10,11 +10,12 @@ MicroPython and the project-owned Python modules are compiled into the C++
 application.
 
 The runtime draws directly to the Linux framebuffer with LVGL, reads Linux
-system information, supports an Adafruit I2C gamepad, and receives replacement
-Python applications over MQTT. A new Python application can replace the
-current one without restarting the C++ process. If a Python application fails,
-the C++ runtime stops it and shows an emergency error screen until another
-valid application arrives or the runtime restarts.
+system information, supports an Adafruit I2C gamepad, downloads files over
+HTTP or HTTPS, displays JPEG images, and receives replacement Python
+applications over MQTT. A new Python application can replace the current one
+without restarting the C++ process. If a Python application fails, the C++
+runtime stops it and shows an emergency error screen until another valid
+application arrives or the runtime restarts.
 
 ## Project History
 
@@ -52,6 +53,8 @@ MQTT broker* -----------------------> iot_app C++ runtime
                                            |        +--> IoT Python modules
                                            |
                                            +--> Linux system and I2C hardware
+                                           |
+                                           +--> libcurl file downloads
                                            |
                                            +--> ScreenManager render thread
                                                     |
@@ -96,7 +99,7 @@ work. Run `make help` to see the available targets.
 | `make format` | Format the project C and C++ source files with `clang-format` |
 | `make format-check` | Check C and C++ formatting without changing any files |
 | `make iot-app` | Configure and build IoT App for the current Linux computer |
-| `make test` | Configure, build, and run all unit tests |
+| `make test` | Configure, build, and run the C++ and native-module tests |
 | `make coverage` | Run the tests and create terminal, HTML, and XML coverage reports |
 | `make wifi-prepare` | Create the shared private Wi-Fi configuration when it is missing |
 | `make storage-check` | Check the shared root and data partition sizes |
@@ -170,6 +173,7 @@ sudo apt update
 sudo apt install \
   build-essential cmake pkg-config \
   libdrm-dev libmosquitto-dev libcjson-dev libssl-dev \
+  libcurl4-openssl-dev libturbojpeg0-dev ca-certificates \
   mosquitto mosquitto-clients
 ```
 
@@ -199,8 +203,8 @@ CMake, Buildroot, and Yocto install this same copy on the Raspberry Pi.
 Developers can send another application from Ubuntu with
 [`iot_app_sender/send_app.py`](iot_app_sender/send_app.py). The
 [sample application catalog](iot_app_sender/sample_applications/README.md)
-contains clocks, gamepad demonstrations, system dashboards, and deliberate
-failure examples.
+contains clocks, gamepad demonstrations, system dashboards, a downloaded JPEG
+gallery, and deliberate failure examples.
 
 The default dashboard can also be sent over MQTT to restore it without
 restarting the C++ runtime. The
@@ -267,6 +271,8 @@ API, deployment, hardware, Buildroot, or Yocto.
 - DRM/KMS for display discovery
 - Linux I2C for hardware access
 - MQTT 5 with Mosquitto for application deployment
+- libcurl for HTTP and HTTPS downloads
+- libjpeg-turbo for JPEG decoding and decoder-side scaling
 - Buildroot or Yocto for a complete Raspberry Pi image
 - GoogleTest and Google Mock for automated tests
 

@@ -20,14 +20,18 @@ iot_app_sender                              Mosquitto broker
 ```
 
 An acknowledgement from the broker only says that it received the MQTT
-message. It does not say that the application started. Each deployment has its
-own transfer ID and status topic, and the sender waits for `iot_app` to report
-the result.
+message. The sender then waits for IoT App to reply `accepted`, which means
+the device checked the package and installed its temporary files. Each send
+has its own transfer ID and status topic.
+
+`accepted` does not mean the Python code compiled or ran successfully. The
+sender exits after acceptance; compilation and execution happen on the device.
 
 The C++ receiver starts the shipped default app before subscribing. A valid
 external app replaces the current Python session without restarting the C++
-process. If external startup raises an exception, the device reports the
-failure and shows its native emergency screen. The default app runs again only
+process. If compilation, startup, or a scheduled callback fails, the device
+writes the traceback to its log and shows its native emergency screen. It does
+not send another deployment status. The default app runs again only
 after `iot_app` restarts.
 
 The `sample_applications` catalog contains clocks, system displays, gamepad
@@ -70,18 +74,32 @@ find the Python source. The directory is resolved relative to
 sender connects to the anonymous MQTT listener described below. The untracked
 name `sender_config.json` is already included in the repository `.gitignore`.
 
-Stable operational limits are constants in `send_app.py`:
+The sender uses these defaults from `send_app.py`:
 
 ```text
-MQTT keep alive:                60 seconds
-MQTT connection timeout:        10 seconds
-Device acknowledgement timeout: 30 seconds
-Maximum deployment message:     1,000,000 bytes
+MQTT keep alive:             60 seconds
+MQTT connection timeout:     10 seconds
+Device reply wait:           30 seconds
+Maximum deployment message:  1,000,000 bytes
 ```
 
 The fixed message limit remains below IoT App's 1,048,576-byte MQTT limit. The
 decoded Python entry point also has a separate 524,288-byte limit on the
 Raspberry Pi.
+
+The sender waits up to 30 seconds for acceptance or a validation/installation
+error. It does not wait for `main.py`, downloads, or scheduled callbacks. Each
+HTTP download on the device has its own 30-second transfer limit, including
+up to 10 seconds to connect.
+
+If the device reply does not arrive in time, the sender reports a timeout. This
+does not cancel the request or prove it was rejected: the device may be busy
+running the previous app, or its reply may not have arrived. Check the device
+log before sending again. Use `--no-wait` to exit after the broker
+acknowledgement without confirming that the device accepted the application.
+
+Update both IoT App and the sender together. Older versions use startup-result
+statuses and do not follow this acceptance-only exchange.
 
 To send another sample, change only the application directory. For example:
 
@@ -248,8 +266,8 @@ Then send it:
 python send_app.py
 ```
 
-The sender should report `received`, `validating`, `starting`, and finally
-`started`. The Pi should log the external application's name without restarting
+The sender should report `received`, `validating`, and finally `accepted`.
+The Pi should log the external application's name without restarting
 the C++ process. With the default sender configuration, the screen should show
 the Ubuntu clock app and its time should change once per second. Its
 reconstructed files exist only while needed under:
@@ -258,10 +276,11 @@ reconstructed files exist only while needed under:
 /tmp/iot-app-<uid>/applications/<transfer-id>/
 ```
 
-To test a startup failure, select the `traceback_failure` sample. The final
-status should be `failed`, and the Pi should show the native red emergency
-screen. It shows the application name, failure phase, time, and Python
-traceback. The Pi terminal prints the same traceback.
+To test a startup failure, select the `traceback_failure` sample. The sender
+still reports `accepted` and exits successfully because the package was
+installed. The Pi then shows the native red emergency screen with the
+application name, failure phase, time, and Python traceback. The Pi log prints
+the same traceback. A syntax error is handled in the same way.
 
 ## MQTT message used by this phase
 
@@ -308,13 +327,18 @@ transfer ID. It is not repeated in the JSON message:
 iot/devices/raspberrypi-01/applications/status/<transfer-id>
 ```
 
-Expected intermediate statuses are `received`, `validating`, and `starting`.
+Expected intermediate statuses are `received` and `validating`.
 Final statuses are:
 
-- `started`: the external application entry point finished successfully;
-- `rejected`: the message or application did not pass validation;
-- `failed`: installation or application startup failed. The native emergency
-  screen remains visible when Python startup was attempted.
+- `accepted`: the package passed validation and its temporary files are
+  installed. This reply is sent before compiling or executing Python;
+- `rejected`: the message or application metadata did not pass validation;
+- `failed`: the temporary application could not be installed.
+
+For `rejected` or `failed`, the current app or emergency screen stays unchanged
+and the sender exits with code `2`. For `accepted`, it exits with code `0`.
+Python errors after acceptance appear on the device, not as another sender
+result. Connection errors and reply timeouts use exit code `1`.
 
 Base64 is only a JSON representation for binary bytes; it provides no security.
 This single-message protocol is limited to small, single-file applications. A

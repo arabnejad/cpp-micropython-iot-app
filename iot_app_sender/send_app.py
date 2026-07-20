@@ -22,15 +22,16 @@ import paho.mqtt.client as mqtt
 # be repeated in every device configuration.
 MQTT_KEEP_ALIVE_SECONDS = 60
 MQTT_CONNECTION_TIMEOUT_SECONDS = 10
+# The device replies after validation and installation, before running Python.
 DEVICE_ACKNOWLEDGEMENT_TIMEOUT_SECONDS = 30
 MAXIMUM_DEPLOYMENT_MESSAGE_SIZE_BYTES = 1_000_000
 
 FINAL_DEVICE_STATUSES = {
-    "started",
+    "accepted",
     "rejected",
     "failed",
 }
-SUCCESS_DEVICE_STATUS = "started"
+SUCCESS_DEVICE_STATUS = "accepted"
 APPLICATION_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]+$")
 
 
@@ -322,8 +323,11 @@ def create_mqtt_client(configuration: SenderConfiguration, state: DeploymentStat
     return client
 
 
-def send_application(configuration: SenderConfiguration, wait_for_device: bool) -> int:
-    """Publishes the deployment request and optionally waits for the Pi result."""
+def send_application(
+    configuration: SenderConfiguration,
+    wait_for_device: bool,
+) -> int:
+    """Publishes the request and optionally waits for the device to accept it."""
 
     transfer_id = uuid4().hex
     deployment = build_deployment_message(configuration, transfer_id)
@@ -366,12 +370,13 @@ def send_application(configuration: SenderConfiguration, wait_for_device: bool) 
         print("The MQTT broker acknowledged the deployment message.")
 
         if not wait_for_device:
-            print("Not waiting for the Raspberry Pi application result (--no-wait).")
+            print("Not waiting for device acceptance (--no-wait).")
             return 0
         if not state.final_response_received.wait(DEVICE_ACKNOWLEDGEMENT_TIMEOUT_SECONDS):
             raise SenderError(
-                "The broker received the message, but the Raspberry Pi did not send a final "
-                "deployment status before the timeout"
+                f"No device acceptance or rejection was received within {DEVICE_ACKNOWLEDGEMENT_TIMEOUT_SECONDS} seconds. "
+                "This does not cancel the request or prove that the device did not accept it. "
+                "Check the device log before sending it again."
             )
         final_response = state.final_response
         return 0 if final_response and final_response.get("status") == SUCCESS_DEVICE_STATUS else 2
@@ -401,7 +406,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--no-wait",
         action="store_true",
-        help="stop after broker acknowledgement instead of waiting for the Pi result",
+        help="stop after broker acknowledgement instead of waiting for device acceptance",
     )
     return parser.parse_args()
 
@@ -421,7 +426,10 @@ def main() -> int:
             print(f"Expected status topic: {deployment.status_topic}")
             print(f"Message size: {len(deployment.payload)} bytes")
             return 0
-        return send_application(configuration, wait_for_device=not arguments.no_wait)
+        return send_application(
+            configuration,
+            wait_for_device=not arguments.no_wait,
+        )
     except SenderError as error:
         print(f"iot_app_sender failed: {error}", file=sys.stderr)
         return 1

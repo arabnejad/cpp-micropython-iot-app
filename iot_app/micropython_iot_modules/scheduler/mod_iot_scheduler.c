@@ -53,6 +53,7 @@ static size_t scheduler_task_count(void) {
 
 static mp_obj_t scheduler_every(size_t number_of_arguments, const mp_obj_t *positional_arguments,
                                 mp_map_t *keyword_arguments) {
+  /* Gives a readable name to each position in the parsed argument array. */
   enum { ARG_milliseconds, ARG_callback };
   static const mp_arg_t allowed_arguments[] = {
       {MP_QSTR_milliseconds, MP_ARG_REQUIRED | MP_ARG_INT, {.u_int = 0}},

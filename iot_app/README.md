@@ -92,6 +92,7 @@ micropython_config/        Embed-port configuration and generation wrapper
 micropython_iot_modules/   Native IoT modules compiled into MicroPython
 src/input/                 Gamepad protocol and input state
 src/messaging/             MQTT receiving, validation, and deployment control
+src/network/               Bounded HTTP and HTTPS file downloads
 src/platform/linux/        Linux display, I2C, and system-information support
 src/python/                Embedded interpreter and MicroPython application context
 src/ui/                    Process-wide screen manager and LVGL framebuffer backend
@@ -101,9 +102,10 @@ src/runtime/               Executable entry point and runtime lifecycle
 The CMake build uses two internal libraries:
 
 - `iot_platform` contains Linux display discovery, framebuffer rendering,
-  system information, I2C, and input hardware support.
+  JPEG decoding and caching, system information, I2C, and input hardware
+  support.
 - `iot_runtime` contains MicroPython, native modules, scheduling, MQTT,
-  deployment, and application supervision.
+  deployment, file downloads, and application supervision.
 
 The `iot_app` executable is the small composition root that connects those
 services and owns the process lifecycle.
@@ -117,6 +119,7 @@ sudo apt update
 sudo apt install \
   build-essential cmake pkg-config \
   libdrm-dev libmosquitto-dev libcjson-dev libssl-dev \
+  libcurl4-openssl-dev libturbojpeg0-dev ca-certificates \
   mosquitto mosquitto-clients
 ```
 
@@ -191,6 +194,16 @@ application context, timer updates, and recovery policy. Switching applications
 creates a clean interpreter without reopening LVGL.
 Python can observe the available display size through `display.size()`, but it
 does not control the system resolution.
+
+Python can download a bounded HTTP or HTTPS file with
+`network.download_file()`. Downloads are stored in the runtime's private
+directory under `/tmp` and can be checked against an expected SHA-256 value.
+One file may use up to 10 MiB, and one Python application may keep up to 50 MiB
+of downloaded files. Files are removed before the next application starts.
+The display API accepts local JPEG files through `draw_image()` and
+`set_background_image()`. JPEG decoding and scaling use libjpeg-turbo. Decoded
+pixels are cached in memory for the current Python application and released
+when the screen is cleared for another application.
 
 Monitor discovery still uses libdrm to report connectors, EDID information,
 and the active display mode. Rendering does not take DRM master ownership and
@@ -411,27 +424,47 @@ The MQTT callback never calls MicroPython or LVGL. It copies the message into a
 four-entry queue and returns. The main thread checks the JSON, target device,
 source size, Base64 data, and SHA-256 before changing the running application.
 
-Received applications are temporary:
+Received applications and downloaded files share one per-user temporary root:
 
 ```text
-/tmp/iot-app-<uid>/applications/<transfer-id>/
-├── app.json
-└── <entry-point>.py
+/tmp/iot-app-<uid>/
+├── applications/
+│   └── <transfer-id>/
+│       ├── app.json
+│       └── <entry-point>.py
+└── downloads/
+    └── <calculated-sha256>.download
 ```
 
-The runtime clears its private temporary application directory when it starts,
-and the operating system clears `/tmp` on reboot. No external application is
-copied to `/usr` or `/var`; after reboot the shipped default app runs again.
+The runtime clears its temporary application directory when it starts. It also
+clears downloaded files before each Python application starts, so one
+application cannot reuse files left by another. The operating system clears
+`/tmp` on reboot. No external application is copied to `/usr` or `/var`; after
+reboot the shipped default app runs again.
 
-If validation fails, the current app remains untouched. If a valid external
-app raises an exception while its `main.py` starts or later from a scheduled
+The downloader calculates SHA-256 for every file, even when Python does not
+provide `expected_sha256`. The calculated value gives the file a stable name.
+Providing `expected_sha256` also lets the runtime verify the bytes and reuse a
+matching download without contacting the server again.
+
+After validation and temporary installation, IoT App replies `accepted` before
+stopping the current app or compiling Python. The sender can then exit without
+waiting for startup work such as image downloads. Acceptance does not promise
+that the code compiles or runs successfully.
+
+If validation or installation fails, the current app remains untouched and
+the sender receives `rejected` or `failed`. If an accepted external app fails
+to compile, raises an exception while `main.py` runs, or fails in a scheduled
 callback, `iot_app` destroys that MicroPython session and shows the captured
 traceback on its native emergency screen. The C++ process and MQTT connection
 remain alive, but no Python application is running. The emergency screen stays
 visible until another valid external app is sent or `iot_app` restarts. A
-restart runs the shipped default app again.
-MQTT QoS 1 duplicates are recognized by transfer ID and receive the
-already-recorded final result instead of being executed twice.
+restart runs the shipped default app again. Python failures are reported on
+the device and in its log, not as another deployment reply.
+
+MQTT QoS 1 duplicates are recognized by transfer ID and receive the saved
+reply instead of being executed twice, even if that Python app has since
+failed.
 
 This first receiver supports one Python entry point per message. The entry point
 must perform its startup work, register any recurring work with

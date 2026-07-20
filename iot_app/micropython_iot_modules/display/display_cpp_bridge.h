@@ -55,6 +55,12 @@ typedef struct {
   int32_t              font_size;
 } iot_text_box_options_t;
 
+typedef enum {
+  IOT_BACKGROUND_IMAGE_CENTER = 0,
+  IOT_BACKGROUND_IMAGE_FIT,
+  IOT_BACKGROUND_IMAGE_TILE,
+} iot_background_image_mode_t;
+
 iot_native_result_t iot_display_clear(uint8_t red, uint8_t green, uint8_t blue);
 
 iot_native_result_t iot_display_draw_text_box(int32_t x, int32_t y, int32_t width, int32_t height, const char *text,
@@ -68,6 +74,23 @@ iot_native_result_t iot_display_move_text_box(uint64_t widget_id, int32_t x, int
 
 /* Deletes a box previously created by Python. */
 iot_native_result_t iot_display_delete_text_box(uint64_t widget_id);
+
+/* Draws a JPEG and returns the widget ID used for later changes. */
+iot_native_result_t iot_display_draw_image(const char *file_path, int32_t x, int32_t y, uint16_t scale_percent,
+                                           uint64_t *widget_id);
+/* Changes the JPEG used by an existing image widget. */
+iot_native_result_t iot_display_update_image(uint64_t widget_id, const char *file_path);
+/* Moves an existing image widget. */
+iot_native_result_t iot_display_move_image(uint64_t widget_id, int32_t x, int32_t y);
+/* Redecodes an image at a smaller or original size. */
+iot_native_result_t iot_display_set_image_scale(uint64_t widget_id, uint16_t scale_percent);
+/* Deletes an image widget. */
+iot_native_result_t iot_display_delete_image(uint64_t widget_id);
+/* Places a JPEG behind all normal widgets. */
+iot_native_result_t iot_display_set_background_image(const char *file_path, iot_background_image_mode_t mode,
+                                                     uint16_t scale_percent);
+/* Removes the background JPEG without changing the screen colour. */
+iot_native_result_t iot_display_clear_background_image(void);
 
 iot_native_result_t iot_display_fill_area(int32_t x, int32_t y, int32_t width, int32_t height, uint8_t red,
                                           uint8_t green, uint8_t blue);

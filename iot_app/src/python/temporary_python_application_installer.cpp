@@ -4,7 +4,6 @@
 #include <cjson/cJSON.h>
 
 #include <sys/stat.h>
-#include <unistd.h>
 
 #include <exception>
 #include <fstream>
@@ -192,13 +191,6 @@ void TemporaryPythonApplicationInstaller::removeInstalledApplication(
   } else {
     IOT_LOG_DEBUG(m_logger, "Removed temporary application directory ", applicationDirectory);
   }
-}
-
-std::filesystem::path defaultTemporaryApplicationRoot() {
-  // Use /tmp directly. Do not allow an environment variable to move received
-  // apps into permanent storage.
-  return std::filesystem::path{"/tmp"} / ("iot-app-" + std::to_string(static_cast<unsigned long>(::getuid()))) /
-         "applications";
 }
 
 } // namespace python

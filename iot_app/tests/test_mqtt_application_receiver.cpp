@@ -130,10 +130,10 @@ TEST_F(MqttApplicationReceiverTest, PublishesJsonStatusToTheCalculatedStatusTopi
 
   m_receiver->start();
   m_receiver->publishStatus({"", "received", "app", "ignored"});
-  m_receiver->publishStatus({"transfer-42", "started", "app", "Application started"});
+  m_receiver->publishStatus({"transfer-42", "accepted", "app", "Application received and ready to execute"});
 
   EXPECT_EQ(m_mqttClientApi.publishedTopic, "iot/devices/test-device/applications/status/transfer-42");
-  EXPECT_NE(m_mqttClientApi.publishedPayload.find("\"started\""), std::string::npos);
+  EXPECT_NE(m_mqttClientApi.publishedPayload.find("\"accepted\""), std::string::npos);
   EXPECT_EQ(m_mqttClientApi.publishedQualityOfService, 1);
   EXPECT_EQ(m_mqttClientApi.propertyFreeCount, 1U);
 }

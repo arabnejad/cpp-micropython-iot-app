@@ -374,10 +374,11 @@ Yocto documents the generated files and the setting used here in its
 
 The smaller package list still supports the features used by this project:
 framebuffer output, Raspberry Pi Wi-Fi and Ethernet, I2C, MQTT, SSH/SFTP,
-systemd networking and time synchronization, mDNS discovery through Avahi, the
-local console, and ext4 filesystem checks. `i2c-tools` is also kept for
-hardware troubleshooting. If a new peripheral needs another kernel module,
-add that module to
+systemd networking and time synchronization, mDNS discovery through Avahi,
+HTTPS downloads with CA certificate checks, JPEG decoding, the local console,
+and ext4 filesystem checks. `i2c-tools` is also kept for hardware
+troubleshooting. If a new peripheral needs another kernel module, add that
+module to
 `meta-iot-app/recipes-core/images/iot-app-image.bb`.
 
 ## 9. Build only IoT App

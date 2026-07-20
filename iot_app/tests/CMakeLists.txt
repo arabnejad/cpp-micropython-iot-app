@@ -27,6 +27,9 @@ add_executable(iot_unit_tests
   fake_mosquitto_library.cpp
   test_game_controller.cpp
   test_i2c_device.cpp
+  test_http_file_downloader.cpp
+  test_jpeg_image_loader.cpp
+  test_libjpeg_turbo_jpeg_image_decoder.cpp
   test_adafruit_mini_i2c_gamepad.cpp
   test_hardware_construction.cpp
   test_input_cpp_bridge.cpp
@@ -53,6 +56,7 @@ target_include_directories(iot_unit_tests PRIVATE
   "${PROJECT_SOURCE_DIR}/micropython_iot_modules/common"
   "${PROJECT_SOURCE_DIR}/micropython_iot_modules/display"
   "${PROJECT_SOURCE_DIR}/micropython_iot_modules/input"
+  "${PROJECT_SOURCE_DIR}/micropython_iot_modules/network"
   "${PROJECT_SOURCE_DIR}/micropython_iot_modules/system"
   "${CMAKE_CURRENT_SOURCE_DIR}"
 )

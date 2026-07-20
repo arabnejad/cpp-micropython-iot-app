@@ -4,7 +4,14 @@ config BR2_PACKAGE_IOT_APP
 	depends on BR2_TOOLCHAIN_HAS_THREADS
 	select BR2_PACKAGE_LIBDRM
 	select BR2_PACKAGE_LIBDRM_VC4 if BR2_arm || BR2_aarch64
+	select BR2_PACKAGE_LIBCURL
+	select BR2_PACKAGE_LIBCURL_FORCE_TLS
+	select BR2_PACKAGE_LIBCURL_OPENSSL
+	select BR2_PACKAGE_OPENSSL
+	select BR2_PACKAGE_CA_CERTIFICATES
+	select BR2_PACKAGE_JPEG
+	select BR2_PACKAGE_JPEG_TURBO
 	help
 	  Embedded C++ IoT App with a built-in MicroPython application,
-	  native hardware modules, DRM display discovery, and LVGL Linux
-	  framebuffer output.
+	  native hardware modules, HTTP and HTTPS downloads, JPEG decoding,
+	  DRM display discovery, and LVGL Linux framebuffer output.

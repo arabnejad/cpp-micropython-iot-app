@@ -99,12 +99,8 @@ TEST(TemporaryPythonApplicationInstallerTest, ClearsOldFilesWhenItTakesOverAnExi
   EXPECT_FALSE(std::filesystem::exists(applicationsRoot / "old-file"));
 }
 
-TEST(TemporaryPythonApplicationInstallerTest, ReportsUnusableRootsAndProvidesTheTemporarySystemRoot) {
+TEST(TemporaryPythonApplicationInstallerTest, ReportsAnUnusableTemporaryRootDirectory) {
   EXPECT_THROW(TemporaryPythonApplicationInstaller{"/proc/iot-app-test-directory"}, std::runtime_error);
-
-  const std::filesystem::path defaultApplicationsRoot = defaultTemporaryApplicationRoot();
-  EXPECT_EQ(defaultApplicationsRoot.filename(), "applications");
-  EXPECT_NE(defaultApplicationsRoot.string().find("iot-app-"), std::string::npos);
 }
 
 TEST(TemporaryPythonApplicationInstallerTest, ReportsAnErrorWhenItsTemporaryRootIsReplacedWithAFile) {

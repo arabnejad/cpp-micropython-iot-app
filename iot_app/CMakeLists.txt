@@ -26,6 +26,8 @@ pkg_check_modules(LIBDRM REQUIRED IMPORTED_TARGET libdrm)
 pkg_check_modules(LIBMOSQUITTO REQUIRED IMPORTED_TARGET libmosquitto)
 pkg_check_modules(CJSON REQUIRED IMPORTED_TARGET libcjson)
 find_package(OpenSSL REQUIRED COMPONENTS Crypto)
+find_package(CURL REQUIRED)
+find_package(TurboJPEG REQUIRED)
 find_package(Threads REQUIRED)
 
 set(LV_BUILD_CONF_PATH "${PROJECT_SOURCE_DIR}/config/lv_conf.h" CACHE PATH "" FORCE)
@@ -49,6 +51,8 @@ add_library(iot_platform STATIC
   src/input/adafruit_mini_i2c_gamepad.cpp
   src/input/game_controller.cpp
   src/logging/logger.cpp
+  src/ui/jpeg_image_loader.cpp
+  src/ui/libjpeg_turbo_jpeg_image_decoder.cpp
   src/platform/linux/display_manager.cpp
   src/platform/linux/edid_parser.cpp
   src/platform/linux/i2c_device.cpp
@@ -59,7 +63,7 @@ add_library(iot_platform STATIC
 target_include_directories(iot_platform PUBLIC "${PROJECT_SOURCE_DIR}/include")
 target_link_libraries(iot_platform
   PUBLIC Threads::Threads
-  PRIVATE lvgl::lvgl PkgConfig::LIBDRM
+  PRIVATE lvgl::lvgl PkgConfig::LIBDRM TurboJPEG::TurboJPEG
 )
 iot_apply_compiler_warnings(iot_platform)
 
@@ -70,12 +74,15 @@ add_library(iot_runtime STATIC
   src/messaging/application_message_queue.cpp
   src/messaging/mqtt_client_api.cpp
   src/messaging/mqtt_application_receiver.cpp
+  src/network/http_file_downloader.cpp
   micropython_iot_modules/device/mod_iot.c
   micropython_iot_modules/common/micropython_traceback.c
   micropython_iot_modules/display/display_cpp_bridge.cpp
   micropython_iot_modules/display/mod_iot_display.c
   micropython_iot_modules/input/input_cpp_bridge.cpp
   micropython_iot_modules/input/mod_iot_input.c
+  micropython_iot_modules/network/network_cpp_bridge.cpp
+  micropython_iot_modules/network/mod_iot_network.c
   micropython_iot_modules/scheduler/mod_iot_scheduler.c
   micropython_iot_modules/system/system_cpp_bridge.cpp
   micropython_iot_modules/system/mod_iot_system.c
@@ -96,6 +103,7 @@ target_include_directories(iot_runtime
     "${PROJECT_SOURCE_DIR}/micropython_iot_modules/common"
     "${PROJECT_SOURCE_DIR}/micropython_iot_modules/display"
     "${PROJECT_SOURCE_DIR}/micropython_iot_modules/input"
+    "${PROJECT_SOURCE_DIR}/micropython_iot_modules/network"
     "${PROJECT_SOURCE_DIR}/micropython_iot_modules/scheduler"
     "${PROJECT_SOURCE_DIR}/micropython_iot_modules/system"
     "${PROJECT_SOURCE_DIR}/src/python"
@@ -113,6 +121,7 @@ target_link_libraries(iot_runtime
     PkgConfig::LIBMOSQUITTO
     PkgConfig::CJSON
     OpenSSL::Crypto
+    CURL::libcurl
 )
 
 add_executable(iot_app

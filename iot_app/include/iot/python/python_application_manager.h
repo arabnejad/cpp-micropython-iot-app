@@ -2,6 +2,7 @@
 
 #include "iot/display/display_types.h"
 #include "iot/logging/logger.h"
+#include "iot/network/ifile_downloader.h"
 #include "iot/python/micropython_runtime.h"
 #include "iot/python/python_application.h"
 #include "iot/system/system_information.h"
@@ -52,7 +53,7 @@ public:
   PythonApplicationManager(ui::ScreenManager &screenManager, display::ActiveDisplay activeDisplay,
                            std::vector<display::DisplayInfo>         connectedDisplays,
                            const system::ISystemInformationProvider &systemInformationProvider,
-                           std::size_t                               pythonHeapSizeInBytes);
+                           network::IFileDownloader &fileDownloader, std::size_t pythonHeapSizeInBytes);
   ~PythonApplicationManager();
 
   // Owns one interpreter and its application context. Copying and moving are
@@ -95,6 +96,7 @@ private:
   display::ActiveDisplay                               m_activeDisplay;
   std::vector<display::DisplayInfo>                    m_connectedDisplays;
   const system::ISystemInformationProvider            &m_systemInformationProvider;
+  network::IFileDownloader                            &m_fileDownloader;
   std::size_t                                          m_pythonHeapSizeInBytes{0};
   std::unique_ptr<MicroPythonApplicationContext>       m_microPythonApplicationContext;
   std::unique_ptr<MicroPythonRuntime>                  m_microPythonRuntime;

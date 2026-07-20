@@ -18,6 +18,10 @@ namespace messaging {
 /*
  * Handles a received application from validation through startup.
  *
+ * Replies accepted after installation, before stopping the current app. Python
+ * errors then appear on the device's emergency screen and in its log, rather
+ * than as another deployment reply.
+ *
  * It is called only by the main thread because MicroPython must start and stop
  * on the thread that owns the interpreter.
  */

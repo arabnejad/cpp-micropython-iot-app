@@ -32,6 +32,7 @@ static iot_gamepad_object_t *gamepad_object(mp_obj_t object) {
 
 static mp_obj_t gamepad_make_new(const mp_obj_type_t *type, size_t number_of_positional_arguments,
                                  size_t number_of_keyword_arguments, const mp_obj_t *all_arguments) {
+  /* Gives a readable name to each position in the parsed argument array. */
   enum { ARG_i2c_bus_number, ARG_i2c_address };
   static const mp_arg_t allowed_arguments[] = {
       {MP_QSTR_i2c_bus_number, MP_ARG_REQUIRED | MP_ARG_INT, {.u_int = 0}},
@@ -88,6 +89,7 @@ static MP_DEFINE_CONST_FUN_OBJ_1(gamepad_connect_object, gamepad_connect);
 
 static mp_obj_t gamepad_calibrate_joystick(size_t number_of_arguments, const mp_obj_t *positional_arguments,
                                            mp_map_t *keyword_arguments) {
+  /* Gives a readable name to each position in the parsed argument array. */
   enum { ARG_number_of_samples, ARG_dead_zone };
   static const mp_arg_t allowed_arguments[] = {
       {MP_QSTR_number_of_samples, MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = 20}},

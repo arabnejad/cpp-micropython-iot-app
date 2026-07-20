@@ -4,8 +4,8 @@
 
 IoT App is a C++ program for an embedded Linux device such as a Raspberry Pi.
 It owns the display, embeds MicroPython, and gives Python applications a small
-set of native APIs for drawing, reading system information, scheduling work,
-and using supported hardware.
+set of native APIs for drawing, downloading files, reading system information,
+scheduling work, and using supported hardware.
 
 The device always starts with a default Python application shipped with the
 C++ executable. A development computer can send another application through
@@ -35,9 +35,11 @@ IoT App handles these jobs:
 
 - Find the connected display and read its active mode.
 - Draw directly to the Linux framebuffer with LVGL.
+- Download bounded HTTP or HTTPS files into a temporary directory.
+- Decode, scale, cache, and display JPEG images.
 - Run one MicroPython application at a time.
 - Expose project-owned native modules as `iot.display`, `iot.input`,
-  `iot.scheduler`, and `iot.system`.
+  `iot.network`, `iot.scheduler`, and `iot.system`.
 - Start the shipped default application when the process starts.
 - Receive a single-file Python application through MQTT.
 - Validate, install, start, and report the result of a deployment.
@@ -127,17 +129,22 @@ ApplicationDeploymentController
     +--> TemporaryPythonApplicationInstaller
     |      writes the application under /tmp
     |
-    +--> PythonApplicationManager
-    |      stops the current app and starts the received app
-    |
     +--> MqttApplicationReceiver
-           publishes progress and the final result
+    |      replies accepted after installation
+    |
+    +--> PythonApplicationManager
+           stops the current app, compiles and runs the received app
+           shows any Python error on the device's emergency screen
 ```
 
 `ApplicationDeploymentController` coordinates the work. The other classes
 continue to handle MQTT, thread communication, validation, temporary files,
 and Python execution separately. Keeping those jobs separate makes each part
 easier to follow and test without creating one large MQTT manager.
+
+The controller also publishes progress and any validation or installation
+error. Its final `accepted` reply confirms the package is installed, not that
+Python compiled or ran successfully.
 
 ## 4. Main design choices
 
@@ -219,6 +226,7 @@ iot_platform
   shared thread-safe logging
   Linux display discovery
   Linux framebuffer rendering
+  JPEG decoding and decoded-pixel cache
   system information
   I2C transport
   game controller support
@@ -227,6 +235,7 @@ iot_runtime
   embedded MicroPython
   native Python modules
   application loading and supervision
+  HTTP and HTTPS downloads
   scheduler
   MQTT receiving and deployment
 
@@ -250,7 +259,9 @@ behavior.
 | libdrm | Finds connected displays and reads their connector, EDID, and active-mode information. It does not render the UI or change the display resolution. |
 | libmosquitto | Connects to the MQTT 5 broker, receives application-install messages, and publishes deployment results. Its network callbacks place received work in a queue for the main thread. |
 | cJSON | Reads application metadata and incoming deployment JSON, and creates the JSON used for deployment status replies. |
-| OpenSSL Crypto | Decodes the Base64 Python source carried in JSON and verifies its SHA-256 hash. Base64 is only an encoding, and SHA-256 only detects inconsistent or damaged content; neither one proves who sent the application. |
+| OpenSSL Crypto | Decodes the Base64 Python source carried in JSON and calculates SHA-256 for deployments and downloaded files. Base64 is only an encoding, and SHA-256 only detects inconsistent or damaged content; neither one proves who sent the application. |
+| libcurl | Downloads HTTP and HTTPS files. Certificate and hostname checks remain enabled for HTTPS. |
+| libjpeg-turbo | Checks, scales, and decodes JPEG files before their pixels are sent to LVGL. |
 
 MicroPython and LVGL are pinned repository submodules. Project code does not
 modify those source trees. CMake generates the MicroPython embed sources into
@@ -269,7 +280,9 @@ main()
 ├── LinuxSystemInformationProvider
 ├── PythonApplicationLoader
 ├── ScreenManager
+│   ├── JpegImageLoader
 │   └── IRenderBackend (LVGL framebuffer implementation)
+├── HttpFileDownloader
 ├── PythonApplicationManager
 │   ├── MicroPythonApplicationContext    created per Python app
 │   └── MicroPythonRuntime               created per Python app
@@ -289,6 +302,7 @@ Process-long objects:
 
 - Display discovery and system-information providers
 - `ScreenManager` and the LVGL framebuffer backend
+- `HttpFileDownloader` and its per-application download directory
 - MQTT receiver and message queue
 - Application loader, installer, deployment controller, and application
   manager
@@ -299,6 +313,7 @@ Application-long objects:
 - `MicroPythonRuntime`
 - The MicroPython heap
 - Python globals, callbacks, widgets IDs, and Python-created hardware objects
+- Files downloaded by the current Python application
 
 The screen itself is process-long, but its application widgets are cleared
 when the active application changes.
@@ -316,6 +331,7 @@ The main thread handles:
 - Runs scheduled Python callbacks.
 - Parses and validates deployment messages.
 - Writes received applications into `/tmp`.
+- Downloads files requested by Python and decodes JPEG cache misses.
 - Changes the application state.
 - Handles `SIGINT` and `SIGTERM` through a stop flag.
 
@@ -490,14 +506,21 @@ window manager, Mesa, EGL, or OpenGL.
 
 ### 11.1 `ScreenManager`
 
-`ScreenManager` is the thread-safe entry point used by the rest of the process.
-It accepts simple C++ values such as `TextBoxSpec`, copies them into commands,
-and returns quickly.
+Python and the main loop call `ScreenManager` on the main thread. It accepts
+values such as `TextBoxSpec` and puts drawing commands in the render queue.
+Only access to that queue is protected by its mutex; widget IDs, image state,
+and the JPEG cache belong to the main thread. Do not call its drawing methods
+from MQTT callbacks or another worker thread.
+
+Most drawing calls only queue work. An image call may first read and decode a
+JPEG, so it waits until the pixels are ready before queueing the drawing work.
 
 Its responsibilities are:
 
 - Own the render thread and backend.
-- Give each text box a process-wide widget ID.
+- Give each text box or normal image a process-wide widget ID.
+- Decode JPEG files and reuse recently decoded pixels within a fixed memory
+  limit.
 - Keep render commands in order.
 - Bound the number of pending commands.
 - Drop old pending commands when a new application clears the screen.
@@ -517,6 +540,8 @@ The current backend supports:
 
 - Clear screen
 - Create, update, move, and delete text boxes
+- Create, update, move, and delete normal JPEG images
+- Set or remove a centred, fitted, or tiled background JPEG
 - Draw solid areas
 - Show a runtime-owned error screen
 
@@ -594,6 +619,84 @@ The complete flow is:
 Python app keeps this ID and passes it to `update_text_box()`,
 `move_text_box()`, or `delete_text_box()` when it wants to change the same text
 box later.
+
+### 11.4 How a downloaded JPEG reaches the monitor
+
+Downloading and drawing are separate operations. An application can download
+a file once, keep the returned path, and use it in more than one drawing call.
+
+```text
+Python application
+  network.download_file(url, expected_sha256=...)
+          |
+          v
+MicroPython network module and C++ bridge
+          |
+          v
+HttpFileDownloader -> libcurl -> current app's /tmp download directory
+          |
+          | returns a local path
+          v
+Python application
+  display.set_background_image(path, mode="fit")
+          |
+          v
+MicroPython display module and C++ bridge
+          |
+          v
+ScreenManager -> JpegImageLoader -> libjpeg-turbo
+          |
+          | queues decoded pixels held by shared_ptr
+          v
+Render thread -> LVGL image widget -> /dev/fb0 -> HDMI monitor
+```
+
+The steps are:
+
+1. `network.download_file()` checks the URL and optional SHA-256 text.
+2. `HttpFileDownloader` writes the response to a private temporary file. It
+   enforces the file, application-total, timeout, redirect, and protocol
+   limits while libcurl is receiving the data.
+3. The downloader calculates SHA-256, checks the expected value when one was
+   supplied, and gives Python the completed file's local path.
+4. Python passes that path to `draw_image()` or `set_background_image()`.
+5. `JpegImageLoader` reuses matching decoded pixels when possible. Otherwise,
+   libjpeg-turbo checks, scales, and decodes the JPEG on the main thread.
+6. `ScreenManager` queues a render command that shares ownership of those
+   pixels. The render thread creates or updates the LVGL image widget.
+7. The LVGL backend keeps that shared owner for as long as the widget needs
+   the pixel buffer.
+
+The API is synchronous. Python waits during the download and a cache-miss
+decode, while the separate render thread continues refreshing LVGL. There is
+no decoder worker thread: starting one and immediately waiting for it would
+add another queue and lifetime to manage without making the Python call
+asynchronous.
+
+Downloads and decoded pixels have separate limits. One file may use 10 MiB,
+and all downloaded files stored by one application may use 50 MiB. The decoded
+JPEG cache retains up to 32 MiB for reuse. It removes the least recently used
+images only when no widget or queued command still needs them. Replacing an
+image needs space for both the old and new pixels until the renderer applies
+the change. If they cannot fit together, the call raises an error and leaves
+the old image unchanged. Request a smaller scale to reduce this memory use.
+
+Deleting a widget queues its removal; it does not immediately release its
+pixels or remove its cache entry. Once the renderer deletes the widget, the
+cache may evict those pixels when it needs room. A new application clears the
+download directory and decoded cache. Old pixels remain valid until the render
+thread finishes removing the old widgets.
+
+The 32 MiB cache limit is not a limit on total process memory. Decoding needs
+temporary compressed data, decoder working memory, and a new pixel buffer
+before cache admission. Old widgets can also briefly hold pixels after a
+screen clear. The LVGL framebuffer buffer and Python heap are separate.
+
+Each network transfer has a 30-second limit, including up to 10 seconds to
+connect. A timeout raises a Python `RuntimeError` and removes the partial file.
+Python can catch that error; an unhandled error stops the application and shows
+the C++ emergency screen. Failure to clear the previous application's download
+directory is handled as a startup failure too. The default app is not restarted.
 
 ## 12. Python application package
 
@@ -780,8 +883,9 @@ PythonApplicationManager
 MicroPythonRuntime -> MicroPython scheduler
 ```
 
-Python display and system calls use a different path. Their C++ bridge files
-get the active context and use it to reach the required C++ service:
+Python display, network, and system calls use a different path. Their C++
+bridge files get the active context and use it to reach the required C++
+service:
 
 ```text
 Python application
@@ -790,12 +894,13 @@ Python application
 Native MicroPython module
   |
   v
-display_cpp_bridge.cpp or system_cpp_bridge.cpp
+display_cpp_bridge.cpp, network_cpp_bridge.cpp, or system_cpp_bridge.cpp
   |
   v
 MicroPythonApplicationContext
   |
   ├── ScreenManager
+  ├── IFileDownloader
   ├── display information
   └── system information
 ```
@@ -871,6 +976,7 @@ currently running application access to:
 - Screen drawing
 - The active display and monitor details captured at startup
 - System information and live uptime
+- File downloads for the current application
 - The current application name
 
 The process runs only one Python application at a time, so only one context can
@@ -878,7 +984,7 @@ be active.
 
 ### 13.5 Native module boundary
 
-The public Python module is `iot`. It exposes four private native
+The public Python module is `iot`. It exposes five private native
 implementations under stable names:
 
 ```text
@@ -891,6 +997,7 @@ mod_iot.c                         public module: iot
 native modules
 ├── mod_iot_display.c
 ├── mod_iot_input.c
+├── mod_iot_network.c
 ├── mod_iot_scheduler.c
 └── mod_iot_system.c
        |
@@ -1020,7 +1127,21 @@ Python.
 Text creation returns a widget ID. Python uses that ID to update, move, or
 delete the same LVGL object later.
 
-### 14.2 `iot.scheduler`
+Image creation follows the same bridge and queue. JPEG decoding happens before
+the render command is queued, so the render thread receives ready pixel data.
+
+### 14.2 `iot.network`
+
+The network binding sends one HTTP or HTTPS request to `HttpFileDownloader`.
+The downloader uses libcurl, writes into a bounded temporary file, and returns
+the local path, SHA-256, size, content type, and whether it reused a cached
+file. Supplying an expected SHA-256 is optional.
+
+The call waits until the transfer finishes. This keeps the API and ownership
+simple. The render thread remains independent, so the current screen still
+refreshes while the main thread is waiting.
+
+### 14.3 `iot.scheduler`
 
 The scheduler stores repeating tasks in the MicroPython VM. Each task contains
 a callback, positive ID, interval, and remaining time.
@@ -1034,7 +1155,7 @@ If several intervals were missed, a repeating callback runs once rather than
 being replayed many times in a burst. Its next deadline stays aligned with its
 interval.
 
-### 14.3 `iot.system`
+### 14.4 `iot.system`
 
 Most values come from a snapshot taken when the application starts. The
 snapshot includes machine, resource, interface, and device details. This avoids
@@ -1043,7 +1164,7 @@ repeated full scans and gives those dashboard panels a consistent view.
 Current local time, uptime, and network interfaces are live calls because those
 values can change while a screen is running.
 
-### 14.4 `iot.input`
+### 14.5 `iot.input`
 
 The input binding currently exposes the Adafruit Mini I2C STEMMA QT Gamepad.
 Python owns a C++ gamepad object through an opaque handle. Joystick and button
@@ -1205,11 +1326,21 @@ The sender:
    prevents a fast device reply from being missed.
 7. Publishes the request at QoS 1 without retaining it.
 8. Prints each device status and returns success only for final status
-   `started`.
+   `accepted`.
 
 `--dry-run` builds and validates the message without connecting. `--no-wait`
 returns after broker acknowledgement instead of waiting for the device's final
 result.
+
+The sender waits up to 30 seconds for acceptance or a validation/installation
+error. IoT App replies before compiling or executing the new Python app, so
+the sender does not wait for its image downloads. Each device HTTP transfer
+still has its own 30-second limit.
+
+The previous app can still delay processing if it is busy on the main thread.
+A reply timeout does not cancel the request or prove it failed; check the
+device log before sending it again. Both IoT App and the sender must use this
+acceptance-only protocol; older versions wait for a startup result instead.
 
 A **transfer ID** identifies one attempt to send an application. The sender
 creates a new value for every send operation, even when it sends the same
@@ -1347,8 +1478,7 @@ The controller publishes progress as it works:
 ```text
 received
 validating
-starting
-started
+accepted
 ```
 
 Possible final failure states are:
@@ -1358,17 +1488,29 @@ rejected
 failed
 ```
 
-`rejected` means the message did not pass validation. `failed` means a later
-installation or startup step could not complete. A startup failure leaves the
-native emergency screen visible; it does not restart the default application.
+`accepted` means the package passed validation and its temporary files were
+installed. The controller sends and remembers this reply before stopping the
+current app or compiling the new Python source. The sender can then exit.
+
+`rejected` means the message did not pass validation. `failed` means the
+temporary installation could not complete. Neither changes the current app
+or emergency screen.
+
+Python syntax errors, startup exceptions, and scheduled-callback exceptions
+are handled on the device. IoT App writes the traceback to its log and shows
+the native emergency screen. It does not send another deployment result or
+restart the default app.
 
 MQTT QoS 1 may deliver the same install message more than once. The controller
 remembers a bounded number of final results by transfer ID. A duplicate gets
-the saved final answer instead of starting the same app again.
+the saved final answer instead of starting the same app again, even if that
+app has since failed. This saved answer describes the original delivery, not
+the app's current state. Sending again from the command line creates a new
+transfer ID and starts a new attempt.
 
 ### 17.8 Reading the sender output
 
-A successful deployment produces output similar to this:
+An accepted deployment produces output similar to this:
 
 ```text
 Application: .../sample_applications/moving_text_in_frame
@@ -1380,8 +1522,7 @@ Message size: 6657 bytes
 The MQTT broker acknowledged the deployment message.
 Device status: received: Message received by IoT App
 Device status: validating: Source size and SHA-256 are valid
-Device status: starting: Temporary application is valid and is starting
-Device status: started: External application started successfully
+Device status: accepted: Application received and ready to execute
 ```
 
 The lines before the broker acknowledgement describe the request prepared by
@@ -1396,69 +1537,57 @@ by IoT App on the Raspberry Pi:
 |---|---|
 | `received` | IoT App received the message and started processing its transfer ID. |
 | `validating` | The JSON fields, device ID, application metadata, source size, Base64 data, and SHA-256 passed validation. |
-| `starting` | The temporary application was written and loaded, and IoT App is about to run its Python entry point. |
-| `started` | The entry point finished without an unhandled startup exception. The MicroPython interpreter remains active for objects and scheduled callbacks. |
+| `accepted` | The temporary files are installed. IoT App is about to stop the current app and compile and run the new source. This is the final successful delivery reply. |
 | `rejected` | Message validation failed. The currently displayed app or emergency screen is left unchanged. |
-| `failed` | Temporary installation or Python startup failed. If Python startup was attempted, IoT App shows the native emergency screen. |
+| `failed` | Temporary installation failed. The currently displayed app or emergency screen is left unchanged. |
 
-For example, a Python exception during startup ends with `failed`:
+For example, if the device cannot write the temporary files, the reply ends
+with `failed`. Its message describes the installation error:
 
 ```text
 Device status: received: Message received by IoT App
 Device status: validating: Source size and SHA-256 are valid
-Device status: starting: Temporary application is valid and is starting
-Device status: failed: Python raised an exception while starting the external application
+Device status: failed: Could not create temporary application file: /tmp/iot-app-<uid>/applications/.staging-<transfer-id>/main.py
 ```
 
-The final MQTT reply for that startup failure is:
-
-```json
-{
-  "transfer_id": "<transfer-id>",
-  "status": "failed",
-  "application_id": "<application-id>",
-  "message": "Python raised an exception while starting the external application"
-}
-```
-
-The MQTT reply does not contain the Python traceback. IoT App writes the full
-traceback to the Raspberry Pi log and shows it on the native emergency screen.
-No default application is restored. The emergency screen stays visible until
-another valid external application is sent or `iot_app` restarts. The Ubuntu
-sender exits with code `2` because the deployment did not reach `started`.
-
-The status message itself is JSON. The sender reads it and prints the shorter
-`Device status` line:
+The final MQTT reply for an accepted application is:
 
 ```json
 {
   "transfer_id": "71b84271630a467aa16ee7b4a0c39632",
-  "status": "started",
+  "status": "accepted",
   "application_id": "moving-text-in-frame",
-  "message": "External application started successfully"
+  "message": "Application received and ready to execute"
 }
 ```
+
+The sender reads this JSON and prints the shorter `Device status` line. It
+exits with code `0` for `accepted` and code `2` for `rejected` or `failed`.
+Connection errors and reply timeouts use exit code `1`.
 
 The sender ignores a status message whose `transfer_id` does not match the
 request it is waiting for.
 
-#### Startup failure compared with a later callback failure
+#### Python errors after acceptance
 
-The sender result depends on when the Python exception happens:
+The sender result is the same for all Python errors. Delivery has already
+been accepted; Python execution is a separate step:
 
 | When Python fails | What the Ubuntu sender reports | What the Raspberry Pi shows |
 |---|---|---|
-| While running the entry point during startup | `failed: Python raised an exception while starting the external application` | The native emergency screen shows the startup traceback. No Python app remains running. |
-| Later, inside a scheduled callback | The sender has already received `started: External application started successfully` | IoT App stops Python and the native emergency screen shows the callback traceback. |
+| While compiling the source, such as a syntax error | `accepted: Application received and ready to execute` | The native emergency screen shows the compilation error. No Python app remains running. |
+| While running the entry point, such as `import os1` or a download timeout | `accepted: Application received and ready to execute` | The native emergency screen shows the startup traceback. No Python app remains running. |
+| Later, inside a scheduled callback | `accepted: Application received and ready to execute` | IoT App stops Python and the native emergency screen shows the callback traceback. |
 
-A scheduled callback cannot run until the entry point has finished. The
-`started` status confirms successful startup, but it cannot predict whether a
-later callback will fail.
+The current protocol does not send a second status for compilation, startup,
+or callback errors. The sender can report success while the device shows an
+error: success means delivery, not successful execution. Check the screen or
+device log to see whether Python is running correctly.
 
-The current protocol does not publish a second MQTT status when a later
-callback fails. The sender may therefore finish successfully before the
-Raspberry Pi changes to the emergency screen. The traceback is still written
-to the Raspberry Pi log.
+IoT App writes the full traceback to the Raspberry Pi log; it is not included
+in the MQTT reply. The emergency screen stays visible until another external
+application starts or `iot_app` restarts. The default app is not restored after
+a Python failure.
 
 ## 18. System information subsystem
 
@@ -1574,6 +1703,13 @@ The default runtime limits are:
 | Active Python timers | 128 |
 | Captured Python traceback | 8 KiB |
 | Application metadata in `app.json` | 64 KiB |
+| One downloaded file | 10 MiB |
+| Downloaded files stored by one Python application | 50 MiB |
+| HTTP/HTTPS redirects | 5 |
+| HTTP/HTTPS connection and total timeout | 10 and 30 seconds |
+| Original JPEG dimensions | 8192 pixels per side and 16,777,216 pixels total |
+| One decoded JPEG | 32 MiB |
+| Decoded JPEG cache | 32 MiB; images still used by widgets or queued commands are not evicted |
 
 These limits stop a fast producer or broken application from growing the main
 queues and heaps without control.
@@ -1593,6 +1729,7 @@ robustness, but they do not create a security boundary.
 | Default package is missing or invalid | Stop startup before Python begins |
 | Default Python startup fails | Show native emergency screen |
 | MQTT cannot start | Log the error and keep the default app running |
+| A download or JPEG check fails | Raise `RuntimeError` in the current Python application |
 | MQTT message queue is full | Drop the new message and log it |
 | Render command queue is full | Raise an error to the calling application |
 | Render thread fails | Main loop rethrows and stops the process |

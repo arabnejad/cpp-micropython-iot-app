@@ -1,6 +1,7 @@
 #pragma once
 
 #include "iot/display/display_types.h"
+#include "iot/network/ifile_downloader.h"
 #include "iot/system/system_information.h"
 
 #include <cstddef>
@@ -17,15 +18,16 @@ namespace python {
 /*
  * Gives native MicroPython modules access to the current C++ services.
  *
- * The display and system modules enter C++ through plain C bridge functions.
- * Those functions cannot receive ScreenManager and the other service objects
- * as normal C++ arguments, so they read them from the active context.
+ * The display, network, and system modules enter C++ through plain C bridge
+ * functions. Those functions cannot receive ScreenManager and the other
+ * service objects as normal C++ arguments, so they read them from the active
+ * context.
  *
  * Before MicroPython starts, PythonApplicationManager makes this context
- * active. When Python requests display or system work, the bridge calls
- * active() to get the required C++ services. The context stays active until
- * MicroPython has completely stopped. The active display and monitor list come
- * from the scan performed during process startup.
+ * active. When Python requests display, download, or system work, the bridge
+ * calls active() to get the required C++ services. The context stays active
+ * until MicroPython has completely stopped. The active display and monitor
+ * list come from the scan performed during process startup.
  *
  * Only one context can be active because IoT App runs one Python application
  * at a time.
@@ -35,7 +37,8 @@ public:
   MicroPythonApplicationContext(ui::ScreenManager &screenManager, display::ActiveDisplay activeDisplay,
                                 const std::vector<display::DisplayInfo>  &connectedDisplays,
                                 const system::ISystemInformationProvider &systemInformationProvider,
-                                system::SystemInformation systemInformation, std::string applicationName);
+                                network::IFileDownloader &fileDownloader, system::SystemInformation systemInformation,
+                                std::string applicationName);
   ~MicroPythonApplicationContext();
 
   // Only one context can be active; copying and moving are disabled.
@@ -54,6 +57,7 @@ public:
   std::uint64_t currentUptimeSeconds() const;
   /* Reads the current Linux network-interface state. */
   std::vector<system::NetworkInterfaceInformation> readCurrentNetworkInterfaces() const;
+  network::IFileDownloader                        &fileDownloader() const noexcept;
   const std::string                               &applicationName() const noexcept;
   /* Gets the active context, or nullptr when no Python app is running. */
   static MicroPythonApplicationContext *active() noexcept;
@@ -63,6 +67,7 @@ private:
   display::ActiveDisplay                    m_activeDisplay;
   const std::vector<display::DisplayInfo>  *m_connectedDisplays{nullptr};
   const system::ISystemInformationProvider *m_systemInformationProvider{nullptr};
+  network::IFileDownloader                 *m_fileDownloader{nullptr};
   system::SystemInformation                 m_systemInformation;
   std::string                               m_applicationName;
 };

@@ -12,9 +12,10 @@ Expected result:
 4. The C++ runtime shows the traceback on its native emergency screen.
 5. No Python application remains running.
 
-The sender may already have reported `started` because startup completed before
-the scheduled failure. Observe the Raspberry Pi display and log for the later
-failure. No optional hardware is required. Use the separate
+IoT App replies `accepted` after installation, before running Python. The
+sender does not wait for startup or callback results. Observe the Raspberry
+Pi display and log for the failure; no additional MQTT status is sent. No
+optional hardware is required. Use the separate
 `traceback_failure` sample to test an exception during `main.py` startup.
 
 Use this directory in `sender_config.json`:

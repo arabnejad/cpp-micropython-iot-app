@@ -16,8 +16,10 @@ IMAGE_FEATURES += "ssh-server-openssh allow-root-login"
 # selected separately below, so translated locale packages are not needed.
 IMAGE_LINGUAS = ""
 
+# IoT App uses the CA bundle below to verify HTTPS server certificates.
 IMAGE_INSTALL:append = " \
     avahi-daemon \
+    ca-certificates \
     e2fsprogs-e2fsck \
     e2fsprogs-resize2fs \
     e2fsprogs-tune2fs \

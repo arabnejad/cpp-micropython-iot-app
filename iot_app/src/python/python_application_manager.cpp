@@ -67,10 +67,11 @@ PythonApplicationManager::PythonApplicationManager(ui::ScreenManager            
                                                    display::ActiveDisplay                    activeDisplay,
                                                    std::vector<display::DisplayInfo>         connectedDisplays,
                                                    const system::ISystemInformationProvider &systemInformationProvider,
+                                                   network::IFileDownloader                 &fileDownloader,
                                                    std::size_t                               pythonHeapSizeInBytes)
     : m_screenManager(screenManager), m_activeDisplay(std::move(activeDisplay)),
       m_connectedDisplays(std::move(connectedDisplays)), m_systemInformationProvider(systemInformationProvider),
-      m_pythonHeapSizeInBytes(pythonHeapSizeInBytes) {
+      m_fileDownloader(fileDownloader), m_pythonHeapSizeInBytes(pythonHeapSizeInBytes) {
   if (m_pythonHeapSizeInBytes == 0U) {
     IOT_LOG_ERROR(m_logger, "Cannot create the Python application manager because pythonHeapSizeInBytes is zero");
     throw std::invalid_argument("PythonApplicationManager requires a non-empty Python heap");
@@ -88,9 +89,9 @@ void PythonApplicationManager::startDefaultApplication(const PythonApplication &
     throw std::invalid_argument("Python application manager requires a valid default application");
   }
 
-  prepareForApplicationStart();
   std::string failureTraceback;
   try {
+    prepareForApplicationStart();
     const auto pythonExecutionResult = startApplicationInNewInterpreter(defaultApplication);
     if (pythonExecutionResult.succeeded) {
       m_state            = ApplicationState::DefaultApplication;
@@ -117,10 +118,10 @@ void PythonApplicationManager::startDefaultApplication(const PythonApplication &
 ExternalApplicationActivationResult
 PythonApplicationManager::activateExternalApplication(const PythonApplication &pythonApplication) {
   ExternalApplicationActivationResult activationResult;
-  prepareForApplicationStart();
 
   std::string failureTraceback;
   try {
+    prepareForApplicationStart();
     const auto pythonExecutionResult = startApplicationInNewInterpreter(pythonApplication);
     if (pythonExecutionResult.succeeded) {
       m_state                                       = ApplicationState::ExternalApplication;
@@ -161,7 +162,7 @@ PythonApplicationManager::startApplicationInNewInterpreter(const PythonApplicati
   m_screenManager.throwIfRenderThreadFailed();
   try {
     m_microPythonApplicationContext = std::make_unique<MicroPythonApplicationContext>(
-        m_screenManager, m_activeDisplay, m_connectedDisplays, m_systemInformationProvider,
+        m_screenManager, m_activeDisplay, m_connectedDisplays, m_systemInformationProvider, m_fileDownloader,
         m_systemInformationProvider.readSystemInformation(), pythonApplication.applicationName);
     m_microPythonRuntime = std::make_unique<MicroPythonRuntime>(m_pythonHeapSizeInBytes);
 
@@ -193,6 +194,7 @@ void PythonApplicationManager::prepareForApplicationStart() {
   m_state = ApplicationState::Stopped;
   m_activeScreenName.clear();
   m_screenManager.clear({8U, 13U, 22U});
+  m_fileDownloader.clearDownloadedFiles();
 }
 
 void PythonApplicationManager::stopPythonInterpreter() noexcept {

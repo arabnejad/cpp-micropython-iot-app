@@ -65,10 +65,7 @@ void ApplicationDeploymentController::process(const ReceivedApplicationMessage &
 
   python::PythonApplication externalApplication;
   try {
-    externalApplication              = m_applicationInstaller.installApplication(deploymentRequest);
-    deploymentStatus.deploymentState = "starting";
-    deploymentStatus.message         = "Temporary application is valid and is starting";
-    m_mqttApplicationReceiver.publishStatus(deploymentStatus);
+    externalApplication = m_applicationInstaller.installApplication(deploymentRequest);
   } catch (const std::exception &error) {
     IOT_LOG_ERROR(m_logger, "Could not install deployment transferId=", deploymentRequest.transferId,
                   ", applicationId=", deploymentRequest.applicationId, ": ", error.what());
@@ -78,6 +75,13 @@ void ApplicationDeploymentController::process(const ReceivedApplicationMessage &
     return;
   }
 
+  // Confirm delivery before Python runs, so startup downloads do not hold up
+  // the sender. Accepted means installed, not compiled or running. Python
+  // failures are shown on the device and do not change this saved reply.
+  deploymentStatus.deploymentState = "accepted";
+  deploymentStatus.message         = "Application received and ready to execute";
+  publishAndRememberFinalStatus(deploymentStatus);
+
   const auto previousExternalApplicationDirectory = m_activeExternalApplicationInstallDirectory;
   const auto activationResult = m_applicationManager.activateExternalApplication(externalApplication);
   if (!previousExternalApplicationDirectory.empty()) {
@@ -86,20 +90,15 @@ void ApplicationDeploymentController::process(const ReceivedApplicationMessage &
 
   if (activationResult.externalApplicationIsRunning) {
     m_activeExternalApplicationInstallDirectory = externalApplication.packageDirectory;
-    deploymentStatus.deploymentState            = "started";
-    deploymentStatus.message                    = "External application started successfully";
     IOT_LOG_INFO(m_logger, "Application id=", deploymentRequest.applicationId,
                  ", transferId=", deploymentRequest.transferId, " is running from ",
                  m_activeExternalApplicationInstallDirectory);
   } else {
     m_applicationInstaller.removeInstalledApplication(externalApplication.packageDirectory);
     m_activeExternalApplicationInstallDirectory.clear();
-    deploymentStatus.deploymentState = "failed";
-    deploymentStatus.message         = activationResult.failureReason;
     IOT_LOG_ERROR(m_logger, "Application id=", deploymentRequest.applicationId,
                   ", transferId=", deploymentRequest.transferId, " failed to start: ", activationResult.failureReason);
   }
-  publishAndRememberFinalStatus(deploymentStatus);
 }
 
 void ApplicationDeploymentController::publishAndRememberFinalStatus(

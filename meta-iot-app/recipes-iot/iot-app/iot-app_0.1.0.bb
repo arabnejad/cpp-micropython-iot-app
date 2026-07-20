@@ -1,5 +1,5 @@
 SUMMARY = "C++ runtime for embedded MicroPython IoT applications"
-DESCRIPTION = "IoT App runs one embedded MicroPython application and exposes native display, system, scheduling, and gamepad services."
+DESCRIPTION = "IoT App runs one embedded MicroPython application and exposes native display, download, system, scheduling, and gamepad services."
 HOMEPAGE = "https://github.com/arabnejad/cpp-micropython-iot-app"
 LICENSE = "PolyForm-Noncommercial-1.0.0"
 
@@ -34,7 +34,9 @@ EXTERNALSRC = "${IOT_APP_PROJECT_ROOT}"
 EXTERNALSRC_BUILD = "${WORKDIR}/build"
 OECMAKE_SOURCEPATH = "${S}/iot_app"
 
-DEPENDS = "cjson libdrm mosquitto openssl python3-native"
+# curl provides HTTP and HTTPS downloads. libjpeg-turbo provides the TurboJPEG
+# API used to decode and reduce JPEG images before they reach LVGL.
+DEPENDS = "cjson curl libdrm libjpeg-turbo mosquitto openssl python3-native"
 
 EXTRA_OECMAKE = " \
     -DLVGL_DIR=${S}/lvgl \

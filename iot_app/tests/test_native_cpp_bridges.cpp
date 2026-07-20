@@ -1,4 +1,5 @@
 #include "display_cpp_bridge.h"
+#include "network_cpp_bridge.h"
 #include "system_cpp_bridge.h"
 
 #include <gtest/gtest.h>
@@ -14,11 +15,24 @@ TEST(NativeDisplayCppBridgeTest, ReturnsErrorsInsteadOfThrowingAcrossTheCMicroPy
   EXPECT_FALSE(iot_display_update_text_box(0U, "text").succeeded);
   EXPECT_FALSE(iot_display_move_text_box(0U, 0, 0).succeeded);
   EXPECT_FALSE(iot_display_delete_text_box(0U).succeeded);
+  EXPECT_FALSE(iot_display_draw_image(nullptr, 0, 0, 100U, &createdTextBoxId).succeeded);
+  EXPECT_FALSE(iot_display_update_image(0U, nullptr).succeeded);
+  EXPECT_FALSE(iot_display_move_image(0U, 0, 0).succeeded);
+  EXPECT_FALSE(iot_display_set_image_scale(0U, 100U).succeeded);
+  EXPECT_FALSE(iot_display_delete_image(0U).succeeded);
+  EXPECT_FALSE(iot_display_set_background_image(nullptr, IOT_BACKGROUND_IMAGE_CENTER, 100U).succeeded);
+  EXPECT_FALSE(iot_display_clear_background_image().succeeded);
   EXPECT_FALSE(iot_display_fill_area(0, 0, 10, 10, 0U, 0U, 0U).succeeded);
   EXPECT_FALSE(iot_display_size(nullptr, nullptr).succeeded);
   EXPECT_FALSE(iot_display_monitor_count(nullptr).succeeded);
   EXPECT_FALSE(iot_display_monitor_information(0U, nullptr).succeeded);
   EXPECT_FALSE(iot_display_supported_mode_information(0U, 0U, nullptr).succeeded);
+}
+
+TEST(NativeNetworkCppBridgeTest, ReturnsErrorsInsteadOfThrowingAcrossTheCMicroPythonBoundary) {
+  iot_downloaded_file_t downloadedFile{};
+  EXPECT_FALSE(iot_network_download_file(nullptr, "", &downloadedFile).succeeded);
+  EXPECT_FALSE(iot_network_download_file("https://example.com/image.jpg", "", &downloadedFile).succeeded);
 }
 
 TEST(NativeSystemCppBridgeTest, ValidatesOutputPointersAndKeepsTimeAvailableOutsideAnApplication) {

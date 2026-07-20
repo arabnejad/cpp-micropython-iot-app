@@ -1,6 +1,7 @@
 #pragma once
 
 #include "iot/display/display_types.h"
+#include "iot/ui/decoded_jpeg_image.h"
 #include "iot/ui/ui_types.h"
 
 #include <cstdint>
@@ -23,12 +24,18 @@ public:
   /* Opens the output and prepares LVGL. */
   virtual void initialize(const display::ActiveDisplay &activeDisplay) = 0;
   /* Releases the output. */
-  virtual void shutdown() noexcept                                               = 0;
-  virtual void createTextBox(WidgetId textBoxId, const TextBoxSpec &textBoxSpec) = 0;
-  virtual void updateTextBox(WidgetId textBoxId, const std::string &updatedText) = 0;
-  virtual void moveTextBox(WidgetId textBoxId, std::int32_t x, std::int32_t y)   = 0;
-  virtual void deleteTextBox(WidgetId textBoxId)                                 = 0;
-  virtual void fillArea(const FilledAreaSpec &filledAreaSpec)                    = 0;
+  virtual void shutdown() noexcept                                                                          = 0;
+  virtual void createTextBox(WidgetId textBoxId, const TextBoxSpec &textBoxSpec)                            = 0;
+  virtual void updateTextBox(WidgetId textBoxId, const std::string &updatedText)                            = 0;
+  virtual void moveTextBox(WidgetId textBoxId, std::int32_t x, std::int32_t y)                              = 0;
+  virtual void deleteTextBox(WidgetId textBoxId)                                                            = 0;
+  virtual void createJpegImage(WidgetId imageId, const DecodedJpegImageSpec &decodedJpegImageSpec)          = 0;
+  virtual void replaceJpegImage(WidgetId imageId, std::shared_ptr<const DecodedJpegImage> decodedJpegImage) = 0;
+  virtual void moveJpegImage(WidgetId imageId, std::int32_t x, std::int32_t y)                              = 0;
+  virtual void deleteJpegImage(WidgetId imageId)                                                            = 0;
+  virtual void setBackgroundJpegImage(const DecodedBackgroundJpegImageSpec &decodedBackgroundJpegImageSpec) = 0;
+  virtual void clearBackgroundJpegImage()                                                                   = 0;
+  virtual void fillArea(const FilledAreaSpec &filledAreaSpec)                                               = 0;
   /* Clears application widgets and shows the runtime-owned error screen. */
   virtual void showErrorScreen(const TextBoxSpec &errorBoxSpec) = 0;
   /* Removes all widgets and fills the screen with one colour. */

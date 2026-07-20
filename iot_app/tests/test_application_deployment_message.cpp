@@ -51,13 +51,14 @@ TEST(ApplicationDeploymentMessageParserTest, RecoversTransferIdFromAnOtherwiseIn
 }
 
 TEST(ApplicationDeploymentMessageParserTest, SerializesStatusFieldsForTheSender) {
-  const ApplicationDeploymentStatus deploymentStatus{"transfer-42", "started", "hello-world", "Application started"};
+  const ApplicationDeploymentStatus deploymentStatus{"transfer-42", "accepted", "hello-world",
+                                                     "Application received and ready to execute"};
 
   const std::string serializedStatusPayload =
       ApplicationDeploymentMessageParser::serializeStatusPayload(deploymentStatus);
 
   EXPECT_NE(serializedStatusPayload.find("\"transfer_id\":\"transfer-42\""), std::string::npos);
-  EXPECT_NE(serializedStatusPayload.find("\"status\":\"started\""), std::string::npos);
+  EXPECT_NE(serializedStatusPayload.find("\"status\":\"accepted\""), std::string::npos);
   EXPECT_NE(serializedStatusPayload.find("\"application_id\":\"hello-world\""), std::string::npos);
 }
 

@@ -14,6 +14,7 @@ TEST(MicroPythonDeviceModuleTest, PublicIotModuleExposesEveryNativeSubsystem) {
   pythonApplication.sourceCode      = "import iot\n"
                                       "assert iot.display is not None\n"
                                       "assert iot.input is not None\n"
+                                      "assert iot.network is not None\n"
                                       "assert iot.scheduler is not None\n"
                                       "assert iot.system is not None\n";
 

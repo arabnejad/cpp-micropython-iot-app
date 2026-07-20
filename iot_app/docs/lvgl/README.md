@@ -264,6 +264,13 @@ is [`IRenderBackend`](../../include/iot/ui/render_backend.h).
 | `updateTextBox(id, text)` | Replaces the label text in an existing box. | `updateTextBox()` |
 | `moveTextBox(id, x, y)` | Moves the existing outer box. Its label moves with it. | `moveTextBox()` |
 | `deleteTextBox(id)` | Deletes the outer box and its label. | `deleteTextBox()` |
+| `drawJpegImage(spec)` | Decodes and queues a normal JPEG image, then returns its widget ID. | `createJpegImage()` |
+| `replaceJpegImage(id, path)` | Replaces the JPEG used by an image widget. | `replaceJpegImage()` |
+| `moveJpegImage(id, x, y)` | Moves an existing image without decoding it again. | `moveJpegImage()` |
+| `setJpegImageScale(id, percent)` | Decodes the image again at the requested smaller size. | `replaceJpegImage()` |
+| `deleteJpegImage(id)` | Removes a normal image widget. | `deleteJpegImage()` |
+| `setBackgroundJpegImage(spec)` | Places a centred, fitted, or tiled JPEG behind normal widgets. | `setBackgroundJpegImage()` |
+| `clearBackgroundJpegImage()` | Removes only the current background JPEG. | `clearBackgroundJpegImage()` |
 | `fillArea(spec)` | Creates a solid rectangle. The current API does not return an ID for it. | `fillArea()` |
 | `clear(colour)` | Removes application widgets and changes the screen background. | `clear()` |
 | `showErrorScreen(spec)` | Removes application widgets and shows the native emergency screen. | `showErrorScreen()` |
@@ -320,7 +327,45 @@ The label is a child of the box, so it moves automatically.
 child label at the same time. The backend then removes the widget ID from its
 map.
 
-### 6.5 Draw a filled area
+### 6.5 Draw a JPEG image
+
+`drawJpegImage()` asks the internal JPEG loader for decoded pixels before it adds a
+render command to the queue. A cache hit returns the existing pixels. A cache
+miss uses libjpeg-turbo on the main/MicroPython thread. This is synchronous,
+so the Python call waits for the result, but the render thread continues
+calling LVGL.
+
+The queued command contains a `shared_ptr` to the decoded pixels. The backend
+keeps that pointer beside the LVGL image descriptor, so the pixels remain
+valid for as long as LVGL uses them.
+
+The backend creates the widget with `lv_image_create()`, gives it the decoded
+RGB888 source, and positions it with `lv_obj_set_pos()`. Updating an image
+replaces its source without creating another widget.
+
+RGB888 gives every pixel three 8-bit colour values:
+
+```text
+Red       Green     Blue
+8 bits    8 bits    8 bits
+```
+
+Together they use 24 bits, or 3 bytes, for each pixel. There is no separate
+transparency value. LVGL stores the three bytes in blue, green, red order in
+memory, so IoT App asks libjpeg-turbo to produce that same order.
+
+### 6.6 Set a background JPEG image
+
+A background image is an LVGL image widget sized to the full screen. The
+backend uses `LV_IMAGE_ALIGN_CENTER` for centred and fitted images, or
+`LV_IMAGE_ALIGN_TILE` to repeat an image. It then moves the object to child
+index zero so text boxes and other normal widgets stay in front.
+
+For `fit`, `ScreenManager` gives the display width and height to the decoder.
+Libjpeg-turbo chooses the largest supported size that fits within both values.
+Small images are not enlarged.
+
+### 6.7 Draw a filled area
 
 `fillArea()` creates a plain LVGL object with a solid background, no border,
 and square corners. It is useful for coloured blocks and simple shapes.
@@ -329,7 +374,7 @@ The function currently returns no widget ID. A filled area remains until the
 screen is cleared, and it cannot be moved, updated, or deleted on its own
 through the public API.
 
-### 6.6 Clear the screen
+### 6.8 Clear the screen
 
 `clear()` performs three actions:
 
@@ -337,10 +382,11 @@ through the public API.
 2. Calls `lv_obj_clean(activeScreen)` to delete the active screen's children.
 3. Sets the new screen background colour and full opacity.
 
-It also clears the backend's text-box map because those LVGL objects no longer
-exist.
+It also clears the backend's text-box and image maps because those LVGL
+objects no longer exist. `ScreenManager` releases its decoded JPEG cache at
+the same time.
 
-### 6.7 Show the emergency screen
+### 6.9 Show the emergency screen
 
 `showErrorScreen()` first clears normal application content. It then creates a
 full-screen object on `lv_layer_top()` and places the error text box inside it.
@@ -377,6 +423,10 @@ These calls are all made from
 | `lv_label_create(parent)` | Creates a text label inside `parent`. |
 | `lv_obj_clean(parent)` | Deletes all children of `parent`, but keeps `parent`. |
 | `lv_obj_delete(widget)` | Deletes a widget and all of its children. |
+| `lv_image_create(parent)` | Creates a widget that can display decoded image pixels. |
+| `lv_image_set_src(image, descriptor)` | Gives an image widget its pixel buffer and dimensions. |
+| `lv_image_set_inner_align()` | Centres an image inside its widget or repeats it as tiles. |
+| `lv_obj_move_to_index(widget, 0)` | Moves the background image behind the other screen children. |
 
 ### 7.3 Position and size calls
 
@@ -456,6 +506,17 @@ text with no visible box:
 | Border width | `0`, no visible border |
 | Requested font size | `24` |
 
+### `JpegImageSpec` and `BackgroundJpegImageSpec`
+
+`JpegImageSpec` keeps a local JPEG path, an `(x, y)` position, and a scale
+limit. `BackgroundJpegImageSpec` keeps a path, a centre/fit/tile mode, and a
+scale limit. Scale values are from 13 to 100 percent. The decoder reduces
+images but does not enlarge them.
+
+Decoded JPEG pixels do not appear in these public request types. They are
+stored in `DecodedJpegImage` inside the UI implementation and passed to LVGL
+only after libjpeg-turbo has finished decoding.
+
 ## 9. Font handling
 
 IoT App compiles four Montserrat fonts into LVGL: 14, 20, 24, and 32 pixels.
@@ -482,32 +543,48 @@ and how the framebuffer renderer uses memory.
 | Setting | Project value | Why it is used |
 |---|---:|---|
 | `LV_COLOR_DEPTH` | `32` | Sets LVGL's native colour depth. The framebuffer driver still detects `/dev/fb0` and selects its actual 16-, 24-, or 32-bit display format. |
-| `LV_MEM_SIZE` | 512 KiB | Gives LVGL space for widgets and drawing buffers on a 1920-pixel-wide display. |
+| `LV_USE_STDLIB_MALLOC` | `LV_STDLIB_CLIB` | Uses the normal process heap instead of LVGL's small fixed private heap. This allows the framebuffer driver to obtain a full-screen drawing buffer. |
 | `LV_USE_OS` | `LV_OS_NONE` | IoT App owns the render thread and queue instead of using LVGL's OS integration. This does not mean the whole process is single-threaded. |
 | `LV_USE_LOG` | `1` | Keeps LVGL's own logging available. |
 | `LV_LOG_LEVEL` | Warning | Shows LVGL warnings and errors without normal informational noise. |
 | `LV_USE_LINUX_FBDEV` | `1` | Enables the `/dev/fb0` driver. |
 | `LV_USE_LINUX_DRM` | `0` | Prevents LVGL from taking DRM/KMS mode-setting ownership. IoT App uses DRM only for display discovery. |
-| Render mode | Partial | Draws the screen in smaller sections instead of allocating a full-screen drawing buffer. |
+| Render mode | Direct | Uses a full-screen drawing buffer instead of a small partial-render buffer. It does not guarantee an atomic or tear-free update. |
 | Buffer count | `1` | Uses one LVGL drawing buffer. |
-| Buffer size | 20 rows | Keeps memory use smaller than a full `1920x1080` buffer. |
+| Buffer size | `0` | Lets the fbdev driver calculate the buffer size from the active framebuffer. |
 | `LV_LINUX_FBDEV_MMAP` | `1` | Maps framebuffer memory for writing. |
+| LVGL filesystem and image decoders | Disabled | IoT App reads JPEG files itself and sends decoded pixels to LVGL. PNG, GIF, BMP, and other formats are not accepted. |
 | Montserrat fonts | 14, 20, 24, 32 | Provides the four sizes used by `fontForSize()`. |
 | FreeType, SDL, Wayland, X11 | Disabled | They are not needed by the console framebuffer design. |
 
 The official [`lv_conf.h` reference](https://lvgl.io/docs/open/9.5/API/lv_conf_h.html)
 lists the available options.
 
-### Why partial rendering matters
+### Why direct rendering is used
 
-A full `1920x1080` buffer consumes several megabytes. IoT App instead gives
-LVGL enough drawing memory for 20 screen rows. LVGL renders one section, copies
-it to the framebuffer, and reuses the buffer for another section.
+Partial rendering uses less memory, but a large photograph may become visible
+a strip at a time as LVGL renders and copies each small section. IoT App uses
+direct rendering with a full-screen drawing buffer, so it does not need to
+split drawing into small buffer-sized strips.
 
-This is why increasing `LV_LINUX_FBDEV_BUFFER_SIZE` also increases the LVGL
-heap requirement. If LVGL reports that it cannot allocate a drawing buffer,
-either reduce the row count or increase `LV_MEM_SIZE` after checking the
-target's available RAM.
+The framebuffer driver still copies changed regions into `/dev/fb0`, row by
+row. This is not a page flip synchronized with the monitor. Updates can still
+be visible while the copy is happening; direct mode alone cannot guarantee
+tear-free output. LVGL's
+[display setup guide](https://lvgl.io/docs/open/9.5/main-modules/display/setup)
+explains the render modes; the actual copying is in
+[`lv_linux_fbdev.c`](../../../lvgl/src/drivers/display/fb/lv_linux_fbdev.c).
+
+This costs more memory. A `1920x1080` screen needs several megabytes for one
+buffer, depending on its pixel format. `LV_STDLIB_CLIB` lets that allocation
+come from the process heap instead of a small fixed LVGL heap. Buildroot,
+Yocto, and Raspberry Pi OS still need enough free RAM for the screen buffer, the
+MicroPython heap, and decoded JPEGs. The reusable JPEG cache holds up to
+32 MiB. It does not evict pixels still used by widgets or queued commands.
+Decoding adds temporary memory, and old widgets can briefly keep their pixels
+after the cache has been cleared. See the
+[image-memory limits](../micropython-api/README.md#jpeg-images) before using
+several large pictures at once.
 
 ## 11. Using the display from MicroPython
 
@@ -544,7 +621,8 @@ delete that text box. Using an ID after its box was deleted or after the screen
 was cleared raises an error when the render thread processes the command.
 
 For the exact required arguments, optional arguments, return values, and more
-examples, use the [MicroPython API guide](../micropython-api/README.md).
+examples, including JPEG downloads and display calls, use the
+[MicroPython API guide](../micropython-api/README.md).
 
 ### Current input limitation
 
@@ -632,10 +710,17 @@ resolution itself.
 
 ### LVGL cannot allocate memory
 
-An error mentioning a null display buffer or failed `lv_malloc()` usually
-means the private LVGL heap is too small for the configured partial-buffer
-height and framebuffer pixel size. Review `LV_MEM_SIZE` and
-`LV_LINUX_FBDEV_BUFFER_SIZE` together.
+An error mentioning a null display buffer or failed `lv_malloc()` means the
+process could not allocate the direct framebuffer drawing buffer. Check the
+active resolution, pixel format, and available memory. A lower Linux console
+resolution reduces the required buffer size.
+
+### A JPEG is rejected
+
+Check that the file contains valid JPEG data, is no larger than 10 MiB, and its
+decoded dimensions fit the safety limits. The filename extension is not used
+to decide the image format. Other image formats are rejected by the JPEG
+decoder.
 
 ### The screen does not update
 

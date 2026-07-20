@@ -2,6 +2,7 @@
 #include "iot/ui/screen_manager.h"
 
 #include "test_support.h"
+#include "test_jpeg_file.h"
 
 #include <gtest/gtest.h>
 
@@ -57,7 +58,7 @@ protected:
   PythonApplicationManager
   createApplicationManager(std::vector<display::DisplayInfo> connectedDisplays = tests::testConnectedDisplays()) {
     return PythonApplicationManager(m_screenManager, tests::testActiveDisplay(), std::move(connectedDisplays),
-                                    m_systemInformationProvider, 256U * 1024U);
+                                    m_systemInformationProvider, m_fileDownloader, 256U * 1024U);
   }
 
   bool waitForEmergencyScreen() {
@@ -76,6 +77,7 @@ protected:
   tests::RecordingRenderBackend                 *m_recordingRenderBackendView;
   ui::ScreenManager                              m_screenManager;
   tests::TestSystemInformationProvider           m_systemInformationProvider;
+  tests::TestFileDownloader                      m_fileDownloader;
 };
 
 TEST_F(PythonApplicationManagerTest, StartsStopsAndRestartsTheShippedDefaultApplication) {
@@ -88,6 +90,7 @@ TEST_F(PythonApplicationManagerTest, StartsStopsAndRestartsTheShippedDefaultAppl
 
   pythonApplicationManager.startDefaultApplication(defaultApplication);
   EXPECT_EQ(pythonApplicationManager.state(), ApplicationState::DefaultApplication);
+  EXPECT_EQ(m_fileDownloader.numberOfClearCalls, 1U);
   EXPECT_EQ(pythonApplicationManager.activeScreenName(), "Default");
 
   pythonApplicationManager.stop();
@@ -96,6 +99,7 @@ TEST_F(PythonApplicationManagerTest, StartsStopsAndRestartsTheShippedDefaultAppl
 
   pythonApplicationManager.startDefaultApplication(defaultApplication);
   EXPECT_EQ(pythonApplicationManager.state(), ApplicationState::DefaultApplication);
+  EXPECT_EQ(m_fileDownloader.numberOfClearCalls, 2U);
 }
 
 TEST_F(PythonApplicationManagerTest, ReplacesTheRunningApplicationWithANewInterpreter) {
@@ -110,6 +114,202 @@ TEST_F(PythonApplicationManagerTest, ReplacesTheRunningApplicationWithANewInterp
   EXPECT_TRUE(secondActivation.externalApplicationIsRunning);
   EXPECT_EQ(pythonApplicationManager.state(), ApplicationState::ExternalApplication);
   EXPECT_EQ(pythonApplicationManager.activeScreenName(), "Second external app");
+}
+
+TEST_F(PythonApplicationManagerTest, ShowsTheEmergencyScreenWhenDefaultApplicationDownloadCleanupFails) {
+  auto pythonApplicationManager      = createApplicationManager();
+  m_fileDownloader.clearErrorMessage = "download cleanup failed";
+
+  EXPECT_NO_THROW(pythonApplicationManager.startDefaultApplication(createPythonApplication("Default", "value = 1\n")));
+
+  EXPECT_EQ(pythonApplicationManager.state(), ApplicationState::EmergencyScreen);
+  ASSERT_TRUE(waitForEmergencyScreen());
+  EXPECT_NE(emergencyScreenText().find("download cleanup failed"), std::string::npos);
+}
+
+TEST_F(PythonApplicationManagerTest, StopsTheOldInterpreterWhenCleanupFailsAndCanStartAnotherApplicationLater) {
+  auto pythonApplicationManager = createApplicationManager();
+  ASSERT_TRUE(
+      pythonApplicationManager
+          .activateExternalApplication(createPythonApplication(
+              "Old app",
+              "from iot import scheduler\ndef tick():\n    pass\nscheduler.every(milliseconds=1000, callback=tick)\n"))
+          .externalApplicationIsRunning);
+  ASSERT_TRUE(pythonApplicationManager.timeUntilNextScheduledCallback().has_value());
+  m_fileDownloader.clearErrorMessage = "download cleanup failed";
+
+  const auto failedActivation =
+      pythonApplicationManager.activateExternalApplication(createPythonApplication("New app", "value = 2\n"));
+
+  EXPECT_FALSE(failedActivation.externalApplicationIsRunning);
+  EXPECT_EQ(failedActivation.failureReason, "download cleanup failed");
+  EXPECT_EQ(pythonApplicationManager.state(), ApplicationState::EmergencyScreen);
+  EXPECT_FALSE(pythonApplicationManager.timeUntilNextScheduledCallback().has_value());
+  ASSERT_TRUE(waitForEmergencyScreen());
+
+  m_fileDownloader.clearErrorMessage.clear();
+  EXPECT_TRUE(pythonApplicationManager.activateExternalApplication(createPythonApplication("Retry", "value = 3\n"))
+                  .externalApplicationIsRunning);
+  EXPECT_EQ(pythonApplicationManager.state(), ApplicationState::ExternalApplication);
+}
+
+TEST_F(PythonApplicationManagerTest, LetsPythonCatchADownloadTimeoutWithoutStoppingTheApplication) {
+  auto pythonApplicationManager         = createApplicationManager();
+  m_fileDownloader.downloadErrorMessage = "File download timed out";
+
+  const auto activationResult = pythonApplicationManager.activateExternalApplication(
+      createPythonApplication("Handles timeout", "from iot import network\n"
+                                                 "try:\n"
+                                                 "    network.download_file('https://example.com/image.jpg')\n"
+                                                 "except RuntimeError as error:\n"
+                                                 "    assert 'timed out' in str(error)\n"
+                                                 "else:\n"
+                                                 "    raise AssertionError('Expected a timeout')\n"));
+
+  EXPECT_TRUE(activationResult.externalApplicationIsRunning) << activationResult.failureReason;
+}
+
+TEST_F(PythonApplicationManagerTest, ShowsAnUnhandledDownloadTimeoutOnTheEmergencyScreen) {
+  auto pythonApplicationManager         = createApplicationManager();
+  m_fileDownloader.downloadErrorMessage = "File download timed out";
+
+  const auto activationResult = pythonApplicationManager.activateExternalApplication(createPythonApplication(
+      "Download failed", "from iot import network\nnetwork.download_file('https://example.com/image.jpg')\n"));
+
+  EXPECT_FALSE(activationResult.externalApplicationIsRunning);
+  EXPECT_EQ(pythonApplicationManager.state(), ApplicationState::EmergencyScreen);
+  ASSERT_TRUE(waitForEmergencyScreen());
+  EXPECT_NE(emergencyScreenText().find("RuntimeError: File download timed out"), std::string::npos);
+}
+
+TEST_F(PythonApplicationManagerTest, ReleasesOldWidgetBackgroundAndCachedPixelsWhenAnotherApplicationStarts) {
+  tests::TemporaryDirectory imageDirectory;
+  m_fileDownloader.downloadedFile.filePath = imageDirectory.path() / "picture.jpg";
+  tests::writeTestJpegFile(m_fileDownloader.downloadedFile.filePath);
+  auto       pythonApplicationManager = createApplicationManager();
+  const auto firstActivation          = pythonApplicationManager.activateExternalApplication(
+      createPythonApplication("With images", "from iot import display, network\n"
+                                                               "download = network.download_file('https://example.com/image.jpg')\n"
+                                                               "display.draw_image(download['path'], 10, 20)\n"
+                                                               "display.set_background_image(download['path'], mode='center')\n"));
+  ASSERT_TRUE(firstActivation.externalApplicationIsRunning) << firstActivation.failureReason;
+  ASSERT_TRUE(tests::waitUntil([this] {
+    std::lock_guard<std::mutex> renderStateLock(m_recordingRenderBackendView->renderStateMutex);
+    return !m_recordingRenderBackendView->jpegImagesById.empty() &&
+           m_recordingRenderBackendView->backgroundJpegImage.has_value();
+  }));
+  std::weak_ptr<const ui::DecodedJpegImage> oldWidgetPixels;
+  std::weak_ptr<const ui::DecodedJpegImage> oldBackgroundPixels;
+  {
+    std::lock_guard<std::mutex> renderStateLock(m_recordingRenderBackendView->renderStateMutex);
+    oldWidgetPixels     = m_recordingRenderBackendView->jpegImagesById.begin()->second.decodedImage;
+    oldBackgroundPixels = m_recordingRenderBackendView->backgroundJpegImage->decodedImage;
+  }
+
+  ASSERT_TRUE(
+      pythonApplicationManager.activateExternalApplication(createPythonApplication("Without images", "value = 1\n"))
+          .externalApplicationIsRunning);
+
+  EXPECT_TRUE(tests::waitUntil([&] { return oldWidgetPixels.expired() && oldBackgroundPixels.expired(); }));
+  EXPECT_EQ(m_fileDownloader.numberOfClearCalls, 2U);
+}
+
+TEST_F(PythonApplicationManagerTest, ShowsACorruptJpegErrorAndAcceptsTheNextApplication) {
+  tests::TemporaryDirectory imageDirectory;
+  m_fileDownloader.downloadedFile.filePath = imageDirectory.path() / "corrupt.jpg";
+  std::ofstream(m_fileDownloader.downloadedFile.filePath) << "not a JPEG";
+  auto pythonApplicationManager = createApplicationManager();
+
+  const auto activationResult = pythonApplicationManager.activateExternalApplication(
+      createPythonApplication("Corrupt image", "from iot import display, network\n"
+                                               "download = network.download_file('https://example.com/image.jpg')\n"
+                                               "display.draw_image(download['path'], 0, 0)\n"));
+
+  EXPECT_FALSE(activationResult.externalApplicationIsRunning);
+  EXPECT_EQ(pythonApplicationManager.state(), ApplicationState::EmergencyScreen);
+  ASSERT_TRUE(waitForEmergencyScreen());
+  EXPECT_NE(emergencyScreenText().find("JPEG"), std::string::npos);
+  EXPECT_TRUE(
+      pythonApplicationManager.activateExternalApplication(createPythonApplication("Healthy app", "value = 1\n"))
+          .externalApplicationIsRunning);
+}
+
+TEST_F(PythonApplicationManagerTest, ReleasesImagePixelsWhenAScheduledImageChangeFails) {
+  tests::TemporaryDirectory imageDirectory;
+  m_fileDownloader.downloadedFile.filePath = imageDirectory.path() / "picture.jpg";
+  tests::writeTestJpegFile(m_fileDownloader.downloadedFile.filePath);
+  auto       pythonApplicationManager = createApplicationManager();
+  const auto activationResult         = pythonApplicationManager.activateExternalApplication(
+      createPythonApplication("Later image error", "from iot import display, network, scheduler\n"
+                                                                   "download = network.download_file('https://example.com/image.jpg')\n"
+                                                                   "image_id = display.draw_image(download['path'], 0, 0)\n"
+                                                                   "def change_image():\n"
+                                                                   "    display.update_image(image_id, download['path'] + '.missing')\n"
+                                                                   "scheduler.every(milliseconds=1, callback=change_image)\n"));
+  ASSERT_TRUE(activationResult.externalApplicationIsRunning) << activationResult.failureReason;
+  ASSERT_TRUE(tests::waitUntil([this] {
+    std::lock_guard<std::mutex> renderStateLock(m_recordingRenderBackendView->renderStateMutex);
+    return !m_recordingRenderBackendView->jpegImagesById.empty();
+  }));
+  std::weak_ptr<const ui::DecodedJpegImage> oldPixels;
+  {
+    std::lock_guard<std::mutex> renderStateLock(m_recordingRenderBackendView->renderStateMutex);
+    oldPixels = m_recordingRenderBackendView->jpegImagesById.begin()->second.decodedImage;
+  }
+
+  ASSERT_TRUE(tests::waitUntil([&] {
+    pythonApplicationManager.runScheduledCallbacks();
+    return pythonApplicationManager.state() == ApplicationState::EmergencyScreen;
+  }));
+
+  ASSERT_TRUE(waitForEmergencyScreen());
+  EXPECT_NE(emergencyScreenText().find("JPEG image file does not exist"), std::string::npos);
+  EXPECT_FALSE(pythonApplicationManager.timeUntilNextScheduledCallback().has_value());
+  EXPECT_TRUE(tests::waitUntil([&] { return oldPixels.expired(); }));
+}
+
+TEST_F(PythonApplicationManagerTest, LetsPythonUpdateMoveScaleAndDeleteImagesAndChooseBackgroundModes) {
+  tests::TemporaryDirectory imageDirectory;
+  m_fileDownloader.downloadedFile.filePath = imageDirectory.path() / "picture.jpg";
+  tests::writeTestJpegFile(m_fileDownloader.downloadedFile.filePath);
+  auto       pythonApplicationManager = createApplicationManager();
+  const auto activationResult         = pythonApplicationManager.activateExternalApplication(
+      createPythonApplication("Image API", "from iot import display, network\n"
+                                                           "download = network.download_file('https://example.com/image.jpg')\n"
+                                                           "path = download['path']\n"
+                                                           "image_id = display.draw_image(path, 10, 20)\n"
+                                                           "display.update_image(image_id, path)\n"
+                                                           "display.move_image(image_id, 30, 40)\n"
+                                                           "display.set_image_scale(image_id, 50)\n"
+                                                           "for mode in ('center', 'fit', 'tile'):\n"
+                                                           "    display.set_background_image(path, mode=mode)\n"
+                                                           "display.clear_background_image()\n"
+                                                           "display.delete_image(image_id)\n"
+                                                           "try:\n"
+                                                           "    display.move_image(image_id, 0, 0)\n"
+                                                           "except RuntimeError:\n"
+                                                           "    pass\n"
+                                                           "else:\n"
+                                                           "    raise AssertionError('Deleted image ID should be rejected')\n"
+                                                           "try:\n"
+                                                           "    display.set_background_image(path, mode='unknown')\n"
+                                                           "except ValueError:\n"
+                                                           "    pass\n"
+                                                           "else:\n"
+                                                           "    raise AssertionError('Unknown background mode should be rejected')\n"
+                                                           "display.draw_image(path, 75, 85, scale_percent=50)\n"));
+
+  ASSERT_TRUE(activationResult.externalApplicationIsRunning) << activationResult.failureReason;
+  EXPECT_TRUE(tests::waitUntil([this] {
+    std::lock_guard<std::mutex> renderStateLock(m_recordingRenderBackendView->renderStateMutex);
+    if (m_recordingRenderBackendView->jpegImagesById.size() != 1U) {
+      return false;
+    }
+    const auto &remainingImage = m_recordingRenderBackendView->jpegImagesById.begin()->second;
+    return remainingImage.x == 75 && remainingImage.y == 85 && remainingImage.decodedImage->width == 8U &&
+           remainingImage.decodedImage->height == 6U && !m_recordingRenderBackendView->backgroundJpegImage.has_value();
+  }));
+  EXPECT_NO_THROW(m_screenManager.throwIfRenderThreadFailed());
 }
 
 TEST_F(PythonApplicationManagerTest, LetsPythonUseDisplayAndSystemModulesThroughTheApplicationContext) {
@@ -149,7 +349,7 @@ TEST_F(PythonApplicationManagerTest, LetsPythonUseEveryDisplayAndSystemFunction)
   auto pythonApplicationManager = createApplicationManager(std::move(connectedDisplays));
 
   const auto activationResult = pythonApplicationManager.activateExternalApplication(createPythonApplication(
-      "Native module test", "from iot import display, system\n"
+      "Native module test", "from iot import display, network, system\n"
                             "monitors = display.monitors()\n"
                             "assert len(monitors) == 2\n"
                             "assert monitors[0]['connector_name'] == 'HDMI-A-1'\n"
@@ -194,10 +394,19 @@ TEST_F(PythonApplicationManagerTest, LetsPythonUseEveryDisplayAndSystemFunction)
                             "assert network_interfaces[0]['connected'] is True\n"
                             "assert network_interfaces[0]['ipv4_address'] == '192.0.2.10'\n"
                             "assert network_interfaces[0]['speed_megabits_per_second'] == 1000\n"
+                            "downloaded_file = network.download_file('https://example.com/image.jpg', "
+                            "expected_sha256='expected')\n"
+                            "assert downloaded_file['path'] == '/tmp/test-download.jpg'\n"
+                            "assert downloaded_file['sha256'] == 'test-sha256'\n"
+                            "assert downloaded_file['size_bytes'] == 123\n"
+                            "assert downloaded_file['content_type'] == 'image/jpeg'\n"
+                            "assert downloaded_file['loaded_from_cache'] is False\n"
                             "assert system.uptime_seconds() == 99\n"
                             "assert len(system.current_time()) == 19\n"));
 
   EXPECT_TRUE(activationResult.externalApplicationIsRunning) << activationResult.failureReason;
+  EXPECT_EQ(m_fileDownloader.lastRequest.url, "https://example.com/image.jpg");
+  EXPECT_EQ(m_fileDownloader.lastRequest.expectedSha256, "expected");
 }
 
 TEST_F(PythonApplicationManagerTest, ShowsTheEmergencyScreenWhenTheDefaultApplicationFailsToStart) {
@@ -281,7 +490,7 @@ TEST_F(PythonApplicationManagerTest, ShowsTheEmergencyScreenWhenReadingSystemInf
   ThrowingSystemInformationProvider throwingSystemInformationProvider;
   PythonApplicationManager          pythonApplicationManager(m_screenManager, tests::testActiveDisplay(),
                                                              tests::testConnectedDisplays(), throwingSystemInformationProvider,
-                                                             256U * 1024U);
+                                                             m_fileDownloader, 256U * 1024U);
 
   const auto activationResult =
       pythonApplicationManager.activateExternalApplication(createPythonApplication("External", "value = 2\n"));
@@ -300,10 +509,10 @@ TEST_F(PythonApplicationManagerTest, RejectsAnEmptyDefaultApplication) {
 }
 
 TEST_F(PythonApplicationManagerTest, RejectsAZeroByteMicroPythonHeap) {
-  EXPECT_THROW(
-      static_cast<void>(PythonApplicationManager(m_screenManager, tests::testActiveDisplay(),
-                                                 tests::testConnectedDisplays(), m_systemInformationProvider, 0U)),
-      std::invalid_argument);
+  EXPECT_THROW(static_cast<void>(PythonApplicationManager(m_screenManager, tests::testActiveDisplay(),
+                                                          tests::testConnectedDisplays(), m_systemInformationProvider,
+                                                          m_fileDownloader, 0U)),
+               std::invalid_argument);
 }
 
 } // namespace

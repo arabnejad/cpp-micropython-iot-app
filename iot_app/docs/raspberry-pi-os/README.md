@@ -39,7 +39,10 @@ hardware are still being tested together.
 
 ```bash
 sudo apt update
-sudo apt install build-essential cmake ninja-build git
+sudo apt install \
+  build-essential cmake ninja-build git pkg-config \
+  libdrm-dev libmosquitto-dev libcjson-dev libssl-dev \
+  libcurl4-openssl-dev libturbojpeg0-dev ca-certificates
 ```
 
 Copy or clone the project, then build:

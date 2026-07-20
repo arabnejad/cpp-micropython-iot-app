@@ -2,11 +2,12 @@
 
 extern const mp_obj_module_t iot_private_display_module;
 extern const mp_obj_module_t iot_private_input_module;
+extern const mp_obj_module_t iot_private_network_module;
 extern const mp_obj_module_t iot_private_scheduler_module;
 extern const mp_obj_module_t iot_private_system_module;
 
 /*
- * Python applications import iot and use iot.display, iot.input,
+ * Python applications import iot and use iot.display, iot.input, iot.network,
  * iot.scheduler, and iot.system. The table below connects those public names
  * to the built-in C modules that implement them.
  *
@@ -18,6 +19,7 @@ static const mp_rom_map_elem_t iot_module_globals_table[] = {
     {MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_iot)},
     {MP_ROM_QSTR(MP_QSTR_display), MP_ROM_PTR(&iot_private_display_module)},
     {MP_ROM_QSTR(MP_QSTR_input), MP_ROM_PTR(&iot_private_input_module)},
+    {MP_ROM_QSTR(MP_QSTR_network), MP_ROM_PTR(&iot_private_network_module)},
     {MP_ROM_QSTR(MP_QSTR_scheduler), MP_ROM_PTR(&iot_private_scheduler_module)},
     {MP_ROM_QSTR(MP_QSTR_system), MP_ROM_PTR(&iot_private_system_module)},
 };

@@ -4,7 +4,7 @@ Python applications running inside IoT App can import the project-owned
 `iot` module:
 
 ```python
-from iot import display, input, scheduler, system
+from iot import display, input, network, scheduler, system
 ```
 
 These modules are built into the IoT App executable. They are not part of
@@ -18,8 +18,9 @@ The public modules are:
 
 | Module | What it provides |
 |---|---|
-| `iot.display` | Screen size, monitor details, text boxes, and filled areas |
+| `iot.display` | Screen size, monitor details, text boxes, filled areas, and JPEG images |
 | `iot.input` | The Adafruit Mini I2C STEMMA QT Gamepad driver |
+| `iot.network` | HTTP and HTTPS downloads with size, timeout, and optional SHA-256 checks |
 | `iot.scheduler` | Repeating callbacks for live applications |
 | `iot.system` | Linux, resource, network, device, and runtime information |
 
@@ -193,6 +194,135 @@ used again after the box has been deleted.
 |---|---|---|
 | `widget_id` | Yes | Positive ID returned by `draw_text_box()` |
 
+### JPEG images
+
+The display module accepts JPEG image data. It checks the file itself rather
+than relying on the filename extension. Other image formats are rejected.
+
+IoT App decodes images with libjpeg-turbo on the main MicroPython thread. The
+LVGL render thread continues refreshing the screen during the decode. Once the
+pixels are ready, `ScreenManager` sends them to the render thread.
+
+`scale_percent` accepts a value from 13 to 100. A value of 100 keeps the
+original size. A smaller value asks libjpeg-turbo for the largest supported
+decoder size that does not exceed that percentage. Images are never enlarged.
+The minimum is 13 because libjpeg-turbo's smallest supported ratio is one
+eighth, or 12.5 percent, while this API accepts whole numbers.
+
+The decoded-image cache can retain up to 32 MiB of pixels for reuse. Drawing
+the same unchanged file again with the same size limits normally avoids a
+second decode. The cache only evicts pixels that no widget or queued command
+still uses.
+
+Replacing an image needs room for the old and new pixels at the same time.
+If they cannot fit, the call raises `RuntimeError` and the original image stays
+in place. A smaller scale uses less memory. Deleting a widget queues its removal,
+so deleting and immediately drawing another large image can still hit the
+limit. After the renderer handles the deletion, the unused pixels can be
+evicted from the cache.
+
+Clearing the screen, starting another application, or showing the emergency
+screen empties the reusable cache. Pixels already used by the renderer stay
+alive until it removes those widgets. Temporary decoding buffers and LVGL's
+screen buffer also use memory, so 32 MiB is not a total process-memory limit.
+
+| JPEG check | Limit |
+|---|---|
+| Compressed file | 10 MiB |
+| Original width or height | 8192 pixels each |
+| Original pixel count | 16,777,216 pixels |
+| One decoded pixel buffer | 32 MiB |
+| Reusable decoded-image cache | 32 MiB |
+
+IoT App checks the original dimensions before decoding. A smaller scale does
+not bypass the original dimension or pixel-count limits.
+
+### `display.draw_image()`
+
+```python
+from iot import display, network
+
+downloaded_image = network.download_file("https://example.com/photo.jpg")
+
+image_id = display.draw_image(
+    path=downloaded_image["path"],
+    x=100,
+    y=80,
+    scale_percent=75,
+)
+```
+
+Draws a JPEG as a normal widget and returns its positive image ID. Keep the ID
+if the image will be changed, moved, resized, or deleted later.
+
+`draw_image()` reads a local file. It does not download it or choose its
+location. `network.download_file()` returns a suitable local path when the
+image comes from a URL.
+
+| Parameter | Required? | Meaning |
+|---|---|---|
+| `path` | Yes | Local path to a file containing JPEG image data |
+| `x` | Yes | Horizontal position of the image's left edge |
+| `y` | Yes | Vertical position of the image's top edge |
+| `scale_percent` | No, default `100` | Largest allowed size, from 13 to 100 percent |
+
+### Changing a normal image
+
+```python
+from iot import display, network
+
+first_download = network.download_file("https://example.com/first.jpg")
+second_download = network.download_file("https://example.com/second.jpg")
+
+image_id = display.draw_image(first_download["path"], x=40, y=60)
+display.update_image(image_id, second_download["path"])
+display.move_image(image_id, 200, 120)
+display.set_image_scale(image_id, 50)
+display.delete_image(image_id)
+```
+
+| Function | What it does |
+|---|---|
+| `display.update_image(image_id, path)` | Replaces the JPEG but keeps the position and scale limit |
+| `display.move_image(image_id, x, y)` | Moves the image without decoding it again |
+| `display.set_image_scale(image_id, scale_percent)` | Decodes the current JPEG at a new 13-to-100 percent limit |
+| `display.delete_image(image_id)` | Removes the image; its ID must not be used again |
+
+### `display.set_background_image()`
+
+```python
+from iot import display, network
+
+background_download = network.download_file("https://example.com/background.jpg")
+
+display.set_background_image(
+    background_download["path"],
+    mode="fit",
+    scale_percent=100,
+)
+```
+
+Places one JPEG behind the normal screen widgets. Calling it again replaces
+the current background.
+
+| Parameter | Required? | Meaning |
+|---|---|---|
+| `path` | Yes | Local path to a file containing JPEG image data |
+| `mode` | No, default `"center"` | `"center"`, `"fit"`, or `"tile"` |
+| `scale_percent` | No, default `100` | Largest allowed size, from 13 to 100 percent |
+
+The modes work as follows:
+
+- `center` keeps the decoded size, centres the image, and crops any part that
+  lies outside the screen. The screen colour remains visible around a smaller
+  image.
+- `fit` reduces a large image until the whole image fits. It does not enlarge
+  a small image.
+- `tile` repeats the decoded image across the screen.
+
+`display.clear_background_image()` removes only the background image. Other
+widgets remain on screen.
+
 ### `display.fill_area()`
 
 ```python
@@ -328,6 +458,117 @@ message_box = display.draw_text_box(
 
 display.update_text_box(message_box, "Display is ready")
 display.move_text_box(message_box, 40, 160)
+```
+
+## `iot.network`
+
+The network module downloads one file at a time over HTTP or HTTPS. The call is
+synchronous: Python waits while the file is downloaded, checked, and moved to
+the application's private download directory. The LVGL render thread keeps
+refreshing the screen, but Python timers and MQTT deployment work wait for the
+call to return.
+
+The fixed limits are:
+
+- 10 MiB for one file;
+- 50 MiB for all downloaded files stored by one Python application;
+- 10 seconds to connect;
+- 30 seconds for the complete transfer, including the connection time;
+- 5 redirects;
+- HTTP and HTTPS URLs only;
+- normal certificate and hostname checks for HTTPS.
+
+Downloaded files are removed before the next Python application starts.
+
+### `network.download_file()`
+
+```python
+from iot import network
+
+downloaded_file = network.download_file(
+    "https://example.com/photo.jpg",
+    expected_sha256="0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+)
+
+print(downloaded_file["path"])
+```
+
+| Parameter | Required? | Meaning |
+|---|---|---|
+| `url` | Yes | An HTTP or HTTPS URL |
+| `expected_sha256` | No | Expected SHA-256 as exactly 64 hexadecimal characters |
+
+Use `expected_sha256` when the expected file is known. A mismatch raises
+`RuntimeError`, and IoT App removes the incomplete or unexpected file.
+If a connection or transfer reaches its time limit, the call raises
+`RuntimeError` with a timeout message and removes the incomplete file. The
+message lists both limits because connecting can time out before the full
+30 seconds have passed. Local file checking and JPEG decoding happen outside
+the transfer timeout.
+
+The downloader requires libcurl with asynchronous DNS (a threaded or c-ares
+resolver). Otherwise it reports an error before making a request: with signals
+disabled, a blocking DNS lookup could ignore the timeout. Both project image
+builds select a suitable resolver. See libcurl's
+[`CURLOPT_NOSIGNAL`](https://curl.se/libcurl/c/CURLOPT_NOSIGNAL.html) and
+[`CURLOPT_TIMEOUT_MS`](https://curl.se/libcurl/c/CURLOPT_TIMEOUT_MS.html) references.
+
+You can catch download or JPEG errors and leave the current screen in place:
+
+```python
+from iot import display, network
+
+try:
+    downloaded_file = network.download_file("https://example.com/photo.jpg")
+    display.set_background_image(downloaded_file["path"], mode="center")
+except RuntimeError as error:
+    print("Could not show the new picture:", error)
+```
+
+If the error is not caught, IoT App stops the Python application and shows the
+C++ emergency screen. It stays there until another application is sent or
+IoT App restarts. This does not depend on code in the default dashboard.
+
+The function returns a dictionary:
+
+```python
+{
+    "path": "<temporary path chosen by IoT App>",
+    "sha256": "0123abcd...",
+    "size_bytes": 147600,
+    "content_type": "image/jpeg",
+    "loaded_from_cache": False,
+}
+```
+
+Every completed file is named `<calculated-sha256>.download`. IoT App always
+calculates this value, whether or not `expected_sha256` was supplied.
+
+When `expected_sha256` is supplied, another request for that hash can return
+the existing file without making a network request. In that case,
+`loaded_from_cache` is `True`. Without an expected hash, the downloader must
+receive the file before it can calculate its identity, so it cannot skip the
+network request. It still reuses the same final path if those bytes were
+downloaded earlier by the current application.
+
+Without an expected hash, the transfer needs room within the remaining
+50 MiB allowance before IoT App knows whether its bytes are already cached.
+A known-hash cache hit can succeed even when that allowance is full.
+
+The downloader can store any file that fits its limits. The display module
+still accepts only JPEG image data.
+
+### Download and show a JPEG
+
+```python
+from iot import display, network
+
+downloaded_file = network.download_file(
+    "https://example.com/photo.jpg",
+    expected_sha256="0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+)
+
+display.set_background_image(downloaded_file["path"], mode="fit")
 ```
 
 ## `iot.scheduler`

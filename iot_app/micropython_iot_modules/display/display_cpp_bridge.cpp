@@ -86,6 +86,18 @@ void applyOptionalUint16Value(int32_t suppliedValue, int32_t minimum, uint16_t &
   }
 }
 
+iot::ui::BackgroundImageMode convertBackgroundImageMode(iot_background_image_mode_t suppliedMode) {
+  switch (suppliedMode) {
+  case IOT_BACKGROUND_IMAGE_CENTER:
+    return iot::ui::BackgroundImageMode::Center;
+  case IOT_BACKGROUND_IMAGE_FIT:
+    return iot::ui::BackgroundImageMode::Fit;
+  case IOT_BACKGROUND_IMAGE_TILE:
+    return iot::ui::BackgroundImageMode::Tile;
+  }
+  throw std::invalid_argument("Background image mode is not supported");
+}
+
 void copyDisplayMode(const iot::display::DisplayMode &displayMode, iot_display_mode_information_t &modeInformation) {
   modeInformation.name            = displayMode.name.c_str();
   modeInformation.width           = displayMode.width;
@@ -151,6 +163,66 @@ extern "C" iot_native_result_t iot_display_delete_text_box(uint64_t widget_id) {
     }
     context().screenManager().deleteTextBox(widget_id);
   });
+}
+
+extern "C" iot_native_result_t iot_display_draw_image(const char *file_path, int32_t x, int32_t y,
+                                                      uint16_t scale_percent, uint64_t *widget_id) {
+  return runSafely([=] {
+    if (file_path == nullptr || widget_id == nullptr) {
+      throw std::invalid_argument("JPEG file path and image widget ID output are required");
+    }
+    *widget_id = context().screenManager().drawJpegImage({file_path, x, y, scale_percent});
+  });
+}
+
+extern "C" iot_native_result_t iot_display_update_image(uint64_t widget_id, const char *file_path) {
+  return runSafely([=] {
+    if (widget_id == 0U || file_path == nullptr) {
+      throw std::invalid_argument("Image widget ID and JPEG file path are required");
+    }
+    context().screenManager().replaceJpegImage(widget_id, file_path);
+  });
+}
+
+extern "C" iot_native_result_t iot_display_move_image(uint64_t widget_id, int32_t x, int32_t y) {
+  return runSafely([=] {
+    if (widget_id == 0U) {
+      throw std::invalid_argument("Image widget ID is required");
+    }
+    context().screenManager().moveJpegImage(widget_id, x, y);
+  });
+}
+
+extern "C" iot_native_result_t iot_display_set_image_scale(uint64_t widget_id, uint16_t scale_percent) {
+  return runSafely([=] {
+    if (widget_id == 0U) {
+      throw std::invalid_argument("Image widget ID is required");
+    }
+    context().screenManager().setJpegImageScale(widget_id, scale_percent);
+  });
+}
+
+extern "C" iot_native_result_t iot_display_delete_image(uint64_t widget_id) {
+  return runSafely([=] {
+    if (widget_id == 0U) {
+      throw std::invalid_argument("Image widget ID is required");
+    }
+    context().screenManager().deleteJpegImage(widget_id);
+  });
+}
+
+extern "C" iot_native_result_t iot_display_set_background_image(const char *file_path, iot_background_image_mode_t mode,
+                                                                uint16_t scale_percent) {
+  return runSafely([=] {
+    if (file_path == nullptr) {
+      throw std::invalid_argument("Background JPEG file path is required");
+    }
+    context().screenManager().setBackgroundJpegImage({file_path, convertBackgroundImageMode(mode), scale_percent});
+  });
+}
+
+extern "C" iot_native_result_t iot_display_clear_background_image(void) {
+  return runSafely([] { context().screenManager().clearBackgroundJpegImage(); });
 }
 
 extern "C" iot_native_result_t iot_display_fill_area(int32_t x, int32_t y, int32_t width, int32_t height, uint8_t red,
