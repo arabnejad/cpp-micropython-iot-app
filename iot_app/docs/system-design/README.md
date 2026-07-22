@@ -601,8 +601,9 @@ The complete flow is:
 4. The bridge creates a C++ `TextBoxSpec`. It gets the current
    `ScreenManager` from `MicroPythonApplicationContext` and calls
    `ScreenManager::drawTextBox()`.
-5. `drawTextBox()` assigns a widget ID to the new text box. It creates a small
-   command that will later call `IRenderBackend::createTextBox()`.
+5. `drawTextBox()` checks that width and height are positive, assigns a widget
+   ID, and records it in a small set of text-box IDs. It creates a command
+   that will later call `IRenderBackend::createTextBox()`.
 6. `ScreenManager::enqueueRenderCommand()` puts that command in the bounded
    render queue and wakes the render thread.
 7. `ScreenManager::runRenderLoop()` removes the command from the queue and runs
@@ -619,6 +620,22 @@ The complete flow is:
 Python app keeps this ID and passes it to `update_text_box()`,
 `move_text_box()`, or `delete_text_box()` when it wants to change the same text
 box later.
+
+`ScreenManager` checks this set before accepting a text update, move, or
+deletion. It includes boxes whose creation is still queued, so Python can
+create and update a box without waiting for a frame. Commands stay in order.
+If queuing creation fails, its ID is removed from the set. A deletion removes
+the ID only after its command has been queued successfully.
+
+Clearing the screen, showing an emergency screen, or stopping the renderer
+invalidates the text-box IDs. Application replacement clears the screen, so
+the new application cannot use an old application's IDs. Width and height
+are also checked before filled-area and emergency-screen requests are queued.
+
+Invalid sizes or IDs raise an error on the main/Python thread. Python can
+catch that error and continue. An unhandled error goes through the normal
+emergency-screen handling; it does not reach the render thread. The LVGL
+backend keeps its own checks for unexpected internal errors.
 
 ### 11.4 How a downloaded JPEG reaches the monitor
 

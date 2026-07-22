@@ -17,6 +17,7 @@
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace iot {
 namespace ui {
@@ -60,11 +61,12 @@ public:
   void start();
   /* Stops the render thread. */
   void stop() noexcept;
-  /* Queues a new text box and returns the ID used to update it later. */
+  /* Checks for a positive size, queues the text box, and returns its ID. */
   WidgetId drawTextBox(const TextBoxSpec &textBoxSpec);
-  void     updateTextBox(WidgetId textBoxId, std::string updatedText);
-  void     moveTextBox(WidgetId textBoxId, std::int32_t x, std::int32_t y);
-  void     deleteTextBox(WidgetId textBoxId);
+  // These calls reject unknown or deleted IDs before queuing any work.
+  void updateTextBox(WidgetId textBoxId, std::string updatedText);
+  void moveTextBox(WidgetId textBoxId, std::int32_t x, std::int32_t y);
+  void deleteTextBox(WidgetId textBoxId);
   /* Decodes and queues a JPEG image. The returned ID can change it later. */
   WidgetId drawJpegImage(const JpegImageSpec &jpegImageSpec);
   void     replaceJpegImage(WidgetId imageId, std::filesystem::path jpegFilePath);
@@ -110,6 +112,8 @@ private:
   void rethrowRenderThreadFailureWhileLocked() const;
   /* Checks that drawing is available. The caller holds the state lock. */
   void                  throwIfRenderThreadIsUnavailableWhileLocked() const;
+  static void           validateDrawableBounds(const Rect &bounds);
+  void                  throwIfTextBoxDoesNotExist(WidgetId textBoxId) const;
   static void           validateImageScalePercent(std::uint16_t scalePercent);
   JpegImageSourceState &findJpegImageSourceState(WidgetId imageId);
 
@@ -119,7 +123,9 @@ private:
   const std::size_t                          m_maximumPendingCommands;
   std::unique_ptr<internal::JpegImageLoader> m_jpegImageLoader;
   // Widget creation is requested only by the main/MicroPython thread.
-  WidgetId                                           m_nextWidgetId{1U};
+  WidgetId m_nextWidgetId{1U};
+  // Includes queued text boxes. Deletion or clearing invalidates IDs immediately.
+  std::unordered_set<WidgetId>                       m_textBoxIds;
   std::unordered_map<WidgetId, JpegImageSourceState> m_jpegImageSourceStatesById;
   mutable std::mutex                                 m_renderStateMutex;
   std::condition_variable                            m_renderCommandAvailable;

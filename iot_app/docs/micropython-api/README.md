@@ -60,6 +60,9 @@ display.clear(color=(0, 0, 0))
 Removes everything drawn by the application and fills the screen with one
 colour. It returns `None`.
 
+All previous text-box and image IDs become invalid when this call returns,
+even if the render thread has not cleared the screen yet.
+
 | Parameter | Required? | Meaning |
 |---|---|---|
 | `color` | No, default `(0, 0, 0)` | `(red, green, blue)` background colour; each value is from 0 to 255 |
@@ -88,6 +91,10 @@ widget_id = display.draw_text_box(
 
 Creates a text box and returns its positive integer widget ID. Keep this ID if
 the box will be updated, moved, or deleted later.
+
+Width and height must be greater than zero. IoT App checks them before queuing
+the drawing request and raises `RuntimeError` for a zero or negative size.
+Negative positions are allowed; content outside the screen is clipped.
 
 The defaults shown above come from the C++ `TextBoxSpec`. The MicroPython
 binding only replaces a style when the application supplies that argument.
@@ -188,11 +195,41 @@ display.delete_text_box(widget_id)
 ```
 
 Deletes one existing text box and returns `None`. The widget ID must not be
-used again after the box has been deleted.
+used again after this call returns, even if the render thread has not drawn
+the deletion yet. If the queue is full and deletion raises an error, the box
+has not been scheduled for deletion and its ID remains valid.
 
 | Parameter | Required? | Meaning |
 |---|---|---|
 | `widget_id` | Yes | Positive ID returned by `draw_text_box()` |
+
+### Text-box errors
+
+Updating, moving, or deleting an unknown text-box ID raises `RuntimeError`
+during that Python call. The same applies to an ID from a deleted box, a
+previously cleared screen, or another application. An image ID cannot be used
+as a text-box ID. Non-positive IDs are rejected by the Python binding with
+`ValueError`.
+
+You can catch these errors and continue drawing:
+
+```python
+from iot import display
+
+text_box_id = display.draw_text_box(40, 40, 300, 80, "Temporary text")
+display.delete_text_box(text_box_id)
+
+try:
+    display.update_text_box(text_box_id, "This box was deleted")
+except RuntimeError as error:
+    print(error)
+    display.draw_text_box(40, 40, 300, 80, "The app is still running")
+```
+
+If the app does not catch the error, IoT App stops Python and shows the
+traceback on its emergency screen. The invalid request is never sent to
+LVGL, so it does not stop the render thread. Unexpected failures inside the
+render backend are still treated as runtime failures.
 
 ### JPEG images
 

@@ -104,18 +104,28 @@ void ScreenManager::stop() noexcept {
   std::lock_guard<std::mutex> lock(m_renderStateMutex);
   std::queue<RenderCommand>   emptyQueue;
   m_pendingRenderCommands.swap(emptyQueue);
+  m_textBoxIds.clear();
   IOT_LOG_INFO(m_logger, "Render thread stopped");
 }
 
 WidgetId ScreenManager::drawTextBox(const TextBoxSpec &textBoxSpec) {
+  validateDrawableBounds(textBoxSpec.bounds);
   const WidgetId textBoxId = m_nextWidgetId++;
   logTextBoxRequest(m_logger, textBoxId, textBoxSpec);
-  enqueueRenderCommand(
-      [textBoxId, textBoxSpec](IRenderBackend &backend) { backend.createTextBox(textBoxId, textBoxSpec); });
+  m_textBoxIds.insert(textBoxId);
+  try {
+    enqueueRenderCommand(
+        [textBoxId, textBoxSpec](IRenderBackend &backend) { backend.createTextBox(textBoxId, textBoxSpec); });
+  } catch (...) {
+    // The renderer will never create this box if its command was rejected.
+    m_textBoxIds.erase(textBoxId);
+    throw;
+  }
   return textBoxId;
 }
 
 void ScreenManager::fillArea(const FilledAreaSpec &filledAreaSpec) {
+  validateDrawableBounds(filledAreaSpec.bounds);
   IOT_LOG_DEBUG(m_logger, "Queueing filled area bounds={x=", filledAreaSpec.bounds.x, ", y=", filledAreaSpec.bounds.y,
                 ", width=", filledAreaSpec.bounds.width, ", height=", filledAreaSpec.bounds.height, "}, color=rgb(",
                 static_cast<unsigned int>(filledAreaSpec.color.red), ',',
@@ -125,6 +135,7 @@ void ScreenManager::fillArea(const FilledAreaSpec &filledAreaSpec) {
 }
 
 void ScreenManager::showErrorScreen(const TextBoxSpec &errorBoxSpec) {
+  validateDrawableBounds(errorBoxSpec.bounds);
   IOT_LOG_ERROR(m_logger, "Queueing runtime error screen; text='", textPreviewForLog(errorBoxSpec.text),
                 "', bounds={x=", errorBoxSpec.bounds.x, ", y=", errorBoxSpec.bounds.y,
                 ", width=", errorBoxSpec.bounds.width, ", height=", errorBoxSpec.bounds.height,
@@ -135,9 +146,11 @@ void ScreenManager::showErrorScreen(const TextBoxSpec &errorBoxSpec) {
   m_jpegImageLoader->clearCache();
   replacePendingRenderCommandsWith(
       [errorBoxSpec](IRenderBackend &renderBackend) { renderBackend.showErrorScreen(errorBoxSpec); });
+  m_textBoxIds.clear();
 }
 
 void ScreenManager::updateTextBox(WidgetId textBoxId, std::string updatedText) {
+  throwIfTextBoxDoesNotExist(textBoxId);
   IOT_LOG_DEBUG(m_logger, "Queueing text update for id=", textBoxId, ", text='", textPreviewForLog(updatedText), "'");
   enqueueRenderCommand([textBoxId, updatedText = std::move(updatedText)](IRenderBackend &backend) {
     backend.updateTextBox(textBoxId, updatedText);
@@ -145,13 +158,16 @@ void ScreenManager::updateTextBox(WidgetId textBoxId, std::string updatedText) {
 }
 
 void ScreenManager::moveTextBox(WidgetId textBoxId, std::int32_t x, std::int32_t y) {
+  throwIfTextBoxDoesNotExist(textBoxId);
   IOT_LOG_DEBUG(m_logger, "Queueing text-box move for id=", textBoxId, ", x=", x, ", y=", y);
   enqueueRenderCommand([textBoxId, x, y](IRenderBackend &backend) { backend.moveTextBox(textBoxId, x, y); });
 }
 
 void ScreenManager::deleteTextBox(WidgetId textBoxId) {
+  throwIfTextBoxDoesNotExist(textBoxId);
   IOT_LOG_DEBUG(m_logger, "Queueing text-box deletion for id=", textBoxId);
   enqueueRenderCommand([textBoxId](IRenderBackend &backend) { backend.deleteTextBox(textBoxId); });
+  m_textBoxIds.erase(textBoxId);
 }
 
 WidgetId ScreenManager::drawJpegImage(const JpegImageSpec &jpegImageSpec) {
@@ -243,8 +259,21 @@ void ScreenManager::clear(Color screenBackgroundColor) {
                 static_cast<unsigned int>(screenBackgroundColor.blue), ')');
   replacePendingRenderCommandsWith(
       [screenBackgroundColor](IRenderBackend &renderBackend) { renderBackend.clear(screenBackgroundColor); });
+  m_textBoxIds.clear();
   m_jpegImageSourceStatesById.clear();
   m_jpegImageLoader->clearCache();
+}
+
+void ScreenManager::validateDrawableBounds(const Rect &bounds) {
+  if (bounds.width <= 0 || bounds.height <= 0) {
+    throw std::invalid_argument("A drawable area must have positive width and height");
+  }
+}
+
+void ScreenManager::throwIfTextBoxDoesNotExist(WidgetId textBoxId) const {
+  if (m_textBoxIds.find(textBoxId) == m_textBoxIds.end()) {
+    throw std::invalid_argument("The requested text-box widget does not exist");
+  }
 }
 
 void ScreenManager::validateImageScalePercent(std::uint16_t scalePercent) {
@@ -296,12 +325,14 @@ void ScreenManager::enqueueRenderCommand(RenderCommand command) {
 }
 
 void ScreenManager::replacePendingRenderCommandsWith(RenderCommand replacementCommand) {
+  // Allocate the replacement first. If that fails, keep the old commands and
+  // their widget IDs unchanged.
+  std::queue<RenderCommand> replacementCommands;
+  replacementCommands.push(std::move(replacementCommand));
   {
     std::lock_guard<std::mutex> lock(m_renderStateMutex);
     throwIfRenderThreadIsUnavailableWhileLocked();
-    std::queue<RenderCommand> discardedCommands;
-    m_pendingRenderCommands.swap(discardedCommands);
-    m_pendingRenderCommands.push(std::move(replacementCommand));
+    m_pendingRenderCommands.swap(replacementCommands);
   }
   m_renderCommandAvailable.notify_one();
 }

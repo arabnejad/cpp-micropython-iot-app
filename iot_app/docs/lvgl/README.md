@@ -193,6 +193,11 @@ The queue is bounded so a Python application cannot consume all memory by
 creating drawing requests faster than the renderer can process them. If the
 queue becomes full, the drawing request returns an error.
 
+`ScreenManager` checks text-box IDs and positive drawable sizes before
+queuing requests. Unknown or deleted text-box IDs therefore produce an error
+in the Python call, not an exception later on the render thread. Python can
+catch the error; otherwise IoT App shows its emergency screen.
+
 When `clear()` starts a new application screen, `ScreenManager` removes pending
 commands from the previous application before it queues the clear operation.
 This prevents old drawing commands from appearing on the new screen.
@@ -242,14 +247,18 @@ Here is what happens:
 
 1. `display_draw_text_box()` checks the Python arguments.
 2. `iot_display_draw_text_box()` creates a C++ `TextBoxSpec`.
-3. `ScreenManager::drawTextBox()` assigns a project widget ID and queues the
-   request.
+3. `ScreenManager::drawTextBox()` checks the size, records a project widget ID,
+   and queues the request. If queuing fails, it removes that ID.
 4. The render thread calls `IRenderBackend::createTextBox()`.
 5. The LVGL backend creates the outer box and its label.
 6. A later `lv_timer_handler()` call draws the changed area to `/dev/fb0`.
 
 The returned widget ID is an IoT App ID, not an LVGL pointer. Python keeps the
 ID and uses it to update, move, or delete the same text box later.
+
+The ID is valid while creation is still queued. It becomes invalid once
+deletion is queued successfully, or when the screen is cleared. You do not
+need to wait for LVGL to finish drawing before using these calls.
 
 ## 6. Public drawing operations
 

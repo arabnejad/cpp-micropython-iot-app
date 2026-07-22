@@ -420,6 +420,143 @@ TEST_F(PythonApplicationManagerTest, ShowsTheEmergencyScreenWhenTheDefaultApplic
   EXPECT_NE(emergencyScreenText().find("Broken default"), std::string::npos);
 }
 
+TEST_F(PythonApplicationManagerTest, LetsPythonCatchInvalidTextBoxRequestsAndContinueDrawing) {
+  auto       pythonApplicationManager = createApplicationManager();
+  const auto activationResult         = pythonApplicationManager.activateExternalApplication(
+      createPythonApplication("Handles invalid text boxes", R"python(
+from iot import display
+
+for width, height in ((0, 40), (-1, 40), (100, 0), (100, -1)):
+    try:
+        display.draw_text_box(0, 0, width, height, "Invalid size")
+    except RuntimeError as error:
+        assert "positive width and height" in str(error)
+    else:
+        raise AssertionError("Invalid size was accepted")
+
+try:
+    display.update_text_box(999, "Unknown text box")
+except RuntimeError:
+    pass
+else:
+    raise AssertionError("Unknown ID was accepted for update")
+
+try:
+    display.move_text_box(999, 10, 20)
+except RuntimeError:
+    pass
+else:
+    raise AssertionError("Unknown ID was accepted for move")
+
+try:
+    display.delete_text_box(999)
+except RuntimeError:
+    pass
+else:
+    raise AssertionError("Unknown ID was accepted for deletion")
+
+display.draw_text_box(0, 0, 300, 80, "Still running")
+)python"));
+
+  ASSERT_TRUE(activationResult.externalApplicationIsRunning) << activationResult.failureReason;
+  EXPECT_EQ(pythonApplicationManager.state(), ApplicationState::ExternalApplication);
+  ASSERT_TRUE(tests::waitUntil([&] {
+    std::lock_guard<std::mutex> renderStateLock(m_recordingRenderBackendView->renderStateMutex);
+    return m_recordingRenderBackendView->textBoxesById.size() == 1U &&
+           m_recordingRenderBackendView->textBoxesById.begin()->second.text == "Still running";
+  }));
+  EXPECT_NO_THROW(m_screenManager.throwIfRenderThreadFailed());
+  EXPECT_TRUE(emergencyScreenText().empty());
+}
+
+TEST_F(PythonApplicationManagerTest, ShowsInvalidTextBoxDimensionsOnTheEmergencyScreenAndCanStartAnotherApp) {
+  auto       pythonApplicationManager = createApplicationManager();
+  const auto activationResult         = pythonApplicationManager.activateExternalApplication(
+      createPythonApplication("Invalid dimensions", "from iot import display\n"
+                                                                    "display.draw_text_box(0, 0, 0, 40, 'Invalid width')\n"));
+
+  EXPECT_FALSE(activationResult.externalApplicationIsRunning);
+  EXPECT_EQ(pythonApplicationManager.state(), ApplicationState::EmergencyScreen);
+  ASSERT_TRUE(waitForEmergencyScreen());
+  EXPECT_NE(emergencyScreenText().find("positive width and height"), std::string::npos);
+  EXPECT_NO_THROW(m_screenManager.throwIfRenderThreadFailed());
+
+  const auto recoveryResult = pythonApplicationManager.activateExternalApplication(
+      createPythonApplication("Valid replacement", "from iot import display\n"
+                                                   "display.draw_text_box(0, 0, 300, 80, 'Recovered')\n"));
+  ASSERT_TRUE(recoveryResult.externalApplicationIsRunning) << recoveryResult.failureReason;
+  ASSERT_TRUE(tests::waitUntil([&] {
+    std::lock_guard<std::mutex> renderStateLock(m_recordingRenderBackendView->renderStateMutex);
+    return m_recordingRenderBackendView->lastErrorScreenText.empty() &&
+           m_recordingRenderBackendView->textBoxesById.size() == 1U &&
+           m_recordingRenderBackendView->textBoxesById.begin()->second.text == "Recovered";
+  }));
+  EXPECT_NO_THROW(m_screenManager.throwIfRenderThreadFailed());
+}
+
+TEST_F(PythonApplicationManagerTest, ShowsADeletedTextBoxErrorFromACallbackWithoutStoppingTheRenderer) {
+  auto       pythonApplicationManager = createApplicationManager();
+  const auto activationResult =
+      pythonApplicationManager.activateExternalApplication(createPythonApplication("Uses a deleted text box", R"python(
+from iot import display, scheduler
+
+text_box_id = display.draw_text_box(0, 0, 300, 80, "Temporary")
+display.delete_text_box(text_box_id)
+
+def update_deleted_box():
+    display.update_text_box(text_box_id, "Already deleted")
+
+scheduler.every(1, update_deleted_box)
+)python"));
+  ASSERT_TRUE(activationResult.externalApplicationIsRunning) << activationResult.failureReason;
+
+  ASSERT_TRUE(tests::waitUntil([&] {
+    pythonApplicationManager.runScheduledCallbacks();
+    return pythonApplicationManager.state() == ApplicationState::EmergencyScreen;
+  }));
+  ASSERT_TRUE(waitForEmergencyScreen());
+  EXPECT_NE(emergencyScreenText().find("text-box widget does not exist"), std::string::npos);
+  EXPECT_NO_THROW(m_screenManager.throwIfRenderThreadFailed());
+}
+
+TEST_F(PythonApplicationManagerTest, AReplacementApplicationCannotUseThePreviousApplicationsTextBoxId) {
+  auto       pythonApplicationManager = createApplicationManager();
+  const auto firstActivationResult    = pythonApplicationManager.activateExternalApplication(
+      createPythonApplication("First application", "from iot import display\n"
+                                                         "display.draw_text_box(0, 0, 300, 80, 'First application')\n"));
+  ASSERT_TRUE(firstActivationResult.externalApplicationIsRunning);
+  ASSERT_TRUE(tests::waitUntil([&] {
+    std::lock_guard<std::mutex> renderStateLock(m_recordingRenderBackendView->renderStateMutex);
+    return m_recordingRenderBackendView->textBoxesById.size() == 1U;
+  }));
+  ui::WidgetId previousTextBoxId;
+  {
+    std::lock_guard<std::mutex> renderStateLock(m_recordingRenderBackendView->renderStateMutex);
+    previousTextBoxId = m_recordingRenderBackendView->textBoxesById.begin()->first;
+  }
+  const std::string replacementSource = "from iot import display\n"
+                                        "try:\n"
+                                        "    display.update_text_box(" +
+                                        std::to_string(previousTextBoxId) +
+                                        ", 'Stale ID')\n"
+                                        "except RuntimeError:\n"
+                                        "    pass\n"
+                                        "else:\n"
+                                        "    raise AssertionError('Previous application ID was accepted')\n"
+                                        "display.draw_text_box(0, 0, 300, 80, 'Replacement application')\n";
+
+  const auto replacementResult = pythonApplicationManager.activateExternalApplication(
+      createPythonApplication("Replacement application", replacementSource));
+
+  ASSERT_TRUE(replacementResult.externalApplicationIsRunning) << replacementResult.failureReason;
+  ASSERT_TRUE(tests::waitUntil([&] {
+    std::lock_guard<std::mutex> renderStateLock(m_recordingRenderBackendView->renderStateMutex);
+    return m_recordingRenderBackendView->textBoxesById.size() == 1U &&
+           m_recordingRenderBackendView->textBoxesById.begin()->second.text == "Replacement application";
+  }));
+  EXPECT_NO_THROW(m_screenManager.throwIfRenderThreadFailed());
+}
+
 TEST_F(PythonApplicationManagerTest, KeepsTheNewestPartOfALongTracebackOnTheEmergencyScreen) {
   const std::string longErrorMessage(3000U, 'x');
   auto              pythonApplicationManager = createApplicationManager();
