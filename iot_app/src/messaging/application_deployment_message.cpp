@@ -30,7 +30,14 @@ struct CJsonObjectDeleter {
   }
 };
 
+struct CJsonTextDeleter {
+  void operator()(char *jsonText) const noexcept {
+    cJSON_free(jsonText);
+  }
+};
+
 using UniqueCJsonObject = std::unique_ptr<cJSON, CJsonObjectDeleter>;
+using UniqueCJsonText   = std::unique_ptr<char, CJsonTextDeleter>;
 
 bool isSafeIdentifier(std::string_view identifier) {
   if (identifier.empty() || identifier.size() > maximumIdentifierLength) {
@@ -245,13 +252,11 @@ ApplicationDeploymentMessageParser::serializeStatusPayload(const ApplicationDepl
   addJsonString(jsonObject.get(), "application_id", deploymentStatus.applicationId);
   addJsonString(jsonObject.get(), "message", deploymentStatus.message);
 
-  char *serializedJson = cJSON_PrintUnformatted(jsonObject.get());
-  if (serializedJson == nullptr) {
+  UniqueCJsonText serializedJson{cJSON_PrintUnformatted(jsonObject.get())};
+  if (!serializedJson) {
     throw std::runtime_error("Could not serialize deployment status JSON");
   }
-  std::string statusPayload(serializedJson);
-  cJSON_free(serializedJson);
-  return statusPayload;
+  return std::string{serializedJson.get()};
 }
 
 } // namespace messaging

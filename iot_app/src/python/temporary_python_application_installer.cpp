@@ -21,7 +21,14 @@ struct CJsonObjectDeleter {
   }
 };
 
+struct CJsonTextDeleter {
+  void operator()(char *jsonText) const noexcept {
+    cJSON_free(jsonText);
+  }
+};
+
 using UniqueCJsonObject = std::unique_ptr<cJSON, CJsonObjectDeleter>;
+using UniqueCJsonText   = std::unique_ptr<char, CJsonTextDeleter>;
 
 void throwIfPathIsUnsafe(const std::filesystem::path &path, const char *description) {
   if (!isSafeRelativePath(path)) {
@@ -52,12 +59,11 @@ std::string createApplicationMetadataJson(const messaging::ApplicationDeployment
     throw std::runtime_error("Could not create the temporary application metadata");
   }
 
-  char *serializedMetadata = cJSON_Print(metadata.get());
-  if (serializedMetadata == nullptr) {
+  UniqueCJsonText serializedMetadata{cJSON_Print(metadata.get())};
+  if (!serializedMetadata) {
     throw std::runtime_error("Could not serialize the temporary application metadata");
   }
-  std::string metadataJson(serializedMetadata);
-  cJSON_free(serializedMetadata);
+  std::string metadataJson(serializedMetadata.get());
   metadataJson.push_back('\n');
   return metadataJson;
 }
