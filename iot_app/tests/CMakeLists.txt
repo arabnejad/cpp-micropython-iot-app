@@ -35,6 +35,7 @@ add_executable(iot_unit_tests
   test_input_cpp_bridge.cpp
   test_lvgl_framebuffer_render_backend.cpp
   test_mqtt_application_receiver.cpp
+  test_native_bridge_error_handler.cpp
   test_native_cpp_bridges.cpp
   test_micropython_runtime.cpp
   test_micropython_device_module.cpp

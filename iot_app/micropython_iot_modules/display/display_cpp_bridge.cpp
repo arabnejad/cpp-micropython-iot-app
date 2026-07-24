@@ -1,25 +1,17 @@
 #include "display_cpp_bridge.h"
 
+#include "native_bridge_error_handler.h"
 #include "iot/python/micropython_application_context.h"
 #include "iot/ui/screen_manager.h"
 #include "iot/ui/ui_types.h"
 
-#include <exception>
 #include <stdexcept>
 #include <string>
 
 namespace {
 
-thread_local std::string latestErrorMessage;
-
-iot_native_result_t success() noexcept {
-  return {1, nullptr};
-}
-
-iot_native_result_t failure(const char *message) noexcept {
-  latestErrorMessage = message;
-  return {0, latestErrorMessage.c_str()};
-}
+/* Display failures become RuntimeError messages in mod_iot_display.c. */
+thread_local iot::python::internal::NativeBridgeErrorHandler nativeBridgeErrorHandler{"Unknown C++ display error"};
 
 iot::python::MicroPythonApplicationContext &context() {
   auto *activeContext = iot::python::MicroPythonApplicationContext::active();
@@ -27,31 +19,6 @@ iot::python::MicroPythonApplicationContext &context() {
     throw std::logic_error("Python display module is not connected to the application runtime");
   }
   return *activeContext;
-}
-
-/*
- * Runs a C++ operation without letting its exception cross into MicroPython's
- * C code.
- *
- * FunctionToRun is the compiler-generated type of the lambda passed here. For
- * example:
- *
- *   return runSafely([=] {
- *     context().screenManager().clear({red, green, blue});
- *   });
- *
- * functionToRun() executes the lambda body. Using a template avoids wrapping
- * every bridge call in std::function.
- */
-template <typename FunctionToRun> iot_native_result_t runSafely(FunctionToRun functionToRun) noexcept {
-  try {
-    functionToRun();
-    return success();
-  } catch (const std::exception &error) {
-    return failure(error.what());
-  } catch (...) {
-    return failure("Unknown C++ display error");
-  }
 }
 
 bool readOptionalUnsignedValue(int32_t suppliedValue, int32_t minimum, int32_t maximum, const char *name,
@@ -110,13 +77,13 @@ void copyDisplayMode(const iot::display::DisplayMode &displayMode, iot_display_m
 } // namespace
 
 extern "C" iot_native_result_t iot_display_clear(uint8_t red, uint8_t green, uint8_t blue) {
-  return runSafely([=] { context().screenManager().clear({red, green, blue}); });
+  return nativeBridgeErrorHandler.runSafely([=] { context().screenManager().clear({red, green, blue}); });
 }
 
 extern "C" iot_native_result_t iot_display_draw_text_box(int32_t x, int32_t y, int32_t width, int32_t height,
                                                          const char *text, const iot_text_box_options_t *textBoxOptions,
                                                          uint64_t *widget_id) {
-  return runSafely([=] {
+  return nativeBridgeErrorHandler.runSafely([=] {
     if (text == nullptr || textBoxOptions == nullptr || widget_id == nullptr) {
       throw std::invalid_argument("Text-box text, options, and widget ID output are required");
     }
@@ -139,7 +106,7 @@ extern "C" iot_native_result_t iot_display_draw_text_box(int32_t x, int32_t y, i
 }
 
 extern "C" iot_native_result_t iot_display_update_text_box(uint64_t widget_id, const char *text) {
-  return runSafely([=] {
+  return nativeBridgeErrorHandler.runSafely([=] {
     if (widget_id == 0U || text == nullptr) {
       throw std::invalid_argument("Text-box widget ID and text are required");
     }
@@ -148,7 +115,7 @@ extern "C" iot_native_result_t iot_display_update_text_box(uint64_t widget_id, c
 }
 
 extern "C" iot_native_result_t iot_display_move_text_box(uint64_t widget_id, int32_t x, int32_t y) {
-  return runSafely([=] {
+  return nativeBridgeErrorHandler.runSafely([=] {
     if (widget_id == 0U) {
       throw std::invalid_argument("Text-box widget ID is required");
     }
@@ -157,7 +124,7 @@ extern "C" iot_native_result_t iot_display_move_text_box(uint64_t widget_id, int
 }
 
 extern "C" iot_native_result_t iot_display_delete_text_box(uint64_t widget_id) {
-  return runSafely([=] {
+  return nativeBridgeErrorHandler.runSafely([=] {
     if (widget_id == 0U) {
       throw std::invalid_argument("Text-box widget ID is required");
     }
@@ -167,7 +134,7 @@ extern "C" iot_native_result_t iot_display_delete_text_box(uint64_t widget_id) {
 
 extern "C" iot_native_result_t iot_display_draw_image(const char *file_path, int32_t x, int32_t y,
                                                       uint16_t scale_percent, uint64_t *widget_id) {
-  return runSafely([=] {
+  return nativeBridgeErrorHandler.runSafely([=] {
     if (file_path == nullptr || widget_id == nullptr) {
       throw std::invalid_argument("JPEG file path and image widget ID output are required");
     }
@@ -176,7 +143,7 @@ extern "C" iot_native_result_t iot_display_draw_image(const char *file_path, int
 }
 
 extern "C" iot_native_result_t iot_display_update_image(uint64_t widget_id, const char *file_path) {
-  return runSafely([=] {
+  return nativeBridgeErrorHandler.runSafely([=] {
     if (widget_id == 0U || file_path == nullptr) {
       throw std::invalid_argument("Image widget ID and JPEG file path are required");
     }
@@ -185,7 +152,7 @@ extern "C" iot_native_result_t iot_display_update_image(uint64_t widget_id, cons
 }
 
 extern "C" iot_native_result_t iot_display_move_image(uint64_t widget_id, int32_t x, int32_t y) {
-  return runSafely([=] {
+  return nativeBridgeErrorHandler.runSafely([=] {
     if (widget_id == 0U) {
       throw std::invalid_argument("Image widget ID is required");
     }
@@ -194,7 +161,7 @@ extern "C" iot_native_result_t iot_display_move_image(uint64_t widget_id, int32_
 }
 
 extern "C" iot_native_result_t iot_display_set_image_scale(uint64_t widget_id, uint16_t scale_percent) {
-  return runSafely([=] {
+  return nativeBridgeErrorHandler.runSafely([=] {
     if (widget_id == 0U) {
       throw std::invalid_argument("Image widget ID is required");
     }
@@ -203,7 +170,7 @@ extern "C" iot_native_result_t iot_display_set_image_scale(uint64_t widget_id, u
 }
 
 extern "C" iot_native_result_t iot_display_delete_image(uint64_t widget_id) {
-  return runSafely([=] {
+  return nativeBridgeErrorHandler.runSafely([=] {
     if (widget_id == 0U) {
       throw std::invalid_argument("Image widget ID is required");
     }
@@ -213,7 +180,7 @@ extern "C" iot_native_result_t iot_display_delete_image(uint64_t widget_id) {
 
 extern "C" iot_native_result_t iot_display_set_background_image(const char *file_path, iot_background_image_mode_t mode,
                                                                 uint16_t scale_percent) {
-  return runSafely([=] {
+  return nativeBridgeErrorHandler.runSafely([=] {
     if (file_path == nullptr) {
       throw std::invalid_argument("Background JPEG file path is required");
     }
@@ -222,12 +189,12 @@ extern "C" iot_native_result_t iot_display_set_background_image(const char *file
 }
 
 extern "C" iot_native_result_t iot_display_clear_background_image(void) {
-  return runSafely([] { context().screenManager().clearBackgroundJpegImage(); });
+  return nativeBridgeErrorHandler.runSafely([] { context().screenManager().clearBackgroundJpegImage(); });
 }
 
 extern "C" iot_native_result_t iot_display_fill_area(int32_t x, int32_t y, int32_t width, int32_t height, uint8_t red,
                                                      uint8_t green, uint8_t blue) {
-  return runSafely([=] {
+  return nativeBridgeErrorHandler.runSafely([=] {
     iot::ui::FilledAreaSpec filledAreaSpec;
     filledAreaSpec.bounds = {x, y, width, height};
     filledAreaSpec.color  = {red, green, blue};
@@ -236,7 +203,7 @@ extern "C" iot_native_result_t iot_display_fill_area(int32_t x, int32_t y, int32
 }
 
 extern "C" iot_native_result_t iot_display_size(uint32_t *width, uint32_t *height) {
-  return runSafely([=] {
+  return nativeBridgeErrorHandler.runSafely([=] {
     if (width == nullptr || height == nullptr) {
       throw std::invalid_argument("Display size output is missing");
     }
@@ -246,7 +213,7 @@ extern "C" iot_native_result_t iot_display_size(uint32_t *width, uint32_t *heigh
 }
 
 extern "C" iot_native_result_t iot_display_monitor_count(size_t *monitorCount) {
-  return runSafely([=] {
+  return nativeBridgeErrorHandler.runSafely([=] {
     if (monitorCount == nullptr) {
       throw std::invalid_argument("Monitor-count output is missing");
     }
@@ -256,7 +223,7 @@ extern "C" iot_native_result_t iot_display_monitor_count(size_t *monitorCount) {
 
 extern "C" iot_native_result_t iot_display_monitor_information(size_t                     monitorIndex,
                                                                iot_monitor_information_t *monitorInformation) {
-  return runSafely([=] {
+  return nativeBridgeErrorHandler.runSafely([=] {
     if (monitorInformation == nullptr) {
       throw std::invalid_argument("Monitor-information output is missing");
     }
@@ -284,7 +251,7 @@ extern "C" iot_native_result_t iot_display_monitor_information(size_t           
 
 extern "C" iot_native_result_t iot_display_supported_mode_information(size_t monitorIndex, size_t modeIndex,
                                                                       iot_display_mode_information_t *modeInformation) {
-  return runSafely([=] {
+  return nativeBridgeErrorHandler.runSafely([=] {
     if (modeInformation == nullptr) {
       throw std::invalid_argument("Display-mode output is missing");
     }

@@ -1,5 +1,6 @@
 #include "system_cpp_bridge.h"
 
+#include "native_bridge_error_handler.h"
 #include "iot/python/micropython_application_context.h"
 
 #include "py/misc.h"
@@ -7,7 +8,6 @@
 
 #include <array>
 #include <ctime>
-#include <exception>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -18,23 +18,16 @@
 
 namespace {
 
-thread_local std::string                                           latestErrorMessage;
 thread_local std::string                                           currentTimeText;
 thread_local std::vector<iot::system::NetworkInterfaceInformation> latestNetworkInterfaces;
+/* System-information failures become RuntimeError messages in mod_iot_system.c. */
+thread_local iot::python::internal::NativeBridgeErrorHandler nativeBridgeErrorHandler{
+    "Unknown C++ system-information error"};
 
 constexpr const char lvglVersion[] =
     MP_STRINGIFY(LVGL_VERSION_MAJOR) "." MP_STRINGIFY(LVGL_VERSION_MINOR) "." MP_STRINGIFY(LVGL_VERSION_PATCH);
 constexpr const char micropythonVersion[] =
     MP_STRINGIFY(MICROPY_VERSION_MAJOR) "." MP_STRINGIFY(MICROPY_VERSION_MINOR) "." MP_STRINGIFY(MICROPY_VERSION_MICRO);
-
-iot_native_result_t success() noexcept {
-  return {1, nullptr};
-}
-
-iot_native_result_t failure(const char *message) noexcept {
-  latestErrorMessage = message;
-  return {0, latestErrorMessage.c_str()};
-}
 
 iot::python::MicroPythonApplicationContext &context() {
   auto *activeContext = iot::python::MicroPythonApplicationContext::active();
@@ -44,35 +37,10 @@ iot::python::MicroPythonApplicationContext &context() {
   return *activeContext;
 }
 
-/*
- * Runs a C++ operation without letting its exception cross into MicroPython's
- * C code.
- *
- * FunctionToRun is the compiler-generated type of the lambda passed here. For
- * example:
- *
- *   return runSafely([=] {
- *     *uptime_seconds = context().currentUptimeSeconds();
- *   });
- *
- * functionToRun() executes the lambda body. Using a template avoids wrapping
- * every bridge call in std::function.
- */
-template <typename FunctionToRun> iot_native_result_t runSafely(FunctionToRun functionToRun) noexcept {
-  try {
-    functionToRun();
-    return success();
-  } catch (const std::exception &error) {
-    return failure(error.what());
-  } catch (...) {
-    return failure("Unknown C++ system-information error");
-  }
-}
-
 } // namespace
 
 extern "C" iot_native_result_t iot_system_read_information(iot_system_information_t *systemInformation) {
-  return runSafely([=] {
+  return nativeBridgeErrorHandler.runSafely([=] {
     if (systemInformation == nullptr) {
       throw std::invalid_argument("System-information output is missing");
     }
@@ -108,7 +76,7 @@ extern "C" iot_native_result_t iot_system_read_information(iot_system_informatio
 }
 
 extern "C" iot_native_result_t iot_system_current_time(const char **formatted_time) {
-  return runSafely([=] {
+  return nativeBridgeErrorHandler.runSafely([=] {
     if (formatted_time == nullptr) {
       throw std::invalid_argument("Current-time output is missing");
     }
@@ -129,7 +97,7 @@ extern "C" iot_native_result_t iot_system_current_time(const char **formatted_ti
 }
 
 extern "C" iot_native_result_t iot_system_uptime_seconds(uint64_t *uptime_seconds) {
-  return runSafely([=] {
+  return nativeBridgeErrorHandler.runSafely([=] {
     if (uptime_seconds == nullptr) {
       throw std::invalid_argument("System-uptime output is missing");
     }
@@ -138,7 +106,7 @@ extern "C" iot_native_result_t iot_system_uptime_seconds(uint64_t *uptime_second
 }
 
 extern "C" iot_native_result_t iot_system_network_interface_count(size_t *networkInterfaceCount) {
-  return runSafely([=] {
+  return nativeBridgeErrorHandler.runSafely([=] {
     if (networkInterfaceCount == nullptr) {
       throw std::invalid_argument("Network-interface count output is missing");
     }
@@ -150,7 +118,7 @@ extern "C" iot_native_result_t iot_system_network_interface_count(size_t *networ
 
 extern "C" iot_native_result_t
 iot_system_read_network_interface(size_t index, iot_network_interface_information_t *networkInterfaceInformation) {
-  return runSafely([=] {
+  return nativeBridgeErrorHandler.runSafely([=] {
     if (networkInterfaceInformation == nullptr) {
       throw std::invalid_argument("Network-interface output is missing");
     }

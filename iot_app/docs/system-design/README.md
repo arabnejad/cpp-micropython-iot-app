@@ -1019,7 +1019,7 @@ native modules
 └── mod_iot_system.c
        |
        v
-C-compatible bridge (`extern "C"` and `runSafely()`)
+C-compatible bridge (`extern "C"` and `NativeBridgeErrorHandler`)
        |
        v
 C++ services
@@ -1086,29 +1086,38 @@ mod_iot_display.c
 iot_display_clear(...)                     extern "C" bridge function
   |
   v
-runSafely([=] { ... })                     C++ exception boundary
+NativeBridgeErrorHandler::runSafely(...)   C++ exception boundary
   |
   v
 ScreenManager::clear(...)
 ```
 
-`runSafely()` is important because a C++ exception must not continue into
-MicroPython's C code. It runs the C++ work inside `try` and `catch` blocks and
-returns a plain C structure:
+`NativeBridgeErrorHandler::runSafely()` is important because a C++ exception
+must not continue into MicroPython's C code. It runs the C++ work inside `try`
+and `catch` blocks and returns a plain C structure:
 
 ```text
 C++ call succeeds
   -> { succeeded = 1, error_message = null }
 
 C++ call throws an exception
-  -> runSafely() catches it
+  -> NativeBridgeErrorHandler catches it
   -> { succeeded = 0, error_message = "..." }
 ```
 
-The error text is kept in thread-local storage long enough for the C binding to
-read it. After the bridge has returned to C, the binding converts a failed
-result into a MicroPython `RuntimeError`. This order means neither exception
-system crosses into code that does not understand it.
+Display, input, network, and system calls use the same error helper. Each bridge
+provides its own fallback text, such as `Unknown C++ gamepad error`, so an
+unexpected exception still identifies the module that failed.
+
+The helper copies the error into a 1 KiB fixed buffer in thread-local storage.
+It shortens a longer message and adds `...` at the end. It does not create a
+`std::string` while handling the exception, so it can also report
+`std::bad_alloc` safely. The error pointer remains valid long enough for the C
+binding to read it.
+
+After the bridge has returned to C, the binding converts a failed result into a
+MicroPython `RuntimeError`. This order means neither exception system crosses
+into code that does not understand it.
 
 The opposite direction is also protected. MicroPython startup and scheduled
 callback errors are caught in C before control returns to C++. This prevents
