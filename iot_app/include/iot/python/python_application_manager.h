@@ -78,7 +78,24 @@ public:
   /* Gets the name of the active app, or "Emergency screen" after a failure. */
   const std::string &activeScreenName() const noexcept;
 
-  /* Gets the time remaining before the current app's next callback. */
+  /*
+   * Gets how long the main loop can wait before the next callback is due.
+   *
+   * The MicroPython scheduler stores a remaining delay. This function reduces
+   * that delay by the time that has passed since the scheduler was last
+   * updated. That time can include work done inside the previous callback.
+   *
+   * For example, suppose the scheduler reports a 1,000 ms delay and the
+   * previous callback took 300 ms:
+   *
+   *   Stored delay:             1,000 ms
+   *   Time already passed:       -300 ms
+   *   Main-loop wait returned:    700 ms
+   *
+   * This function only calculates the wait. It does not change the stored
+   * timer. runScheduledCallbacks() records the complete elapsed time later, so
+   * the same 300 ms is not counted twice.
+   */
   std::optional<std::chrono::milliseconds> timeUntilNextScheduledCallback() const;
 
   /* Runs callbacks that are due and shows the emergency screen if one fails. */

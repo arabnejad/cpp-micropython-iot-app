@@ -623,6 +623,32 @@ TEST_F(PythonApplicationManagerTest, ReportsAndRunsTheNextScheduledCallback) {
   EXPECT_EQ(pythonApplicationManager.activeScreenName(), "External with timer");
 }
 
+TEST_F(PythonApplicationManagerTest, CountsTimeSpentInsideACallbackBeforeChoosingTheNextWait) {
+  m_fileDownloader.downloadDelay      = std::chrono::milliseconds(40);
+  auto       pythonApplicationManager = createApplicationManager();
+  const auto activationResult =
+      pythonApplicationManager.activateExternalApplication(createPythonApplication("External with slow timer", R"python(
+from iot import network, scheduler
+
+def download_file():
+    network.download_file("https://example.com/status.json")
+
+scheduler.every(milliseconds=10, callback=download_file)
+)python"));
+  ASSERT_TRUE(activationResult.externalApplicationIsRunning);
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(15));
+  pythonApplicationManager.runScheduledCallbacks();
+
+  EXPECT_EQ(m_fileDownloader.numberOfDownloadCalls, 1U);
+  EXPECT_EQ(pythonApplicationManager.timeUntilNextScheduledCallback(), std::chrono::milliseconds::zero());
+
+  // The callback took longer than several intervals, but one scheduler update
+  // still runs it only once.
+  pythonApplicationManager.runScheduledCallbacks();
+  EXPECT_EQ(m_fileDownloader.numberOfDownloadCalls, 2U);
+}
+
 TEST_F(PythonApplicationManagerTest, ShowsTheEmergencyScreenWhenReadingSystemInformationFails) {
   ThrowingSystemInformationProvider throwingSystemInformationProvider;
   PythonApplicationManager          pythonApplicationManager(m_screenManager, tests::testActiveDisplay(),

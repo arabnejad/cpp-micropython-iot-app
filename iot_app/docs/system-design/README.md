@@ -1181,6 +1181,13 @@ If several intervals were missed, a repeating callback runs once rather than
 being replayed many times in a burst. Its next deadline stays aligned with its
 interval.
 
+Time spent inside a callback counts towards the timer interval. For example,
+if the next call is due in one second and the callback takes 300 milliseconds,
+the main loop waits about 700 milliseconds. At this point, it only calculates
+the wait; it does not change the timer. The timer is updated the next time the
+main loop checks for callbacks, so those 300 milliseconds are not subtracted
+twice.
+
 ### 14.4 `iot.system`
 
 Most values come from a snapshot taken when the application starts. The

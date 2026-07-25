@@ -223,7 +223,25 @@ std::optional<std::chrono::milliseconds> PythonApplicationManager::timeUntilNext
   if (m_microPythonRuntime == nullptr) {
     return std::nullopt;
   }
-  return m_microPythonRuntime->timeUntilNextScheduledCallback();
+
+  const auto scheduledDelay = m_microPythonRuntime->timeUntilNextScheduledCallback();
+  if (!scheduledDelay || !m_previousSchedulerUpdateTime) {
+    return scheduledDelay;
+  }
+
+  const auto elapsedTimeSinceSchedulerUpdate = std::chrono::duration_cast<std::chrono::milliseconds>(
+      std::chrono::steady_clock::now() - *m_previousSchedulerUpdateTime);
+  if (elapsedTimeSinceSchedulerUpdate <= std::chrono::milliseconds::zero()) {
+    return scheduledDelay;
+  }
+
+  // Use this elapsed time only to shorten the main-loop wait. The scheduler
+  // state is updated later by runScheduledCallbacks(), so the time is not
+  // counted twice.
+  if (elapsedTimeSinceSchedulerUpdate >= *scheduledDelay) {
+    return std::chrono::milliseconds::zero();
+  }
+  return *scheduledDelay - elapsedTimeSinceSchedulerUpdate;
 }
 
 void PythonApplicationManager::runScheduledCallbacks() {

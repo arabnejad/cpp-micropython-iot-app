@@ -652,6 +652,11 @@ catch up. For example, if 3.4 seconds pass before IoT App can check a
 one-second timer, the callback runs once and its next call is due about 0.6
 seconds later.
 
+The time used by the callback is part of the timer interval. Suppose a timer
+runs once per second and its callback takes 300 milliseconds. About 700
+milliseconds then remain before the next call. IoT App waits for that remaining
+time rather than starting a new one-second wait.
+
 Callbacks should finish quickly. They may add or cancel timers, but they should
 not sleep for a long time or run forever.
 

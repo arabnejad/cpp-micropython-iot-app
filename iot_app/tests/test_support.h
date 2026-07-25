@@ -211,6 +211,10 @@ class TestFileDownloader final : public network::IFileDownloader {
 public:
   network::DownloadedFile downloadFile(const network::FileDownloadRequest &fileDownloadRequest) override {
     lastRequest = fileDownloadRequest;
+    ++numberOfDownloadCalls;
+    if (downloadDelay > std::chrono::milliseconds::zero()) {
+      std::this_thread::sleep_for(downloadDelay);
+    }
     if (!downloadErrorMessage.empty()) {
       throw std::runtime_error(downloadErrorMessage);
     }
@@ -226,6 +230,8 @@ public:
 
   network::FileDownloadRequest lastRequest;
   network::DownloadedFile      downloadedFile{"/tmp/test-download.jpg", "test-sha256", 123U, "image/jpeg", false};
+  std::chrono::milliseconds    downloadDelay{0};
+  std::size_t                  numberOfDownloadCalls{0U};
   std::size_t                  numberOfClearCalls{0U};
   std::string                  downloadErrorMessage;
   std::string                  clearErrorMessage;
