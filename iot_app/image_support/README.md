@@ -6,8 +6,8 @@ those files.
 
 | File | Installed location | Purpose |
 |---|---|---|
-| `iot-app-launcher` | `/usr/libexec/iot-app-launcher` | Runs the development executable from `/data` when it is available; otherwise runs `/usr/bin/iot_app` |
-| `iot-app-prepare-data-storage` | `/usr/libexec/iot-app-prepare-data-storage` | Expands, mounts, and prepares the persistent `/data` partition |
+| `iot-app-launcher` | `/usr/libexec/iot-app-launcher` | Runs the development executable from a mounted `/data`; otherwise runs `/usr/bin/iot_app` |
+| `iot-app-prepare-data-storage` | `/usr/libexec/iot-app-prepare-data-storage` | Prepares the optional persistent `/data` partition when it exists |
 | `iot-app-hide-tty1-cursor` | `/usr/libexec/iot-app-hide-tty1-cursor` | Hides the terminal cursor before the framebuffer dashboard starts |
 | `mosquitto.conf` | `/etc/mosquitto/mosquitto.conf` | Opens the development MQTT listener used by the sender |
 | `70-iot-app-access.rules` | `/usr/lib/udev/rules.d/70-iot-app-access.rules` | Gives the `iot-app` user group access to framebuffer, DRM, I2C, and input devices |
@@ -44,6 +44,10 @@ grows its ext4 filesystem, and mounts it at `/data`. Later boots keep the files
 already stored there. The complete partition layout is in the
 [storage guide](../docs/storage/README.md).
 
+The runtime does not require this partition. A custom image may omit it. If it
+is missing or cannot be mounted, the storage helper does not create application
+directories on the root filesystem, and IoT App uses its installed executable.
+
 ## Development executable override
 
 Both startup services run `iot-app-launcher`. It normally starts the executable
@@ -53,10 +57,11 @@ installed at `/usr/bin/iot_app`. For development, it first checks:
 /data/iot-app/development/iot_app
 ```
 
-The launcher uses that file only when it is a regular, non-symlink executable.
-Removing it makes the next service start use `/usr/bin/iot_app` again. The
-Buildroot and Yocto guides contain the commands for uploading a new executable
-without exposing a partly copied file to the service.
+The launcher uses that file only when `/data` is mounted and the file is a
+regular, non-symlink executable. Removing it makes the next service start use
+`/usr/bin/iot_app` again. The Buildroot and Yocto guides contain the commands
+for uploading a new executable without exposing a partly copied file to the
+service.
 
 ## Private Wi-Fi configuration
 

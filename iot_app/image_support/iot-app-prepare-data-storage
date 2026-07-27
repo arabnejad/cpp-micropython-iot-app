@@ -1,8 +1,8 @@
 #!/bin/sh
 
-# Prepare the persistent data partition used by both the Buildroot and Yocto
-# images. Buildroot calls this program from S25data-storage. Yocto calls it
-# from iot-app-storage.service before starting IoT App.
+# Prepare the optional persistent data partition used by the Buildroot and
+# Yocto images. Buildroot calls this program from S25data-storage. Yocto calls
+# it from iot-app-storage.service before starting IoT App.
 #
 # The generated SD-card image contains these partitions:
 #
@@ -17,6 +17,10 @@
 #
 # It also creates /data/iot-app/development. The IoT App launcher checks that
 # directory for a development executable before using /usr/bin/iot_app.
+#
+# IoT App can run without this partition. If partition 3 is absent, this
+# program leaves /data unavailable and exits successfully. The launcher then
+# uses /usr/bin/iot_app.
 #
 # The program is safe to run on later boots. If /data is already mounted, it
 # only checks the application directories and their ownership.
@@ -33,6 +37,18 @@ set -u
 data_mount_point="/data"
 development_directory="/data/iot-app/development"
 expected_data_label="iot-data"
+
+# Check the programs used below before making any changes to the partition.
+# A missing program leaves /data unavailable, but it does not stop IoT App
+# because the storage startup job is an optional dependency.
+check_required_commands() {
+	for required_command in awk e2label mkdir chmod id chown parted partx resize2fs mount; do
+		if ! command -v "$required_command" >/dev/null 2>&1; then
+			echo "Cannot prepare optional data storage because $required_command is not installed" >&2
+			return 1
+		fi
+	done
+}
 
 # Read root= from the kernel command line to find the storage device that
 # contains the running image. This project always puts Linux in partition 2
@@ -81,36 +97,60 @@ data_partition_is_mounted() {
 # there. The id check keeps this shared helper safe if it is run on a system
 # where that account has not been installed.
 prepare_iot_app_directories() {
-	mkdir -p "$development_directory"
-	chmod 0755 "$development_directory"
+	if ! data_partition_is_mounted; then
+		echo "Refusing to create application directories because $data_mount_point is not mounted" >&2
+		return 1
+	fi
+
+	if ! mkdir -p "$development_directory"; then
+		echo "Could not create $development_directory" >&2
+		return 1
+	fi
+	if ! chmod 0755 "$development_directory"; then
+		echo "Could not set permissions on $development_directory" >&2
+		return 1
+	fi
 
 	if id iot-app >/dev/null 2>&1; then
-		chown iot-app:iot-app "$data_mount_point"
-		chown iot-app:iot-app "$development_directory"
+		if ! chown iot-app:iot-app "$data_mount_point" "$development_directory"; then
+			echo "Could not give the iot-app user access to $data_mount_point" >&2
+			return 1
+		fi
 	fi
 }
 
-# Stop if root= does not use one of the supported device-name formats.
-find_image_devices || exit 1
-
-# A missing third partition means this is not an image with the expected
-# storage layout. Do not create or resize anything in that case.
-if [ ! -b "$data_partition" ]; then
-	echo "Data partition does not exist: $data_partition" >&2
-	exit 1
+# An unsupported root-device name means this image has no data partition that
+# this program can safely identify. IoT App can still run from its installed
+# executable.
+if ! find_image_devices; then
+	echo "Optional persistent storage is unavailable; continuing without $data_mount_point"
+	exit 0
 fi
+
+# A missing third partition is allowed. This can happen when the complete disk
+# is assigned to the Linux root partition. Do not create /data directories on
+# the root filesystem as a substitute.
+if [ ! -b "$data_partition" ]; then
+	echo "Optional data partition does not exist: $data_partition; continuing without $data_mount_point"
+	exit 0
+fi
+
+check_required_commands || exit 1
 
 # Verify the ext4 label before changing a partition boundary. This check keeps
 # the script from resizing an unrelated third partition if it is run on a
 # different disk layout.
-actual_data_label="$(e2label "$data_partition" 2>/dev/null || true)"
+if ! actual_data_label="$(e2label "$data_partition" 2>/dev/null)"; then
+	echo "Could not read the filesystem label from $data_partition" >&2
+	exit 1
+fi
 if [ "$actual_data_label" != "$expected_data_label" ]; then
 	echo "Refusing to resize $data_partition because its label is '$actual_data_label', not '$expected_data_label'" >&2
 	exit 1
 fi
 
 if data_partition_is_mounted; then
-	prepare_iot_app_directories
+	prepare_iot_app_directories || exit 1
 	exit 0
 fi
 
@@ -118,13 +158,33 @@ fi
 # its new boundary and grow the ext4 filesystem inside it. Resizing the
 # partition alone would not make the extra space available to files.
 echo "Expanding $data_partition to use the remaining space on $image_device"
-parted --script "$image_device" resizepart 3 100%
-partx --update --nr 3 "$image_device"
-resize2fs "$data_partition"
+if ! parted --script "$image_device" resizepart 3 100%; then
+	echo "Could not expand partition 3 on $image_device" >&2
+	exit 1
+fi
+if ! partx --update --nr 3 "$image_device"; then
+	echo "Could not update the kernel's partition information for $data_partition" >&2
+	exit 1
+fi
+if ! resize2fs "$data_partition"; then
+	echo "Could not expand the filesystem on $data_partition" >&2
+	exit 1
+fi
 
 # Mount the expanded filesystem and finish preparing its application
 # directories. The startup script or service that called this program manages
 # the mount during the current boot.
-mkdir -p "$data_mount_point"
-mount -t ext4 "$data_partition" "$data_mount_point"
-prepare_iot_app_directories
+if ! mkdir -p "$data_mount_point"; then
+	echo "Could not create the mount point $data_mount_point" >&2
+	exit 1
+fi
+if ! mount -t ext4 "$data_partition" "$data_mount_point"; then
+	echo "Could not mount $data_partition at $data_mount_point" >&2
+	exit 1
+fi
+if ! data_partition_is_mounted; then
+	echo "$data_partition was not mounted at $data_mount_point" >&2
+	exit 1
+fi
+
+prepare_iot_app_directories || exit 1

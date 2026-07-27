@@ -19,6 +19,10 @@ expands to use the rest of the card on first boot. `make yocto-prepare` reads
 the root size from `storage_layout.conf` and
 creates the Wic layout in the Yocto build directory.
 
+The supplied image includes `/data`, but IoT App does not depend on it. A
+custom image without the data partition can still run the installed
+application.
+
 The complete layout, size overrides, first-boot process, verification commands,
 and upstream references are in the [shared storage guide](../storage/README.md).
 Files that must behave the same in Yocto and Buildroot are described in the
@@ -37,7 +41,7 @@ The Yocto image is configured to:
 - connect through Wi-Fi or Ethernet using DHCP;
 - listen for SSH connections;
 - run a local Mosquitto broker on IPv4 port 1883;
-- expand and mount the persistent data partition at `/data`;
+- prepare the optional persistent data partition at `/data` when it exists;
 - start IoT App automatically after the framebuffer is available;
 - keep running offline if the network is unavailable; and
 - reconnect to Mosquitto when the broker becomes available.

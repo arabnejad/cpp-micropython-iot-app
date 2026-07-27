@@ -1,5 +1,5 @@
 [Unit]
-Description=Expand and mount IoT App persistent storage
+Description=Prepare optional IoT App persistent storage
 Before=iot-app.service
 
 [Service]

@@ -1,8 +1,9 @@
 # Test a rebuilt executable from `/data`
 
-During development, a rebuilt IoT App executable can be tested without
-rebuilding and flashing the complete image. The installed executable stays at
-`/usr/bin/iot_app`, while the test executable is stored here:
+When the optional `/data` partition is available, a rebuilt IoT App executable
+can be tested without rebuilding and flashing the complete image. The
+installed executable stays at `/usr/bin/iot_app`, while the test executable is
+stored here:
 
 ```text
 /data/iot-app/development/iot_app
@@ -12,28 +13,46 @@ The storage service creates `/data/iot-app/development` during boot. Buildroot
 and Yocto then start `/usr/libexec/iot-app-launcher` instead of calling the
 installed executable directly.
 
-The launcher makes this choice:
+The launcher first confirms that `/data` is mounted, then makes this choice:
 
 ```text
 IoT App service starts
         |
         v
-Is /data/iot-app/development/iot_app
-a regular executable file?
+Is /data mounted?
         |
    +----+----+
    |         |
   Yes        No
    |         |
    v         v
-Run the      Run /usr/bin/iot_app
+Check the    Run /usr/bin/iot_app
 development
 executable
+    |
+    v
+Is it a regular, non-symlink executable file?
+    |
+ +--+--+
+ |     |
+Yes    No
+ |     |
+ v     v
+Run it  Run /usr/bin/iot_app
 ```
 
 A symbolic link is not accepted as the development executable. If the path
 exists but is not a regular executable file, the launcher reports a warning
 and uses `/usr/bin/iot_app`.
+
+Confirm that the data partition is mounted before copying a development file:
+
+```bash
+ssh root@rspi-iot-app.local "grep ' /data ' /proc/mounts"
+```
+
+If this command prints nothing, use the installed executable or repair the
+optional storage first.
 
 ## 1. Build for the correct image
 

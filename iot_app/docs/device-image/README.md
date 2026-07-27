@@ -142,7 +142,7 @@ the same main jobs:
 ```text
 Linux starts
     |
-    +--> Prepare and mount /data
+    +--> Prepare and mount optional /data storage
     +--> Start Wi-Fi and Ethernet
     +--> Start SSH, time synchronization, and Mosquitto
     +--> Create /dev/fb0
@@ -155,9 +155,9 @@ Linux starts
 ```
 
 The exact service order differs. Buildroot runs BusyBox/SysV startup scripts
-one after another. The relevant scripts prepare `/data`, start Wi-Fi and DHCP,
-start time synchronization, start Dropbear and Mosquitto, and finally start
-IoT App. Their names show that order: `S25data-storage`, `S30wifi`,
+one after another. The relevant scripts try to prepare `/data`, start Wi-Fi and
+DHCP, start time synchronization, start Dropbear and Mosquitto, and finally
+start IoT App. Their names show that order: `S25data-storage`, `S30wifi`,
 `S40network`, `S45time-sync`, the two `S50` services, and `S90iot-app`.
 `S45time-sync` starts `ntpd`, waits up to 30 seconds for the first valid time,
 and leaves it running in the background. `S90iot-app` waits up to 10 seconds
@@ -165,7 +165,9 @@ for `/dev/fb0` before starting IoT App.
 
 Yocto starts independent systemd services in parallel. `iot-app.service` is
 ordered after the storage and Mosquitto services and requires
-`dev-fb0.device`. It does not wait for `network-online.target`.
+`dev-fb0.device`. Storage and Mosquitto are requested with `Wants`, so their
+failure does not stop the dashboard. It does not wait for
+`network-online.target`.
 
 Neither image waits for an IP address before starting IoT App. The dashboard
 can start offline, and its MQTT client reconnects when the local broker becomes
@@ -629,6 +631,10 @@ and the [`printk` guide](https://docs.kernel.org/core-api/printk-basics.html).
 
 ### `/data` is missing or has not expanded
 
+`/data` is optional, so IoT App should still run from `/usr/bin/iot_app` while
+you check the storage problem. The launcher will not use a development
+executable unless `/data` is mounted.
+
 Check the third partition and storage service:
 
 ```sh
@@ -647,9 +653,10 @@ systemctl status iot-app-storage --no-pager
 journalctl -b -u iot-app-storage --no-pager
 ```
 
-Partition 3 must have the `iot-data` label. The storage helper refuses to
-resize an unexpected partition. See the [storage guide](../storage/README.md)
-for the complete checks.
+When partition 3 exists, it must have the `iot-data` label. The storage helper
+refuses to resize an unexpected partition. A missing partition 3 is allowed
+and means that this image has no optional persistent storage. See the
+[storage guide](../storage/README.md) for the complete checks.
 
 ### Yocto starts IoT App later than Buildroot
 

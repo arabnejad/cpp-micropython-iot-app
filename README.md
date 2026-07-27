@@ -146,7 +146,9 @@ cached results.
 Buildroot and Yocto read [`storage_layout.conf`](storage_layout.conf). Each
 image has the fixed root-partition size selected in that file. The data
 partition expands to the end of the SD card on first boot and is mounted at
-`/data`.
+`/data`. The supplied images include this partition, but IoT App can run
+without it.
+
 See the [storage layout guide](iot_app/docs/storage/README.md)
 for the partition map, size overrides, first-boot steps, and upstream
 references.

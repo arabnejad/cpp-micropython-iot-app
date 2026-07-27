@@ -7,7 +7,9 @@ start() {
 	if "$storage_program"; then
 		echo "OK"
 	else
-		echo "FAIL"
+		# Persistent storage is optional. Report the failure, but returning an
+		# error here does not stop the later Buildroot startup scripts.
+		echo "FAIL (IoT App will continue without /data)"
 		return 1
 	fi
 }

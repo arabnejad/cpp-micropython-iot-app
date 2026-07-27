@@ -1,8 +1,13 @@
 # Image storage layout
 
 The Raspberry Pi 4 Buildroot and Yocto images use the same storage plan. Linux
-and IoT App stay in a fixed-size root partition. Files that need more space
-belong in `/data`.
+and IoT App stay in a fixed-size root partition. The supplied images also
+provide `/data` for files that need more space or must survive a reboot.
+
+IoT App does not require `/data`. It can run from the root filesystem when a
+custom image has no data partition or when the data partition cannot be
+mounted. In that case, persistent storage and the development executable
+override are unavailable.
 
 The sizes are kept in the root-level
 [`storage_layout.conf`](../../../storage_layout.conf):
@@ -37,6 +42,12 @@ these steps:
 5. `resize2fs` expands the ext4 filesystem inside the partition.
 6. The filesystem is mounted at `/data` and made writable by the `iot-app`
    user.
+
+The helper creates `/data/iot-app/development` only after it confirms that the
+data partition is mounted. If partition 3 does not exist, it reports that the
+optional storage is unavailable and finishes without creating anything under
+`/data`. If resizing or mounting an existing data partition fails, the storage
+job reports the error, but IoT App still starts from `/usr/bin/iot_app`.
 
 The script can run again safely. After the first successful boot, there is
 normally nothing left to expand.
@@ -80,8 +91,9 @@ df -h / /data
 lsblk -o NAME,SIZE,FSTYPE,LABEL,MOUNTPOINTS
 ```
 
-`/` should keep the configured root size. `/data` should use the space left on
-the card.
+With the supplied three-partition images, `/` should keep the configured root
+size and `/data` should use the space left on the card. A custom image without
+partition 3 will not have a `/data` mount.
 
 The storage service also creates `/data/iot-app/development`. The
 [development executable guide](../development-executable/README.md) explains

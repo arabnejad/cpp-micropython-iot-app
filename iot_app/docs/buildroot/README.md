@@ -14,6 +14,10 @@ partition, and an ext4 data partition mounted at `/data`. The data partition
 expands to use the rest of the card on first boot. The root partition size
 comes from the root-level `storage_layout.conf` file.
 
+The supplied image includes `/data`, but IoT App does not depend on it. A
+custom image without the data partition can still run the installed
+application.
+
 The complete layout, size overrides, first-boot process, verification commands,
 and upstream references are in the [shared storage guide](../storage/README.md).
 Files that must behave the same in Buildroot and Yocto are described in the
@@ -32,7 +36,7 @@ The `iot_rpi4_defconfig` configuration prepares the Pi to:
 - accept SSH connections as `root`;
 - start Mosquitto on IPv4 port 1883 for development deployments from the
   local network;
-- expand and mount the persistent data partition at `/data`;
+- prepare the optional persistent data partition at `/data` when it exists;
 - start IoT App automatically near the end of boot; and
 - provide `/etc/init.d/iot-app` for manually starting, stopping, or restarting
   the service.

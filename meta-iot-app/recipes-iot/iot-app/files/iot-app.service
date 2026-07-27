@@ -3,6 +3,8 @@ Description=IoT App MicroPython runtime
 # The dashboard requires the framebuffer. Network access and MQTT are optional
 # because the dashboard works offline and the MQTT client reconnects.
 Requires=dev-fb0.device
+# Persistent storage and MQTT are optional. Wants starts them when available,
+# but their failure does not prevent the dashboard from starting.
 After=dev-fb0.device iot-app-storage.service mosquitto.service
 Wants=iot-app-storage.service mosquitto.service
 

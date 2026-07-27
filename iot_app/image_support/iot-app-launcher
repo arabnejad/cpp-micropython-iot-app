@@ -1,8 +1,8 @@
 #!/bin/sh
 
-# Use a development executable from persistent storage when one has been
-# installed. Removing that file returns the next start to the image's normal
-# executable.
+# Use a development executable from persistent storage when /data is mounted
+# and the file has been installed. Removing that file returns the next start
+# to the image's normal executable. IoT App does not require /data.
 #
 # The development path is accepted only when it passes three checks:
 #
@@ -19,9 +19,16 @@
 # that failure.
 
 installed_executable="/usr/bin/iot_app"
+data_mount_point="/data"
 development_executable="/data/iot-app/development/iot_app"
 
-if [ -f "$development_executable" ] &&
+data_storage_is_mounted() {
+	awk -v directory="$data_mount_point" \
+		'$2 == directory { found = 1 } END { exit !found }' /proc/mounts
+}
+
+if data_storage_is_mounted &&
+	[ -f "$development_executable" ] &&
 	[ -x "$development_executable" ] &&
 	[ ! -L "$development_executable" ]; then
 	echo "[IOT_APP][WARNING]   [iot-app-launcher] Running development executable: $development_executable"
@@ -33,7 +40,9 @@ fi
 # A file at the development path failed at least one check. Report that the
 # override was ignored, then continue with the executable installed in the
 # image.
-if [ -e "$development_executable" ]; then
+if [ -e "$development_executable" ] && ! data_storage_is_mounted; then
+	echo "[IOT_APP][WARNING]   [iot-app-launcher] Ignoring development executable because $data_mount_point is not mounted: $development_executable"
+elif [ -e "$development_executable" ]; then
 	echo "[IOT_APP][WARNING]   [iot-app-launcher] Ignoring path because it is not a regular, non-symlink executable file: $development_executable"
 fi
 
