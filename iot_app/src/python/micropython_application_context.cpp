@@ -18,10 +18,9 @@ MicroPythonApplicationContext::MicroPythonApplicationContext(
     const std::vector<display::DisplayInfo>  &connectedDisplays,
     const system::ISystemInformationProvider &systemInformationProvider, network::IFileDownloader &fileDownloader,
     system::SystemInformation systemInformation, std::string applicationName)
-    : m_screenManager(&screenManager), m_activeDisplay(std::move(activeDisplay)),
-      m_connectedDisplays(&connectedDisplays), m_systemInformationProvider(&systemInformationProvider),
-      m_fileDownloader(&fileDownloader), m_systemInformation(std::move(systemInformation)),
-      m_applicationName(std::move(applicationName)) {
+    : m_screenManager(screenManager), m_activeDisplay(std::move(activeDisplay)), m_connectedDisplays(connectedDisplays),
+      m_systemInformationProvider(systemInformationProvider), m_fileDownloader(fileDownloader),
+      m_systemInformation(std::move(systemInformation)), m_applicationName(std::move(applicationName)) {
   if (activeContext != nullptr) {
     throw std::logic_error("Only one MicroPython application context can be active");
   }
@@ -35,7 +34,7 @@ MicroPythonApplicationContext::~MicroPythonApplicationContext() {
 }
 
 ui::ScreenManager &MicroPythonApplicationContext::screenManager() const noexcept {
-  return *m_screenManager;
+  return m_screenManager;
 }
 
 std::uint32_t MicroPythonApplicationContext::displayWidth() const noexcept {
@@ -51,7 +50,7 @@ const display::ActiveDisplay &MicroPythonApplicationContext::activeDisplay() con
 }
 
 const std::vector<display::DisplayInfo> &MicroPythonApplicationContext::connectedDisplays() const noexcept {
-  return *m_connectedDisplays;
+  return m_connectedDisplays;
 }
 
 const system::SystemInformation &MicroPythonApplicationContext::systemInformation() const noexcept {
@@ -59,15 +58,15 @@ const system::SystemInformation &MicroPythonApplicationContext::systemInformatio
 }
 
 std::uint64_t MicroPythonApplicationContext::currentUptimeSeconds() const {
-  return m_systemInformationProvider->readUptimeSeconds();
+  return m_systemInformationProvider.readUptimeSeconds();
 }
 
 std::vector<system::NetworkInterfaceInformation> MicroPythonApplicationContext::readCurrentNetworkInterfaces() const {
-  return m_systemInformationProvider->readNetworkInterfaces();
+  return m_systemInformationProvider.readNetworkInterfaces();
 }
 
 network::IFileDownloader &MicroPythonApplicationContext::fileDownloader() const noexcept {
-  return *m_fileDownloader;
+  return m_fileDownloader;
 }
 
 const std::string &MicroPythonApplicationContext::applicationName() const noexcept {

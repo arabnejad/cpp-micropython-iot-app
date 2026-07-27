@@ -29,6 +29,10 @@ namespace python {
  * until MicroPython has completely stopped. The active display and monitor
  * list come from the scan performed during process startup.
  *
+ * The context stores references to these services because every service must
+ * remain available while the Python application is running. Only the active
+ * context pointer can be null, which means no Python application is running.
+ *
  * Only one context can be active because IoT App runs one Python application
  * at a time.
  */
@@ -63,11 +67,11 @@ public:
   static MicroPythonApplicationContext *active() noexcept;
 
 private:
-  ui::ScreenManager                        *m_screenManager{nullptr};
+  ui::ScreenManager                        &m_screenManager;
   display::ActiveDisplay                    m_activeDisplay;
-  const std::vector<display::DisplayInfo>  *m_connectedDisplays{nullptr};
-  const system::ISystemInformationProvider *m_systemInformationProvider{nullptr};
-  network::IFileDownloader                 *m_fileDownloader{nullptr};
+  const std::vector<display::DisplayInfo>  &m_connectedDisplays;
+  const system::ISystemInformationProvider &m_systemInformationProvider;
+  network::IFileDownloader                 &m_fileDownloader;
   system::SystemInformation                 m_systemInformation;
   std::string                               m_applicationName;
 };
