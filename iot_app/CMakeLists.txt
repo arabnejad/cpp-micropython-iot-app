@@ -75,6 +75,7 @@ add_library(iot_runtime STATIC
   src/messaging/mqtt_client_api.cpp
   src/messaging/mqtt_application_receiver.cpp
   src/network/http_file_downloader.cpp
+  src/json/json_field_reader.cpp
   micropython_iot_modules/device/mod_iot.c
   micropython_iot_modules/common/micropython_traceback.c
   micropython_iot_modules/display/display_cpp_bridge.cpp
@@ -106,6 +107,7 @@ target_include_directories(iot_runtime
     "${PROJECT_SOURCE_DIR}/micropython_iot_modules/network"
     "${PROJECT_SOURCE_DIR}/micropython_iot_modules/scheduler"
     "${PROJECT_SOURCE_DIR}/micropython_iot_modules/system"
+    "${PROJECT_SOURCE_DIR}/src"
     "${PROJECT_SOURCE_DIR}/src/python"
     "${IOT_MICROPYTHON_GENERATED_DIR}"
     "${IOT_MICROPYTHON_GENERATED_DIR}/port"

@@ -1,6 +1,7 @@
 #include "iot/messaging/application_deployment_message.h"
 
 #include "iot/python/application_metadata.h"
+#include "json/json_field_reader.h"
 
 #include <cjson/cJSON.h>
 #include <openssl/evp.h>
@@ -53,26 +54,8 @@ bool isSafeIdentifier(std::string_view identifier) {
   return true;
 }
 
-const cJSON *findUniqueField(const cJSON *jsonObject, const char *fieldName) {
-  const cJSON *matchingField = nullptr;
-  for (const cJSON *field = jsonObject == nullptr ? nullptr : jsonObject->child; field != nullptr;
-       field              = field->next) {
-    if (field->string != nullptr && std::string_view(field->string) == fieldName) {
-      if (matchingField != nullptr) {
-        throw std::runtime_error("Deployment message contains the field '" + std::string(fieldName) +
-                                 "' more than once");
-      }
-      matchingField = field;
-    }
-  }
-  if (matchingField == nullptr) {
-    throw std::runtime_error("Deployment message is missing the field '" + std::string(fieldName) + "'");
-  }
-  return matchingField;
-}
-
 const cJSON *requireObjectField(const cJSON *jsonObject, const char *fieldName) {
-  const cJSON *field = findUniqueField(jsonObject, fieldName);
+  const cJSON *field = iot::internal::findUniqueJsonField(jsonObject, fieldName, "Deployment message");
   if (!cJSON_IsObject(field)) {
     throw std::runtime_error("Deployment field '" + std::string(fieldName) + "' must be a JSON object");
   }
@@ -80,15 +63,11 @@ const cJSON *requireObjectField(const cJSON *jsonObject, const char *fieldName) 
 }
 
 std::string requireStringField(const cJSON *jsonObject, const char *fieldName) {
-  const cJSON *field = findUniqueField(jsonObject, fieldName);
-  if (!cJSON_IsString(field) || field->valuestring == nullptr || field->valuestring[0] == '\0') {
-    throw std::runtime_error("Deployment field '" + std::string(fieldName) + "' must be a non-empty string");
-  }
-  return field->valuestring;
+  return iot::internal::requireNonEmptyJsonStringField(jsonObject, fieldName, "Deployment message");
 }
 
 std::size_t requireSizeField(const cJSON *jsonObject, const char *fieldName, std::size_t maximumValue) {
-  const cJSON *field = findUniqueField(jsonObject, fieldName);
+  const cJSON *field = iot::internal::findUniqueJsonField(jsonObject, fieldName, "Deployment message");
   if (!cJSON_IsNumber(field) || !std::isfinite(field->valuedouble) || field->valuedouble < 0.0 ||
       std::floor(field->valuedouble) != field->valuedouble || field->valuedouble > static_cast<double>(maximumValue)) {
     throw std::runtime_error("Deployment field '" + std::string(fieldName) + "' has an invalid byte count");
