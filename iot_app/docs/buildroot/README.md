@@ -283,15 +283,15 @@ a stable path for Raspberry Pi Imager:
 make buildroot-image
 ```
 
-The Makefile runs the following Buildroot command once for
-`iot_app-dirclean`, then again for the full parallel build:
+The Makefile first synchronizes and rebuilds IoT App, then updates the complete
+image:
 
 ```bash
 env -u LD_LIBRARY_PATH \
   make -C buildroot \
   BR2_EXTERNAL="$PWD/iot_app/buildroot_external" \
   O=/opt/iot-app-builds/buildroot-raspberry-pi-4 \
-  iot_app-dirclean
+  iot_app-reconfigure -j"$(getconf _NPROCESSORS_ONLN)"
 
 env -u LD_LIBRARY_PATH \
   make -C buildroot \
@@ -300,8 +300,14 @@ env -u LD_LIBRARY_PATH \
   all -j"$(getconf _NPROCESSORS_ONLN)"
 ```
 
-The first build takes a while because Buildroot must download and compile the
-cross-toolchain, Linux kernel, libraries, and application dependencies.
+`iot_app-reconfigure` copies the current source into Buildroot, runs CMake
+again, and rebuilds only the files that changed. The existing CMake build
+directory is kept, so a small source change does not recompile the complete
+application.
+
+The first image build still takes a while because Buildroot must download and
+compile the cross-toolchain, Linux kernel, libraries, and application
+dependencies.
 
 IoT App uses libcurl with OpenSSL for HTTP and HTTPS downloads. Buildroot also
 includes CA certificates so HTTPS connections can verify the server's
@@ -460,32 +466,27 @@ Buildroot.
 
 ### 10.1 Rebuild only the IoT App package
 
-Buildroot does not automatically notice every change in a package that uses a
-local source directory. First remove Buildroot's old copy of the IoT App
-source:
+Use the root Makefile to synchronize the current source, run CMake again, and
+build the application:
+
+```bash
+make buildroot-app
+```
+
+The equivalent Buildroot command is:
 
 ```bash
 env -u LD_LIBRARY_PATH \
   make -C buildroot \
   BR2_EXTERNAL="$PWD/iot_app/buildroot_external" \
   O=/opt/iot-app-builds/buildroot-raspberry-pi-4 \
-  iot_app-dirclean
+  iot_app-reconfigure -j"$(getconf _NPROCESSORS_ONLN)"
 ```
 
-Then build and install only the `iot_app` package into Buildroot's target
-directory:
-
-```bash
-env -u LD_LIBRARY_PATH \
-  make -C buildroot \
-  BR2_EXTERNAL="$PWD/iot_app/buildroot_external" \
-  O=/opt/iot-app-builds/buildroot-raspberry-pi-4 \
-  iot_app
-```
-
-Buildroot reuses the existing cross-toolchain and already-built dependencies.
-It does not rebuild the Linux kernel or generate a new filesystem image in
-this step.
+Buildroot removes source files from its working copy when they have been
+deleted from the project. It keeps the existing CMake build directory, the
+cross-toolchain, and already-built dependencies. It does not rebuild the Linux
+kernel or generate a new filesystem image in this step.
 
 Confirm that the new executable is for the Raspberry Pi:
 
@@ -593,11 +594,7 @@ Before producing or flashing a release image, rebuild the package and
 regenerate the image:
 
 ```bash
-env -u LD_LIBRARY_PATH \
-  make -C buildroot \
-  BR2_EXTERNAL="$PWD/iot_app/buildroot_external" \
-  O=/opt/iot-app-builds/buildroot-raspberry-pi-4 \
-  iot_app-dirclean all
+make buildroot-image
 ```
 
 Reflash the newly generated `sdcard.img` to verify the final image.

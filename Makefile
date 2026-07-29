@@ -149,12 +149,11 @@ buildroot-prepare: wifi-prepare storage-check
 		"$(BUILD_SCRIPTS_DIRECTORY)/prepare-buildroot.sh"
 
 buildroot-app: buildroot-prepare
-	$(BUILDROOT_COMMAND) iot_app-dirclean
-	$(BUILDROOT_COMMAND) iot_app -j"$(BUILD_JOBS)"
+	$(BUILDROOT_COMMAND) iot_app-reconfigure -j"$(BUILD_JOBS)"
 	@echo "Raspberry Pi executable: $(BUILDROOT_OUTPUT)/target/usr/bin/iot_app"
 
 buildroot-image: buildroot-prepare wifi-check
-	$(BUILDROOT_COMMAND) iot_app-dirclean
+	$(BUILDROOT_COMMAND) iot_app-reconfigure -j"$(BUILD_JOBS)"
 	$(BUILDROOT_COMMAND) all -j"$(BUILD_JOBS)"
 	@echo "Raspberry Pi image: $(BUILDROOT_OUTPUT)/images/sdcard.img"
 	@install -m 0644 "$(BUILDROOT_OUTPUT)/images/sdcard.img" \

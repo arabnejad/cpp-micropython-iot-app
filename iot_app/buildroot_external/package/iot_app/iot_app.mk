@@ -8,6 +8,15 @@ IOT_APP_VERSION = 0.1.0
 IOT_APP_SITE = $(BR2_EXTERNAL_IOT_PROJECT_PATH)/..
 IOT_APP_SITE_METHOD = local
 IOT_APP_SUPPORTS_IN_SOURCE_BUILD = NO
+# Keep the separate CMake build directory and Buildroot's bookkeeping files
+# when the local source tree is synchronized. --delete removes source files
+# that have been deleted from the project, so an old copy cannot remain in an
+# incremental build.
+IOT_APP_OVERRIDE_SRCDIR_RSYNC_EXCLUSIONS = \
+	--delete \
+	--exclude=/buildroot-build/ \
+	--exclude=/.stamp_* \
+	--exclude=/.files-list*
 IOT_APP_DEPENDENCIES = cjson jpeg libcurl libdrm mosquitto openssl
 IOT_APP_CONF_OPTS = \
 	-DLVGL_DIR=$(abspath $(BR2_EXTERNAL_IOT_PROJECT_PATH)/../../lvgl) \

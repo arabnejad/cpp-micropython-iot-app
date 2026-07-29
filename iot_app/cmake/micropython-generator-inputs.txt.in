@@ -1,0 +1,7 @@
+# CMake uses this template to create a list in the build directory of every
+# file used to generate the embedded MicroPython sources. If a file is added,
+# removed, or the MicroPython revision changes, the list changes and CMake
+# runs the generator again. This file is not compiled or installed.
+
+MicroPython revision: @IOT_MICROPYTHON_GIT_REVISION@
+@IOT_MICROPYTHON_GENERATOR_INPUT_FILE_LIST@
