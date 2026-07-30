@@ -44,6 +44,10 @@ class JpegImageLoader;
  * requests faster than the render thread can process them, the queue becomes
  * full and ScreenManager rejects the next request with an error. This prevents
  * drawing requests from using more and more memory.
+ *
+ * The render thread handles commands in small batches. After each batch, it
+ * gives LVGL time to refresh the display and run its timers. If more commands
+ * are waiting, the next batch starts immediately.
  */
 class ScreenManager {
 public:

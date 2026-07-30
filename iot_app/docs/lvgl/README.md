@@ -178,16 +178,30 @@ Main or MicroPython thread                    Render thread
 Request drawing
       |
       v
-ScreenManager command queue  ------------->  Run queued command
-                                              Call LVGL
+ScreenManager command queue  ------------->  Run up to 16 commands
                                               Call lv_timer_handler()
-                                              Wait for work
+                                              More commands waiting?
+                                                yes -> next batch
+                                                no  -> wait for work
 ```
 
 `ScreenManager` is the safe entry point for the rest of IoT App. Its public
 functions do not call LVGL. They copy the request into a command and place that
 command in a bounded queue. The render thread removes commands in order and
 passes them to `LvglFramebufferRenderBackend`.
+
+The render thread takes no more than 16 commands from the queue at once. The
+number 16 is a maximum, not a minimum. It always calls `lv_timer_handler()`
+after processing the commands that are currently available:
+
+```text
+10 commands -> process 10 -> refresh LVGL -> wait
+20 commands -> process 16 -> refresh LVGL -> process 4 -> refresh LVGL -> wait
+```
+
+The next batch starts immediately when commands remain in the queue. Without
+this limit, a continuous stream of commands could prevent LVGL from refreshing
+the screen.
 
 The queue is bounded so a Python application cannot consume all memory by
 creating drawing requests faster than the renderer can process them. If the

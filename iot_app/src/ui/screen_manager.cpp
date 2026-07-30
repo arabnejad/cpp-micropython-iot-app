@@ -12,6 +12,9 @@ namespace iot {
 namespace ui {
 namespace {
 
+/* Give LVGL time to refresh even when drawing commands keep arriving. */
+constexpr std::size_t maximumRenderCommandsPerBatch = 16U;
+
 std::string textPreviewForLog(std::string text) {
   constexpr std::size_t maximumPreviewSize = 120U;
   for (char &character : text) {
@@ -350,9 +353,13 @@ void ScreenManager::runRenderLoop(std::promise<void> initialization) noexcept {
     initialization.set_value();
 
     while (true) {
-      while (true) {
+      // Process no more than 16 commands before giving LVGL time to update.
+      // If fewer commands are waiting, stop the batch when the queue is empty.
+      for (std::size_t processedCommandCount = 0U; processedCommandCount < maximumRenderCommandsPerBatch;
+           ++processedCommandCount) {
         RenderCommand command;
         {
+          // Hold the lock only while reading and changing the shared queue.
           std::lock_guard<std::mutex> lock(m_renderStateMutex);
           if (m_pendingRenderCommands.empty()) {
             break;
@@ -360,19 +367,33 @@ void ScreenManager::runRenderLoop(std::promise<void> initialization) noexcept {
           command = std::move(m_pendingRenderCommands.front());
           m_pendingRenderCommands.pop();
         }
+
+        // Run the command after releasing the queue lock. This lets the main
+        // thread add another command while the current one is being drawn.
         command(*m_renderBackend);
       }
 
+      // Let LVGL refresh the display and run any timers that are ready.
       const std::uint32_t requestedWaitMilliseconds = m_renderBackend->processEventsAndGetWaitMilliseconds();
+
+      // Check LVGL again within 50 milliseconds, but always allow a wait of at
+      // least 1 millisecond when there are no drawing commands.
       const std::uint32_t waitMilliseconds =
           std::min<std::uint32_t>(50U, std::max<std::uint32_t>(1U, requestedWaitMilliseconds));
 
+      // The stop flag and command queue are shared with the main thread, so
+      // keep their checks under the same lock.
       std::unique_lock<std::mutex> lock(m_renderStateMutex);
       if (m_stopping) {
         break;
       }
+
+      // This sleeps only when the queue is empty. A waiting command makes the
+      // condition true immediately, so the next batch starts without a delay.
       m_renderCommandAvailable.wait_for(lock, std::chrono::milliseconds(waitMilliseconds),
                                         [this] { return m_stopping || !m_pendingRenderCommands.empty(); });
+
+      // The stop request may have arrived while this thread was waiting.
       if (m_stopping) {
         break;
       }

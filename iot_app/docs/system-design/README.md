@@ -176,7 +176,9 @@ parts of the process send small commands to `ScreenManager`.
 
 The command queue has a fixed capacity. A Python application that draws faster
 than LVGL can process the work gets an error instead of consuming memory
-without a limit.
+without a limit. The render thread handles up to 16 commands at a time, then
+gives LVGL a chance to refresh the display. This still happens when new drawing
+commands keep arriving.
 
 ### 4.4 MicroPython stays on the main thread
 
@@ -342,10 +344,11 @@ MicroPython never moves away from this thread.
 `ScreenManager::start()` creates the render thread and waits until the backend
 has opened `/dev/fb0`. The thread then repeats this work:
 
-1. Take queued rendering commands in order.
-2. Run each command through the backend.
+1. Take up to 16 queued rendering commands in order.
+2. Run those commands through the backend.
 3. Call `lv_timer_handler()` so LVGL can update the display.
-4. Wait for LVGL's requested delay, a new command, or shutdown.
+4. If commands are still waiting, start the next batch immediately.
+5. Otherwise, wait for LVGL's requested delay, a new command, or shutdown.
 
 The wait is kept between 1 and 50 milliseconds. A new command wakes the thread
 immediately.
@@ -373,7 +376,7 @@ operations stay on the main thread.
 | Sender | Receiver | What happens |
 |---|---|---|
 | MQTT network thread | Main thread | The MQTT callback copies the received JSON text into `ApplicationMessageQueue`. The main thread wakes up, removes the message with `waitAndPopMessage()`, and processes it. If the queue is full, the new message is rejected. |
-| Main thread | Render thread | A Python drawing request becomes a C++ drawing command. `ScreenManager::enqueueRenderCommand()` adds it to the render queue and wakes the render thread. The render thread removes the command and uses LVGL to draw it. If the queue is full, the drawing request reports an error. |
+| Main thread | Render thread | A Python drawing request becomes a C++ drawing command. `ScreenManager::enqueueRenderCommand()` adds it to the render queue and wakes the render thread. The render thread handles commands in groups of up to 16 and lets LVGL refresh between groups. If the queue is full, the drawing request reports an error. |
 | Render thread, during startup | Main thread | The render thread reports whether the display backend opened successfully. It uses a promise to send the result and the main thread waits for it through a future. |
 | Render thread, after startup | Main thread | If rendering fails, the render thread saves the exception. The main loop finds it through `ScreenManager::throwIfRenderThreadFailed()` and stops the process safely. |
 
@@ -522,6 +525,7 @@ Its responsibilities are:
 - Decode JPEG files and reuse recently decoded pixels within a fixed memory
   limit.
 - Keep render commands in order.
+- Process commands in batches so LVGL can refresh while the queue is busy.
 - Bound the number of pending commands.
 - Drop old pending commands when a new application clears the screen.
 - Report render-thread failure to the main thread.
@@ -615,6 +619,17 @@ The complete flow is:
    `processEventsAndGetWaitMilliseconds()`. This calls LVGL's
    `lv_timer_handler()`, allowing LVGL to update `/dev/fb0`. Linux then sends
    the framebuffer image to the active HDMI monitor.
+
+The render loop handles no more than 16 commands before step 9. The number 16
+is a maximum, not a minimum:
+
+```text
+10 commands -> process 10 -> refresh LVGL -> wait
+20 commands -> process 16 -> refresh LVGL -> process 4 -> refresh LVGL -> wait
+```
+
+The second group starts without an extra sleep. This keeps drawing responsive
+without changing the order of commands.
 
 `draw_text_box()` returns the widget ID after the command has been queued. The
 Python app keeps this ID and passes it to `update_text_box()`,
