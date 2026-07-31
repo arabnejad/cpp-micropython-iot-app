@@ -52,7 +52,7 @@ define RUN_YOCTO_COMMAND
 		$(1)'
 endef
 
-.PHONY: help submodules format format-check iot-app test coverage wifi-prepare wifi-check storage-check \
+.PHONY: help submodules reset-submodules format format-check iot-app test coverage wifi-prepare wifi-check storage-check \
 	buildroot-prepare buildroot-app buildroot-image \
 	yocto-prepare yocto-check yocto-app yocto-image images
 
@@ -60,6 +60,7 @@ help:
 	@echo "IoT project commands:"
 	@echo
 	@echo "  make submodules        Initialize the pinned Git submodules"
+	@echo "  make reset-submodules  Restore submodules and remove their untracked files"
 	@echo "  make format            Format the project C and C++ files"
 	@echo "  make format-check      Check formatting without changing files"
 	@echo "  make iot-app           Build IoT App for this Linux computer"
@@ -90,6 +91,12 @@ help:
 submodules:
 	git submodule sync --recursive
 	git submodule update --init --recursive
+
+reset-submodules:
+	@echo "WARNING: discarding tracked and untracked changes inside every submodule"
+	git submodule sync --recursive
+	git submodule foreach --recursive 'git reset --hard && git clean -ffd'
+	git submodule update --init --recursive --force
 
 format:
 	@"$(BUILD_SCRIPTS_DIRECTORY)/run-clang-format.sh" \

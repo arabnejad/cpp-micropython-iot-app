@@ -96,6 +96,7 @@ work. Run `make help` to see the available targets.
 | Command | What it does |
 |---|---|
 | `make submodules` | Initialize all upstream submodules at the revisions pinned by this repository |
+| `make reset-submodules` | Restore all submodules to their pinned revisions and remove untracked files inside them |
 | `make format` | Format the project C and C++ source files with `clang-format` |
 | `make format-check` | Check C and C++ formatting without changing any files |
 | `make iot-app` | Configure and build IoT App for the current Linux computer |
@@ -111,6 +112,16 @@ work. Run `make help` to see the available targets.
 | `make yocto-app` | Cross-compile only the IoT App Yocto package |
 | `make yocto-image` | Build a complete Yocto image and prepare it for Raspberry Pi Imager |
 | `make images` | Build both the Buildroot and Yocto Raspberry Pi images |
+
+Use `make reset-submodules` when an upstream submodule appears as modified
+because it contains local or generated files. The command resets tracked files,
+removes untracked files and directories, and checks out the revision recorded
+by this repository. It applies recursively to nested submodules as well.
+
+This operation permanently discards work inside `buildroot/`, `lvgl/`,
+`micropython/`, `poky/`, `meta-openembedded/`, `meta-raspberrypi/`, and their
+nested submodules. It does not change project-owned files outside those
+directories. Ignored build and cache files are left in place.
 
 Both image builders also look for an optional root-level
 `ssh_authorized_keys` file. When that file exists and is not empty, its public
