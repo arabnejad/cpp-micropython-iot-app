@@ -8,7 +8,6 @@
 #include "iot/network/http_file_downloader.h"
 #include "iot/python/python_application_manager.h"
 #include "iot/python/python_application_loader.h"
-#include "iot/python/temporary_python_application_installer.h"
 #include "iot/system/system_information.h"
 #include "iot/ui/render_backend.h"
 #include "iot/ui/screen_manager.h"
@@ -136,15 +135,12 @@ int main(int argc, char **argv) {
 
     iot::messaging::MqttApplicationReceiver mqttApplicationReceiver{std::move(mqttSettings), applicationMessageQueue,
                                                                     iot::messaging::internal::mqttClientApi()};
-    iot::python::TemporaryPythonApplicationInstaller temporaryApplicationInstaller{temporaryRuntimeDirectory /
-                                                                                   "applications"};
-    iot::messaging::ApplicationDeploymentController  deploymentController{
-        runtimeConfig.deviceId,
-        iot::messaging::ApplicationDeploymentMessageParser{iot::runtime::maximumPythonSourceSizeInBytes},
-        temporaryApplicationInstaller,
-        pythonApplicationManager,
-        mqttApplicationReceiver,
-        iot::runtime::maximumRememberedDeployments};
+    iot::messaging::ApplicationDeploymentController deploymentController{runtimeConfig.deviceId,
+                                                                         iot::runtime::maximumPythonSourceSizeInBytes,
+                                                                         temporaryRuntimeDirectory / "applications",
+                                                                         pythonApplicationManager,
+                                                                         mqttApplicationReceiver,
+                                                                         iot::runtime::maximumRememberedDeployments};
 
     try {
       mqttApplicationReceiver.start();

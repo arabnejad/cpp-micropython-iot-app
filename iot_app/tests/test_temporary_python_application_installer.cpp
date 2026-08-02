@@ -1,4 +1,4 @@
-#include "iot/python/temporary_python_application_installer.h"
+#include "iot/messaging/temporary_python_application_installer.h"
 
 #include "test_support.h"
 
@@ -10,11 +10,11 @@
 #include <fstream>
 
 namespace iot {
-namespace python {
+namespace messaging {
 namespace {
 
-messaging::ApplicationDeploymentRequest createValidDeploymentRequest() {
-  messaging::ApplicationDeploymentRequest deploymentRequest;
+ApplicationDeploymentRequest createValidDeploymentRequest() {
+  ApplicationDeploymentRequest deploymentRequest;
   deploymentRequest.transferId      = "transfer-42";
   deploymentRequest.applicationId   = "external-clock";
   deploymentRequest.applicationName = "External clock";
@@ -27,7 +27,7 @@ TEST(TemporaryPythonApplicationInstallerTest, WritesReturnsAndRemovesOneReceived
   tests::TemporaryDirectory           temporaryDirectory;
   TemporaryPythonApplicationInstaller temporaryApplicationInstaller(temporaryDirectory.path());
 
-  const PythonApplication installedApplication =
+  const python::PythonApplication installedApplication =
       temporaryApplicationInstaller.installApplication(createValidDeploymentRequest());
 
   EXPECT_EQ(installedApplication.applicationId, "external-clock");
@@ -77,13 +77,14 @@ TEST(TemporaryPythonApplicationInstallerTest, CreatesNestedEntryPointDirectories
   auto                                deploymentRequest = createValidDeploymentRequest();
   deploymentRequest.entryPoint                          = "application/main.py";
 
-  const PythonApplication firstInstalledApplication =
+  const python::PythonApplication firstInstalledApplication =
       temporaryApplicationInstaller.installApplication(deploymentRequest);
   EXPECT_TRUE(std::filesystem::is_regular_file(firstInstalledApplication.entryPointPath));
   EXPECT_EQ(firstInstalledApplication.sourceCode, "print('clock')\n");
 
-  deploymentRequest.sourceCode                   = "print('replacement')\n";
-  const PythonApplication replacementApplication = temporaryApplicationInstaller.installApplication(deploymentRequest);
+  deploymentRequest.sourceCode = "print('replacement')\n";
+  const python::PythonApplication replacementApplication =
+      temporaryApplicationInstaller.installApplication(deploymentRequest);
   EXPECT_EQ(replacementApplication.sourceCode, "print('replacement')\n");
   temporaryApplicationInstaller.removeInstalledApplication(replacementApplication.packageDirectory);
 }
@@ -166,5 +167,5 @@ TEST(TemporaryPythonApplicationInstallerTest, ReportsAnOutOfMemoryErrorWhileSeri
 }
 
 } // namespace
-} // namespace python
+} // namespace messaging
 } // namespace iot

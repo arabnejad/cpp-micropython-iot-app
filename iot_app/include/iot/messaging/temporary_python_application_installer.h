@@ -7,10 +7,10 @@
 #include <filesystem>
 
 namespace iot {
-namespace python {
+namespace messaging {
 
 /*
- * Installs/Writes validated MQTT applications in a private /tmp directory.
+ * Installs validated MQTT applications in a private temporary directory.
  *
  * IoT App clears the directory on startup. Received applications therefore
  * disappear after a restart or reboot; the shipped default app is permanent.
@@ -26,7 +26,7 @@ public:
   TemporaryPythonApplicationInstaller &operator=(TemporaryPythonApplicationInstaller &&)      = delete;
 
   /* Writes one deployment to /tmp and returns the application ready to run. */
-  PythonApplication installApplication(const messaging::ApplicationDeploymentRequest &deploymentRequest);
+  python::PythonApplication installApplication(const ApplicationDeploymentRequest &deploymentRequest);
 
   /* Removes a received app that is no longer needed. */
   void removeInstalledApplication(const std::filesystem::path &applicationDirectory) noexcept;
@@ -36,5 +36,5 @@ private:
   std::filesystem::path m_temporaryRootDirectory;
 };
 
-} // namespace python
+} // namespace messaging
 } // namespace iot

@@ -72,6 +72,7 @@ add_library(iot_runtime STATIC
   src/messaging/application_deployment_controller.cpp
   src/messaging/application_deployment_message.cpp
   src/messaging/application_message_queue.cpp
+  src/messaging/temporary_python_application_installer.cpp
   src/messaging/mqtt_client_api.cpp
   src/messaging/mqtt_application_receiver.cpp
   src/network/http_file_downloader.cpp
@@ -94,7 +95,6 @@ add_library(iot_runtime STATIC
   src/python/micropython_runtime.cpp
   src/python/micropython_application_context.cpp
   src/python/python_application_manager.cpp
-  src/python/temporary_python_application_installer.cpp
 )
 add_dependencies(iot_runtime generate_micropython_embed)
 target_include_directories(iot_runtime

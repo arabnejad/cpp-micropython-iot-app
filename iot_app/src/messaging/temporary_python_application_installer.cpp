@@ -1,4 +1,4 @@
-#include "iot/python/temporary_python_application_installer.h"
+#include "iot/messaging/temporary_python_application_installer.h"
 #include "iot/python/path_validation.h"
 
 #include <cjson/cJSON.h>
@@ -12,7 +12,7 @@
 #include <string>
 
 namespace iot {
-namespace python {
+namespace messaging {
 namespace {
 
 struct CJsonObjectDeleter {
@@ -31,7 +31,7 @@ using UniqueCJsonObject = std::unique_ptr<cJSON, CJsonObjectDeleter>;
 using UniqueCJsonText   = std::unique_ptr<char, CJsonTextDeleter>;
 
 void throwIfPathIsUnsafe(const std::filesystem::path &path, const char *description) {
-  if (!isSafeRelativePath(path)) {
+  if (!python::isSafeRelativePath(path)) {
     throw std::runtime_error(std::string(description) + " is not a safe relative path");
   }
 }
@@ -51,7 +51,7 @@ void writePrivateFile(const std::filesystem::path &filePath, const std::string &
   }
 }
 
-std::string createApplicationMetadataJson(const messaging::ApplicationDeploymentRequest &deploymentRequest) {
+std::string createApplicationMetadataJson(const ApplicationDeploymentRequest &deploymentRequest) {
   UniqueCJsonObject metadata{cJSON_CreateObject()};
   if (!metadata || cJSON_AddStringToObject(metadata.get(), "id", deploymentRequest.applicationId.c_str()) == nullptr ||
       cJSON_AddStringToObject(metadata.get(), "name", deploymentRequest.applicationName.c_str()) == nullptr ||
@@ -114,8 +114,8 @@ TemporaryPythonApplicationInstaller::TemporaryPythonApplicationInstaller(std::fi
   createPrivateDirectory(m_temporaryRootDirectory);
 }
 
-PythonApplication TemporaryPythonApplicationInstaller::installApplication(
-    const messaging::ApplicationDeploymentRequest &deploymentRequest) {
+python::PythonApplication
+TemporaryPythonApplicationInstaller::installApplication(const ApplicationDeploymentRequest &deploymentRequest) {
   const std::filesystem::path transferDirectoryName(deploymentRequest.transferId);
   const std::filesystem::path entryPointPath(deploymentRequest.entryPoint);
   throwIfPathIsUnsafe(transferDirectoryName, "Deployment transfer ID");
@@ -184,7 +184,7 @@ PythonApplication TemporaryPythonApplicationInstaller::installApplication(
 void TemporaryPythonApplicationInstaller::removeInstalledApplication(
     const std::filesystem::path &applicationDirectory) noexcept {
   const auto relativePath = applicationDirectory.lexically_relative(m_temporaryRootDirectory);
-  if (!isSafeRelativePath(relativePath) || relativePath.has_parent_path()) {
+  if (!python::isSafeRelativePath(relativePath) || relativePath.has_parent_path()) {
     IOT_LOG_WARNING(m_logger, "Refused to remove application directory outside the temporary root; directory=",
                     applicationDirectory, ", temporaryRoot=", m_temporaryRootDirectory);
     return;
@@ -199,5 +199,5 @@ void TemporaryPythonApplicationInstaller::removeInstalledApplication(
   }
 }
 
-} // namespace python
+} // namespace messaging
 } // namespace iot

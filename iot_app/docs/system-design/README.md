@@ -290,8 +290,9 @@ main()
 │   └── MicroPythonRuntime               created per Python app
 ├── ApplicationMessageQueue
 ├── MqttApplicationReceiver
-├── TemporaryPythonApplicationInstaller
 └── ApplicationDeploymentController
+    ├── ApplicationDeploymentMessageParser
+    └── TemporaryPythonApplicationInstaller
 ```
 
 Most service objects are not copyable or movable. They own a thread, an open
@@ -771,10 +772,10 @@ IoT App uses it for the shipped default application:
 The manager does not depend on the source file staying open. It compiles the
 owned source string from memory.
 
-Applications received through MQTT have already passed the deployment message
-parser before they reach the installer. TemporaryPythonApplicationInstaller
-writes that checked metadata and source into a staging directory, renames it
-to its final directory, and returns a PythonApplication using the same
+For an MQTT application, ApplicationDeploymentController owns the parser and
+temporary installer. The parser checks the deployment first. The installer
+then writes the checked metadata and source into a staging directory, renames
+it to its final directory, and returns a PythonApplication using the same
 checked values. It does not reopen and parse the files that it just wrote.
 
 ### 12.2 Default application location
@@ -851,7 +852,6 @@ application's lifetime:
 | `ApplicationMetadata` | Holds the `id`, `name`, and `entry_point` values read from `app.json`. |
 | `PythonApplication` | Holds a completely loaded application, including its metadata, paths, and Python source code. This is the object passed through the rest of the runtime. |
 | `PythonApplicationLoader` | Reads `app.json` and the entry-point file from an application directory, checks them, and returns a `PythonApplication`. |
-| TemporaryPythonApplicationInstaller | Writes an application that passed MQTT validation under /tmp and returns it with its final paths. The shipped default application does not use this installer. |
 | PythonApplicationManager | Owns one Python application session. It creates and destroys the context and interpreter, advances timers, tracks application state, and shows the C++ emergency screen after a failure. |
 | `MicroPythonApplicationContext` | Gives the display and system bridge functions access to the C++ services used by the current Python application. |
 | `MicroPythonRuntime` | Allocates the Python heap, starts MicroPython, executes `main.py`, runs scheduled callbacks, and shuts the interpreter down. |
@@ -888,9 +888,10 @@ An application received through MQTT has two extra steps at the beginning:
 ```text
 ApplicationDeploymentController
   |
-  v
-TemporaryPythonApplicationInstaller
-  |  writes the checked application under /tmp
+  +--> validates the deployment message
+  |
+  +--> uses its TemporaryPythonApplicationInstaller
+  |      to write the checked application under /tmp
   |
   v
 PythonApplication
@@ -1823,7 +1824,8 @@ src/python/
   application loading, interpreter ownership, supervision, and failure handling
 
 src/messaging/
-  MQTT receiving, deployment parsing, queueing, status, and activation
+  MQTT receiving, deployment parsing, queueing, temporary installation,
+  status, and activation
 
 micropython_iot_modules/
   thin MicroPython C bindings and C-to-C++ bridges

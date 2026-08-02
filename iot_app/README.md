@@ -91,7 +91,7 @@ include/iot/               Public C++ headers
 micropython_config/        Embed-port configuration and generation wrapper
 micropython_iot_modules/   Native IoT modules compiled into MicroPython
 src/input/                 Gamepad protocol and input state
-src/messaging/             MQTT receiving, validation, and deployment control
+src/messaging/             MQTT receiving, validation, temporary installation, and deployment control
 src/network/               Bounded HTTP and HTTPS file downloads
 src/platform/linux/        Linux display, I2C, and system-information support
 src/python/                Embedded interpreter and MicroPython application context

@@ -8,12 +8,11 @@ namespace iot {
 namespace messaging {
 
 ApplicationDeploymentController::ApplicationDeploymentController(
-    std::string deviceId, ApplicationDeploymentMessageParser messageParser,
-    python::TemporaryPythonApplicationInstaller &applicationInstaller,
-    python::PythonApplicationManager &applicationManager, IMqttApplicationReceiver &mqttApplicationReceiver,
-    std::size_t maximumRememberedDeployments)
-    : m_deviceId(std::move(deviceId)), m_messageParser(std::move(messageParser)),
-      m_applicationInstaller(applicationInstaller), m_applicationManager(applicationManager),
+    std::string deviceId, std::size_t maximumPythonSourceSizeInBytes,
+    std::filesystem::path temporaryApplicationRootDirectory, python::PythonApplicationManager &applicationManager,
+    IMqttApplicationReceiver &mqttApplicationReceiver, std::size_t maximumRememberedDeployments)
+    : m_deviceId(std::move(deviceId)), m_messageParser(maximumPythonSourceSizeInBytes),
+      m_applicationInstaller(std::move(temporaryApplicationRootDirectory)), m_applicationManager(applicationManager),
       m_mqttApplicationReceiver(mqttApplicationReceiver), m_maximumRememberedDeployments(maximumRememberedDeployments) {
   if (m_deviceId.empty() || m_maximumRememberedDeployments == 0U) {
     throw std::invalid_argument("Application deployment controller settings are incomplete");

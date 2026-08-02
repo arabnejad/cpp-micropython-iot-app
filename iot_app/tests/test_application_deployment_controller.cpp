@@ -71,8 +71,7 @@ std::string createDeploymentMessageForSource(const std::string &sourceCode) {
 class ApplicationDeploymentControllerTest : public ::testing::Test {
 protected:
   ApplicationDeploymentControllerTest()
-      : m_temporaryApplicationInstaller(m_temporaryDirectory.path()),
-        m_recordingRenderBackend(std::make_unique<tests::RecordingRenderBackend>()),
+      : m_recordingRenderBackend(std::make_unique<tests::RecordingRenderBackend>()),
         m_recordingRenderBackendView(m_recordingRenderBackend.get()),
         m_screenManager(tests::testActiveDisplay(), std::move(m_recordingRenderBackend), 16U),
         m_pythonApplicationManager(m_screenManager, tests::testActiveDisplay(), tests::testConnectedDisplays(),
@@ -89,9 +88,9 @@ protected:
 
   std::unique_ptr<ApplicationDeploymentController>
   createDeploymentController(std::size_t rememberedDeploymentCapacity = 4U) {
-    return std::make_unique<ApplicationDeploymentController>(
-        "test-device", ApplicationDeploymentMessageParser(1024U), m_temporaryApplicationInstaller,
-        m_pythonApplicationManager, m_mqttApplicationReceiver, rememberedDeploymentCapacity);
+    return std::make_unique<ApplicationDeploymentController>("test-device", 1024U, m_temporaryDirectory.path(),
+                                                             m_pythonApplicationManager, m_mqttApplicationReceiver,
+                                                             rememberedDeploymentCapacity);
   }
 
   void startDefaultApplication() {
@@ -111,7 +110,6 @@ protected:
   }
 
   tests::TemporaryDirectory                      m_temporaryDirectory;
-  python::TemporaryPythonApplicationInstaller    m_temporaryApplicationInstaller;
   std::unique_ptr<tests::RecordingRenderBackend> m_recordingRenderBackend;
   tests::RecordingRenderBackend                 *m_recordingRenderBackendView;
   ui::ScreenManager                              m_screenManager;
@@ -124,9 +122,8 @@ protected:
 TEST_F(ApplicationDeploymentControllerTest, AcceptsAValidatedApplicationBeforeStoppingTheCurrentAppOrRunningPython) {
   startDefaultApplication();
   ::testing::StrictMock<MockMqttApplicationReceiver> mqttApplicationReceiver;
-  ApplicationDeploymentController deploymentController("test-device", ApplicationDeploymentMessageParser(1024U),
-                                                       m_temporaryApplicationInstaller, m_pythonApplicationManager,
-                                                       mqttApplicationReceiver, 4U);
+  ApplicationDeploymentController deploymentController("test-device", 1024U, m_temporaryDirectory.path(),
+                                                       m_pythonApplicationManager, mqttApplicationReceiver, 4U);
   ::testing::InSequence           statusOrder;
   EXPECT_CALL(mqttApplicationReceiver,
               publishStatus(::testing::Field(&ApplicationDeploymentStatus::deploymentState, "received")));
@@ -281,25 +278,23 @@ TEST_F(ApplicationDeploymentControllerTest, ProcessesATransferAgainAfterItsRemem
 }
 
 TEST_F(ApplicationDeploymentControllerTest, RejectsAnEmptyDeviceId) {
-  EXPECT_THROW(ApplicationDeploymentController({}, ApplicationDeploymentMessageParser(1024U),
-                                               m_temporaryApplicationInstaller, m_pythonApplicationManager,
+  EXPECT_THROW(ApplicationDeploymentController({}, 1024U, m_temporaryDirectory.path(), m_pythonApplicationManager,
                                                m_mqttApplicationReceiver, 1U),
                std::invalid_argument);
 }
 
 TEST_F(ApplicationDeploymentControllerTest, RejectsAZeroRememberedDeploymentCapacity) {
-  EXPECT_THROW(ApplicationDeploymentController("test-device", ApplicationDeploymentMessageParser(1024U),
-                                               m_temporaryApplicationInstaller, m_pythonApplicationManager,
-                                               m_mqttApplicationReceiver, 0U),
+  EXPECT_THROW(ApplicationDeploymentController("test-device", 1024U, m_temporaryDirectory.path(),
+                                               m_pythonApplicationManager, m_mqttApplicationReceiver, 0U),
                std::invalid_argument);
 }
 
 TEST_F(ApplicationDeploymentControllerTest, PublishesFailureWhenTheTemporaryApplicationCannotBeInstalled) {
   startDefaultApplication();
+  auto deploymentController = createDeploymentController(1U);
   std::filesystem::permissions(m_temporaryDirectory.path(),
                                std::filesystem::perms::owner_read | std::filesystem::perms::owner_exec,
                                std::filesystem::perm_options::replace);
-  auto deploymentController = createDeploymentController(1U);
 
   deploymentController->process({validDeploymentMessageJson});
 
