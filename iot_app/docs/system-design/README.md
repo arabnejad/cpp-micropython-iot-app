@@ -112,35 +112,47 @@ uses only the library and state it owns.
 
 ### 3.1 Application deployment pipeline
 
-The deployment code is split into small classes, but they form one pipeline:
+The deployment code is split into small classes, but each received message
+follows one pipeline:
 
 ```text
-MqttApplicationReceiver
-    |  receives the MQTT message
+MQTT network thread
+    |
+    v
+MqttApplicationReceiver::handleMessage()
+    |  checks the topic, payload, and message size
+    |  copies the raw JSON with tryPush()
     v
 ApplicationMessageQueue
-    |  passes the message to the main thread
+    |  bounded boundary between the two threads
+    |  waitAndPopMessage() wakes the main thread
     v
-ApplicationDeploymentController
+Main thread
+    |
+    v
+ApplicationDeploymentController::process()
     |
     +--> ApplicationDeploymentMessageParser
-    |      validates the message and reads the application
+    |      checks the JSON and reads the application
     |
     +--> TemporaryPythonApplicationInstaller
-    |      writes the application under /tmp
-    |
-    +--> MqttApplicationReceiver
-    |      replies accepted after installation
+    |      writes the checked application under /tmp
     |
     +--> PythonApplicationManager
-           stops the current app, compiles and runs the received app
-           shows any Python error on the device's emergency screen
+    |      replaces the running Python application
+    |
+    +--> MqttApplicationReceiver::publishStatus()
+           sends progress or an error back to the sender
 ```
 
-`ApplicationDeploymentController` coordinates the work. The other classes
-continue to handle MQTT, thread communication, validation, temporary files,
-and Python execution separately. Keeping those jobs separate makes each part
-easier to follow and test without creating one large MQTT manager.
+The queue only holds received JSON while it waits for the main thread. It is
+not a list of installed applications and it does not understand the JSON. The
+parser runs later, when the main thread calls the deployment controller.
+
+`ApplicationDeploymentController` coordinates the main-thread work. The other
+classes continue to handle MQTT, thread communication, validation, temporary
+files, and Python execution separately. This avoids one large class that would
+need to understand all of those jobs.
 
 The controller also publishes progress and any validation or installation
 error. Its final `accepted` reply confirms the package is installed, not that
@@ -1466,6 +1478,9 @@ thread when an application message arrives. This function checks the topic,
 payload, and total message size. It then copies the JSON text into the bounded
 `ApplicationMessageQueue` and returns.
 
+These are transport checks only. The callback does not check JSON fields,
+decode Python source, calculate its hash, write files, or call MicroPython.
+
 The main thread waits in `ApplicationMessageQueue::waitAndPopMessage()`. When a
 message is available, the main thread removes it from the queue and passes it
 to `ApplicationDeploymentController::process()`. The controller can then parse
@@ -1477,7 +1492,9 @@ the status-publishing interface instead of calling libmosquitto directly.
 
 The MQTT callback can arrive at any time. It puts the message in the queue and
 returns without calling MicroPython. The main thread later removes the message
-and does the MicroPython work on the thread that owns the interpreter.
+and does the parsing and MicroPython work on the thread that owns the
+interpreter. The queue is only a short-lived thread boundary; installed
+applications are kept in their temporary directories instead.
 
 ### 17.5 Validation
 

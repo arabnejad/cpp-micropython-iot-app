@@ -18,6 +18,10 @@ struct ReceivedApplicationMessage {
 
 /*
  * Passes application messages from the MQTT thread to the main thread.
+ *
+ * This bounded queue is the boundary between those threads. It briefly holds
+ * raw MQTT payloads until the main thread can process them. It does not parse
+ * messages or store installed applications.
  */
 class ApplicationMessageQueue {
 public:

@@ -27,7 +27,8 @@ struct ApplicationDeploymentStatus {
 
 /*
  * Reads the JSON message created by iot_app_sender/send_app.py and checks
- * its fields, source size, and hash.
+ * its fields, source size, and hash. ApplicationDeploymentController uses this
+ * parser on the main thread; the MQTT callback does not parse JSON.
  */
 class ApplicationDeploymentMessageParser {
 public:
