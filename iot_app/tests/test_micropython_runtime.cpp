@@ -2,7 +2,9 @@
 
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <string>
+#include <thread>
 
 namespace iot {
 namespace python {
@@ -59,39 +61,36 @@ TEST(MicroPythonRuntimeTest, RunsAScheduledCallbackAndReportsItsFailure) {
 
   const auto timeUntilScheduledCallback = microPythonRuntime.timeUntilNextScheduledCallback();
   ASSERT_TRUE(timeUntilScheduledCallback.has_value());
-  EXPECT_EQ(*timeUntilScheduledCallback, std::chrono::milliseconds(10));
+  EXPECT_LE(*timeUntilScheduledCallback, std::chrono::milliseconds(10));
 
-  const PythonExecutionResult scheduledCallbackResult =
-      microPythonRuntime.runScheduledCallbacks(std::chrono::milliseconds(10));
+  std::this_thread::sleep_for(std::chrono::milliseconds(15));
+  const PythonExecutionResult scheduledCallbackResult = microPythonRuntime.runScheduledCallbacks();
 
   EXPECT_FALSE(scheduledCallbackResult.succeeded);
   EXPECT_NE(scheduledCallbackResult.traceback.find("ValueError"), std::string::npos);
 }
 
-TEST(MicroPythonRuntimeTest, TreatsANegativeElapsedTimeAsZeroMilliseconds) {
-  MicroPythonRuntime          microPythonRuntime(256U * 1024U);
-  const PythonExecutionResult applicationStartupResult = microPythonRuntime.executeApplication(
-      createPythonApplication("import iot\n"
-                              "iot.scheduler.every(milliseconds=10, callback=lambda: None)\n"));
-  ASSERT_TRUE(applicationStartupResult.succeeded) << applicationStartupResult.traceback;
+TEST(MicroPythonRuntimeTest, DoesNothingWhenCallbacksAreCheckedBeforeAnApplicationStarts) {
+  MicroPythonRuntime microPythonRuntime(256U * 1024U);
 
-  const PythonExecutionResult callbackResult = microPythonRuntime.runScheduledCallbacks(std::chrono::milliseconds(-10));
+  const PythonExecutionResult callbackResult = microPythonRuntime.runScheduledCallbacks();
 
   EXPECT_TRUE(callbackResult.succeeded);
-  EXPECT_EQ(microPythonRuntime.timeUntilNextScheduledCallback(), std::chrono::milliseconds(10));
+  EXPECT_FALSE(microPythonRuntime.timeUntilNextScheduledCallback().has_value());
 }
 
-TEST(MicroPythonRuntimeTest, LimitsVeryLargeElapsedTimesToTheSchedulerIntegerRange) {
+TEST(MicroPythonRuntimeTest, IncludesElapsedTimeWhenReportingTheNextCallbackDelay) {
   MicroPythonRuntime          microPythonRuntime(256U * 1024U);
   const PythonExecutionResult applicationStartupResult = microPythonRuntime.executeApplication(
       createPythonApplication("import iot\n"
-                              "iot.scheduler.every(milliseconds=10, callback=lambda: None)\n"));
+                              "iot.scheduler.every(milliseconds=200, callback=lambda: None)\n"));
   ASSERT_TRUE(applicationStartupResult.succeeded) << applicationStartupResult.traceback;
 
-  const PythonExecutionResult callbackResult =
-      microPythonRuntime.runScheduledCallbacks(std::chrono::milliseconds::max());
+  std::this_thread::sleep_for(std::chrono::milliseconds(40));
+  const auto timeUntilScheduledCallback = microPythonRuntime.timeUntilNextScheduledCallback();
 
-  EXPECT_TRUE(callbackResult.succeeded);
+  ASSERT_TRUE(timeUntilScheduledCallback.has_value());
+  EXPECT_LT(*timeUntilScheduledCallback, std::chrono::milliseconds(190));
 }
 
 TEST(MicroPythonRuntimeTest, RequiresANonZeroHeap) {

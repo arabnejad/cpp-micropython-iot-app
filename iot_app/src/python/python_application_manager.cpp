@@ -169,10 +169,6 @@ PythonApplicationManager::startApplicationInNewInterpreter(const PythonApplicati
     const auto pythonExecutionResult = m_microPythonRuntime->executeApplication(pythonApplication);
     if (!pythonExecutionResult.succeeded) {
       stopPythonInterpreter();
-    } else {
-      // Timer intervals start after main.py has finished. A slow startup must
-      // not make every newly created timer overdue.
-      m_previousSchedulerUpdateTime = std::chrono::steady_clock::now();
     }
     return pythonExecutionResult;
   } catch (const std::exception &error) {
@@ -202,7 +198,6 @@ void PythonApplicationManager::stopPythonInterpreter() noexcept {
   // modules. ScreenManager remains alive for the next application.
   m_microPythonRuntime.reset();
   m_microPythonApplicationContext.reset();
-  m_previousSchedulerUpdateTime.reset();
 }
 
 void PythonApplicationManager::stop() noexcept {
@@ -224,39 +219,15 @@ std::optional<std::chrono::milliseconds> PythonApplicationManager::timeUntilNext
     return std::nullopt;
   }
 
-  const auto scheduledDelay = m_microPythonRuntime->timeUntilNextScheduledCallback();
-  if (!scheduledDelay || !m_previousSchedulerUpdateTime) {
-    return scheduledDelay;
-  }
-
-  const auto elapsedTimeSinceSchedulerUpdate = std::chrono::duration_cast<std::chrono::milliseconds>(
-      std::chrono::steady_clock::now() - *m_previousSchedulerUpdateTime);
-  if (elapsedTimeSinceSchedulerUpdate <= std::chrono::milliseconds::zero()) {
-    return scheduledDelay;
-  }
-
-  // Use this elapsed time only to shorten the main-loop wait. The scheduler
-  // state is updated later by runScheduledCallbacks(), so the time is not
-  // counted twice.
-  if (elapsedTimeSinceSchedulerUpdate >= *scheduledDelay) {
-    return std::chrono::milliseconds::zero();
-  }
-  return *scheduledDelay - elapsedTimeSinceSchedulerUpdate;
+  return m_microPythonRuntime->timeUntilNextScheduledCallback();
 }
 
 void PythonApplicationManager::runScheduledCallbacks() {
-  if (m_microPythonRuntime == nullptr || !m_previousSchedulerUpdateTime) {
+  if (m_microPythonRuntime == nullptr) {
     return;
   }
 
-  const auto currentTime = std::chrono::steady_clock::now();
-  const auto elapsedTime =
-      std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - *m_previousSchedulerUpdateTime);
-  // Keep fractions of a millisecond for the next update. Otherwise frequent
-  // MQTT messages could slowly make Python timers lose time.
-  *m_previousSchedulerUpdateTime += elapsedTime;
-
-  const auto callbackExecutionResult = m_microPythonRuntime->runScheduledCallbacks(elapsedTime);
+  const auto callbackExecutionResult = m_microPythonRuntime->runScheduledCallbacks();
   if (callbackExecutionResult.succeeded) {
     return;
   }

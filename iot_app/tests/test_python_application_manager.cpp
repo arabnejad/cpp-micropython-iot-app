@@ -659,7 +659,7 @@ TEST_F(PythonApplicationManagerTest, CountsTimeSpentInOneCallbackTowardsAnotherT
    *
    * The other timer had about 995 ms left when the callback started. The
    * 200 ms spent inside that callback must reduce its next wait to about
-   * 795 ms. Without that adjustment, the manager would report about 995 ms.
+   * 795 ms. Without that adjustment, the runtime would report about 995 ms.
    */
   m_fileDownloader.downloadDelay      = std::chrono::milliseconds(200);
   auto       pythonApplicationManager = createApplicationManager();

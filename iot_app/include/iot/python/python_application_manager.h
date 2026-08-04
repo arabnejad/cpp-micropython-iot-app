@@ -43,10 +43,10 @@ struct ExternalApplicationActivationResult {
  * Controls the lifetime of the current Python application.
  *
  * Each application gets a fresh MicroPython interpreter and context. The
- * manager also advances timers, stops the old interpreter during a switch, and
- * shows the emergency screen after an unhandled Python exception. It receives
- * the selected display and monitor details found during startup, so switching
- * applications does not scan DRM again.
+ * manager asks the runtime to process timers, stops the old interpreter during
+ * a switch, and shows the emergency screen after an unhandled Python exception.
+ * It receives the selected display and monitor details found during startup,
+ * so switching applications does not scan DRM again.
  */
 class PythonApplicationManager {
 public:
@@ -78,24 +78,7 @@ public:
   /* Gets the name of the active app, or "Emergency screen" after a failure. */
   const std::string &activeScreenName() const noexcept;
 
-  /*
-   * Gets how long the main loop can wait before the next callback is due.
-   *
-   * The MicroPython scheduler stores a remaining delay. This function reduces
-   * that delay by the time that has passed since the scheduler was last
-   * updated. That time can include work done inside the previous callback.
-   *
-   * For example, suppose the scheduler reports a 1,000 ms delay and the
-   * previous callback took 300 ms:
-   *
-   *   Stored delay:             1,000 ms
-   *   Time already passed:       -300 ms
-   *   Main-loop wait returned:    700 ms
-   *
-   * This function only calculates the wait. It does not change the stored
-   * timer. runScheduledCallbacks() records the complete elapsed time later, so
-   * the same 300 ms is not counted twice.
-   */
+  /* Asks the active MicroPython runtime when its next callback is due. */
   std::optional<std::chrono::milliseconds> timeUntilNextScheduledCallback() const;
 
   /* Runs callbacks that are due and shows the emergency screen if one fails. */
@@ -108,18 +91,17 @@ private:
   bool                  showEmergencyScreenForApplicationFailure(std::string explanation, std::string applicationName,
                                                                  std::string failurePhase, std::string traceback) noexcept;
 
-  logging::Logger                                      m_logger{"PythonApplicationManager"};
-  ui::ScreenManager                                   &m_screenManager;
-  display::ActiveDisplay                               m_activeDisplay;
-  std::vector<display::DisplayInfo>                    m_connectedDisplays;
-  const system::ISystemInformationProvider            &m_systemInformationProvider;
-  network::IFileDownloader                            &m_fileDownloader;
-  std::size_t                                          m_pythonHeapSizeInBytes{0};
-  std::unique_ptr<MicroPythonApplicationContext>       m_microPythonApplicationContext;
-  std::unique_ptr<MicroPythonRuntime>                  m_microPythonRuntime;
-  std::optional<std::chrono::steady_clock::time_point> m_previousSchedulerUpdateTime;
-  ApplicationState                                     m_state{ApplicationState::Stopped};
-  std::string                                          m_activeScreenName;
+  logging::Logger                                m_logger{"PythonApplicationManager"};
+  ui::ScreenManager                             &m_screenManager;
+  display::ActiveDisplay                         m_activeDisplay;
+  std::vector<display::DisplayInfo>              m_connectedDisplays;
+  const system::ISystemInformationProvider      &m_systemInformationProvider;
+  network::IFileDownloader                      &m_fileDownloader;
+  std::size_t                                    m_pythonHeapSizeInBytes{0};
+  std::unique_ptr<MicroPythonApplicationContext> m_microPythonApplicationContext;
+  std::unique_ptr<MicroPythonRuntime>            m_microPythonRuntime;
+  ApplicationState                               m_state{ApplicationState::Stopped};
+  std::string                                    m_activeScreenName;
 };
 
 } // namespace python

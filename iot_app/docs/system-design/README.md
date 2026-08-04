@@ -864,7 +864,7 @@ application's lifetime:
 | `ApplicationMetadata` | Holds the `id`, `name`, and `entry_point` values read from `app.json`. |
 | `PythonApplication` | Holds a completely loaded application, including its metadata, paths, and Python source code. This is the object passed through the rest of the runtime. |
 | `PythonApplicationLoader` | Reads `app.json` and the entry-point file from an application directory, checks them, and returns a `PythonApplication`. |
-| PythonApplicationManager | Owns one Python application session. It creates and destroys the context and interpreter, advances timers, tracks application state, and shows the C++ emergency screen after a failure. |
+| PythonApplicationManager | Owns one Python application session. It creates and destroys the context and interpreter, asks the runtime to process timers, tracks application state, and shows the C++ emergency screen after a failure. |
 | `MicroPythonApplicationContext` | Gives the display and system bridge functions access to the C++ services used by the current Python application. |
 | `MicroPythonRuntime` | Allocates the Python heap, starts MicroPython, executes `main.py`, runs scheduled callbacks, and shuts the interpreter down. |
 
@@ -916,7 +916,8 @@ After this point, both application types use the same manager, context, and
 MicroPython runtime.
 
 While an application is running, the main loop asks the manager when the next
-Python callback is due. The manager asks the runtime directly:
+Python callback is due. The manager passes that request to the runtime. The
+runtime measures the elapsed time and reads the timer state from MicroPython:
 
 ```text
 main loop
@@ -1198,7 +1199,8 @@ refreshes while the main thread is waiting.
 ### 14.3 `iot.scheduler`
 
 The scheduler stores repeating tasks in the MicroPython VM. Each task contains
-a callback, positive ID, interval, and remaining time.
+a callback, positive ID, interval, and remaining time. MicroPythonRuntime owns
+the clock used to update these remaining times.
 
 When C++ asks for the next delay, the scheduler returns the shortest remaining
 time. When that time has passed, it gathers the due callbacks and then runs
@@ -1211,10 +1213,10 @@ interval.
 
 Time spent inside a callback counts towards the timer interval. For example,
 if the next call is due in one second and the callback takes 300 milliseconds,
-the main loop waits about 700 milliseconds. At this point, it only calculates
-the wait; it does not change the timer. The timer is updated the next time the
-main loop checks for callbacks, so those 300 milliseconds are not subtracted
-twice.
+MicroPythonRuntime reports that about 700 milliseconds remain. Reading the
+delay does not change the stored timer. The runtime updates it when the main
+loop asks the runtime to process callbacks, so the same 300 milliseconds are
+not counted twice.
 
 ### 14.4 `iot.system`
 

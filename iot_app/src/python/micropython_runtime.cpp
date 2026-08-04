@@ -55,6 +55,7 @@ PythonExecutionResult MicroPythonRuntime::executeApplication(const PythonApplica
     throw std::invalid_argument("Python application is empty");
   }
 
+  m_previousSchedulerUpdateTime.reset();
   const std::string entryPointName = pythonApplication.entryPointPath.string();
   IOT_LOG_INFO(m_logger, "Python app '", pythonApplication.applicationName, "' is starting ", entryPointName);
   std::array<char, maximumCapturedTracebackSizeInBytes + 1U> tracebackBuffer{};
@@ -62,6 +63,9 @@ PythonExecutionResult MicroPythonRuntime::executeApplication(const PythonApplica
                                                        pythonApplication.sourceCode.size(), tracebackBuffer.data(),
                                                        tracebackBuffer.size());
   if (succeeded != 0) {
+    // Timer intervals start after main.py has finished. Time used by startup
+    // should not make newly created timers overdue.
+    m_previousSchedulerUpdateTime = std::chrono::steady_clock::now();
     IOT_LOG_INFO(m_logger, "Python app '", pythonApplication.applicationName, "' started successfully");
   } else {
     IOT_LOG_ERROR(m_logger, "Python app '", pythonApplication.applicationName, "' failed during startup");
@@ -75,21 +79,44 @@ std::optional<std::chrono::milliseconds> MicroPythonRuntime::timeUntilNextSchedu
   if (iot_scheduler_next_delay_milliseconds(&delayMilliseconds) == 0) {
     return std::nullopt;
   }
-  return std::chrono::milliseconds(delayMilliseconds);
+  const auto scheduledDelay = std::chrono::milliseconds(delayMilliseconds);
+  if (!m_previousSchedulerUpdateTime) {
+    return scheduledDelay;
+  }
+
+  const auto elapsedTimeSinceSchedulerUpdate = std::chrono::duration_cast<std::chrono::milliseconds>(
+      std::chrono::steady_clock::now() - *m_previousSchedulerUpdateTime);
+  if (elapsedTimeSinceSchedulerUpdate <= std::chrono::milliseconds::zero()) {
+    return scheduledDelay;
+  }
+
+  // The stored timer is updated later by runScheduledCallbacks(). For now,
+  // only shorten the main-loop wait by the time that has already passed.
+  if (elapsedTimeSinceSchedulerUpdate >= scheduledDelay) {
+    return std::chrono::milliseconds::zero();
+  }
+  return scheduledDelay - elapsedTimeSinceSchedulerUpdate;
 }
 
-PythonExecutionResult MicroPythonRuntime::runScheduledCallbacks(std::chrono::milliseconds elapsedTime) {
+PythonExecutionResult MicroPythonRuntime::runScheduledCallbacks() {
   throwIfCalledFromAnotherThread();
-  std::uint32_t elapsedMilliseconds = 0U;
-  if (elapsedTime.count() > 0) {
-    const auto maximumElapsedMilliseconds =
-        static_cast<std::chrono::milliseconds::rep>(std::numeric_limits<std::uint32_t>::max());
-    if (elapsedTime.count() > maximumElapsedMilliseconds) {
-      elapsedMilliseconds = std::numeric_limits<std::uint32_t>::max();
-    } else {
-      elapsedMilliseconds = static_cast<std::uint32_t>(elapsedTime.count());
-    }
+  if (!m_previousSchedulerUpdateTime) {
+    return {true, {}};
   }
+
+  const auto currentTime = std::chrono::steady_clock::now();
+  const auto elapsedTime =
+      std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - *m_previousSchedulerUpdateTime);
+  // Keep fractions of a millisecond for the next update. Otherwise frequent
+  // calls could slowly make Python timers lose time.
+  *m_previousSchedulerUpdateTime += elapsedTime;
+
+  const auto maximumElapsedMilliseconds =
+      static_cast<std::chrono::milliseconds::rep>(std::numeric_limits<std::uint32_t>::max());
+  const std::uint32_t elapsedMilliseconds = elapsedTime.count() > maximumElapsedMilliseconds
+                                                ? std::numeric_limits<std::uint32_t>::max()
+                                                : static_cast<std::uint32_t>(elapsedTime.count());
+
   std::array<char, maximumCapturedTracebackSizeInBytes + 1U> tracebackBuffer{};
   const int                                                  succeeded =
       iot_scheduler_run_due_callbacks(elapsedMilliseconds, tracebackBuffer.data(), tracebackBuffer.size());
