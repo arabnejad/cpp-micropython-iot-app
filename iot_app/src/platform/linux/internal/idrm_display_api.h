@@ -13,8 +13,8 @@ namespace internal {
  *
  * The normal implementation reads the real Linux DRM devices. Unit tests can
  * provide a short monitor list through this interface without creating libdrm
- * objects or requiring a connected monitor. Application code should use
- * IDisplayManager instead.
+ * objects or requiring a connected monitor. Only DisplayManager and its tests
+ * should use this interface. The rest of the application uses DisplayManager.
  */
 class IDrmDisplayApi {
 public:
