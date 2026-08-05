@@ -14,7 +14,6 @@
 #include <cctype>
 #include <cstdint>
 #include <filesystem>
-#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -239,28 +238,6 @@ DisplayManager::DisplayManager(internal::IDrmDisplayApi &drmDisplayApi) : m_drmD
 
 std::vector<DisplayInfo> DisplayManager::connectedDisplays() const {
   return m_drmDisplayApi.connectedDisplays();
-}
-
-/*
- * Reads a monitor again and returns its current DRM mode.
- *
- * The cable may have changed since the first scan, so the monitor is checked
- * again. This app never changes modes and must use the mode DRM says is active,
- * not the preferred mode from EDID.
- */
-ActiveDisplay DisplayManager::readActiveDisplay(const DisplayId &displayId) const {
-  const auto connectedDisplayList = connectedDisplays();
-  for (const auto &displayInformation : connectedDisplayList) {
-    if (!(displayInformation.displayId == displayId)) {
-      continue;
-    }
-    if (!displayInformation.currentMode) {
-      throw std::runtime_error("Display " + displayId.connectorName +
-                               " is connected but does not currently have an active DRM mode");
-    }
-    return ActiveDisplay{displayInformation, *displayInformation.currentMode};
-  }
-  throw std::runtime_error("Display " + displayId.connectorName + " is no longer connected");
 }
 
 } // namespace display

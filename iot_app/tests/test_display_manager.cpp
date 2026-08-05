@@ -7,7 +7,6 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include <stdexcept>
 #include <vector>
 
 namespace iot {
@@ -38,20 +37,7 @@ TEST(DisplayTypesTest, ComparesEveryPartOfADisplayIdentity) {
   EXPECT_FALSE(original == (DisplayId{"/dev/dri/card0", "HDMI-A-1", 44U}));
 }
 
-TEST(DisplayManagerTest, ReturnsTheDisplaysReportedByLinuxDrm) {
-  MockDrmDisplayApi drmDisplayApi;
-  DisplayManager    displayManager(drmDisplayApi);
-  DisplayInfo       connectedDisplay = tests::testActiveDisplay().display();
-  EXPECT_CALL(drmDisplayApi, connectedDisplays())
-      .WillOnce(::testing::Return(std::vector<DisplayInfo>{connectedDisplay}));
-
-  const auto connectedDisplays = displayManager.connectedDisplays();
-
-  ASSERT_EQ(connectedDisplays.size(), 1U);
-  EXPECT_EQ(connectedDisplays.front().displayId, connectedDisplay.displayId);
-}
-
-TEST(DisplayManagerTest, ReadsTheActiveModeForTheRequestedDisplay) {
+TEST(DisplayManagerTest, ReturnsMonitorDetailsAndCurrentModeFromOneDrmScan) {
   MockDrmDisplayApi   drmDisplayApi;
   DisplayManager      displayManager(drmDisplayApi);
   const ActiveDisplay expectedActiveDisplay = tests::testActiveDisplay();
@@ -60,14 +46,16 @@ TEST(DisplayManagerTest, ReadsTheActiveModeForTheRequestedDisplay) {
   EXPECT_CALL(drmDisplayApi, connectedDisplays())
       .WillOnce(::testing::Return(std::vector<DisplayInfo>{connectedDisplay}));
 
-  const ActiveDisplay activeDisplay = displayManager.readActiveDisplay(connectedDisplay.displayId);
+  const auto connectedDisplays = displayManager.connectedDisplays();
 
-  EXPECT_EQ(activeDisplay.display().displayId, connectedDisplay.displayId);
-  EXPECT_EQ(activeDisplay.mode().width, 1920U);
-  EXPECT_EQ(activeDisplay.mode().height, 1080U);
+  ASSERT_EQ(connectedDisplays.size(), 1U);
+  EXPECT_EQ(connectedDisplays.front().displayId, connectedDisplay.displayId);
+  ASSERT_TRUE(connectedDisplays.front().currentMode.has_value());
+  EXPECT_EQ(connectedDisplays.front().currentMode->width, 1920U);
+  EXPECT_EQ(connectedDisplays.front().currentMode->height, 1080U);
 }
 
-TEST(DisplayManagerTest, ReportsAConnectedDisplayWithoutAnActiveMode) {
+TEST(DisplayManagerTest, KeepsAConnectedMonitorWithoutAnActiveModeInTheSnapshot) {
   MockDrmDisplayApi drmDisplayApi;
   DisplayManager    displayManager(drmDisplayApi);
   DisplayInfo       connectedDisplay = tests::testActiveDisplay().display();
@@ -75,15 +63,18 @@ TEST(DisplayManagerTest, ReportsAConnectedDisplayWithoutAnActiveMode) {
   EXPECT_CALL(drmDisplayApi, connectedDisplays())
       .WillOnce(::testing::Return(std::vector<DisplayInfo>{connectedDisplay}));
 
-  EXPECT_THROW(displayManager.readActiveDisplay(connectedDisplay.displayId), std::runtime_error);
+  const auto connectedDisplays = displayManager.connectedDisplays();
+
+  ASSERT_EQ(connectedDisplays.size(), 1U);
+  EXPECT_FALSE(connectedDisplays.front().currentMode.has_value());
 }
 
-TEST(DisplayManagerTest, ReportsWhenTheRequestedDisplayIsNotConnected) {
+TEST(DisplayManagerTest, ReturnsAnEmptySnapshotWhenDrmFindsNoConnectedMonitor) {
   MockDrmDisplayApi drmDisplayApi;
   DisplayManager    displayManager(drmDisplayApi);
   EXPECT_CALL(drmDisplayApi, connectedDisplays()).WillOnce(::testing::Return(std::vector<DisplayInfo>{}));
 
-  EXPECT_THROW(displayManager.readActiveDisplay({"/dev/dri/card0", "HDMI-A-1", 35U}), std::runtime_error);
+  EXPECT_TRUE(displayManager.connectedDisplays().empty());
 }
 
 TEST(DisplayManagerIntegrationTest, CanSafelyScanAHostWithoutADrmMonitor) {

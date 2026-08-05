@@ -87,13 +87,19 @@ int main(int argc, char **argv) {
       throw std::runtime_error("No connected DRM display was found");
     }
 
-    const auto activeDisplay = displayManager.readActiveDisplay(selectedDisplay->displayId);
-    for (auto &displayInformation : connectedDisplays) {
-      if (displayInformation.displayId == activeDisplay.display().displayId) {
-        displayInformation = activeDisplay.display();
-        break;
-      }
+    /*
+     * Use the current DRM mode from the startup scan.
+     *
+     * IoT App does not change display modes. The preferred EDID mode is the mode
+     * recommended by the monitor, but Linux may currently use a different mode.
+     * Connecting or disconnecting a monitor cable after this scan does not update
+     * the snapshot; restart IoT App to scan the monitors again.
+     */
+    if (!selectedDisplay->currentMode) {
+      throw std::runtime_error("Display " + selectedDisplay->displayId.connectorName +
+                               " is connected but does not currently have an active DRM mode");
     }
+    const iot::display::ActiveDisplay activeDisplay{*selectedDisplay, *selectedDisplay->currentMode};
     printDisplaySummary(activeDisplay);
     std::signal(SIGINT, stopApplication);
     std::signal(SIGTERM, stopApplication);

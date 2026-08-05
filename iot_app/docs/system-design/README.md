@@ -33,7 +33,8 @@ deployment. The shorter guides are better for day-to-day tasks:
 
 IoT App handles these jobs:
 
-- Find the connected display and read its active mode.
+- Scan the connected monitors once, then select the monitor and mode used for
+  drawing.
 - Draw directly to the Linux framebuffer with LVGL.
 - Download bounded HTTP or HTTPS files into a temporary directory.
 - Decode, scale, cache, and display JPEG images.
@@ -410,7 +411,7 @@ Normal startup follows this order:
 1. Read command-line and environment configuration
 2. Scan DRM devices for connected displays
 3. Prefer HDMI-A-1, otherwise choose the first connected display
-4. Read that display again and capture its active DRM mode
+4. Use that monitor's active mode from the same scan
 5. Find and load the shipped default application
 6. Start ScreenManager and open /dev/fb0 on the render thread
 7. Create the Python application manager
@@ -494,10 +495,12 @@ The current policy is intentionally simple:
 - Otherwise use the first connected display from the sorted DRM scan.
 - Stop startup when no connected display exists.
 
-The selected monitor is read again before use so a cable change between the
-first scan and selection is detected.
+`DisplayManager` scans DRM once during startup. Each returned monitor includes
+the mode it was using at that time. `main()` chooses a monitor from this list
+and builds `ActiveDisplay` from the monitor and mode in the same list. Startup
+stops if the selected monitor does not have an active mode.
 
-`main()` moves the monitor list from this startup scan into
+`main()` then moves the monitor list from this startup scan into
 `PythonApplicationManager`. The manager keeps that one snapshot and each
 MicroPython application context reads it without copying the list. Starting or
 switching a Python application does not scan DRM again.

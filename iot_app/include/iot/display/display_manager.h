@@ -16,11 +16,8 @@ class IDisplayManager {
 public:
   virtual ~IDisplayManager() = default;
 
-  /* Lists connected monitors that report at least one usable mode. */
+  /* Scans DRM and returns connected monitors with their current and supported modes. */
   virtual std::vector<DisplayInfo> connectedDisplays() const = 0;
-
-  /* Reads the monitor again to find its current mode. */
-  virtual ActiveDisplay readActiveDisplay(const DisplayId &displayId) const = 0;
 };
 
 /* Finds monitors through Linux DRM/KMS. */
@@ -30,7 +27,6 @@ public:
   explicit DisplayManager(internal::IDrmDisplayApi &drmDisplayApi);
 
   std::vector<DisplayInfo> connectedDisplays() const override;
-  ActiveDisplay            readActiveDisplay(const DisplayId &displayId) const override;
 
 private:
   internal::IDrmDisplayApi &m_drmDisplayApi;
