@@ -57,6 +57,10 @@ const system::SystemInformation &MicroPythonApplicationContext::systemInformatio
   return m_systemInformation;
 }
 
+std::string MicroPythonApplicationContext::readCurrentLocalTime() const {
+  return m_systemInformationProvider.readCurrentLocalTime();
+}
+
 std::uint64_t MicroPythonApplicationContext::currentUptimeSeconds() const {
   return m_systemInformationProvider.readUptimeSeconds();
 }

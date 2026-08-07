@@ -57,6 +57,8 @@ public:
   const display::ActiveDisplay            &activeDisplay() const noexcept;
   const std::vector<display::DisplayInfo> &connectedDisplays() const noexcept;
   const system::SystemInformation         &systemInformation() const noexcept;
+  /* Reads the current Linux local time. */
+  std::string readCurrentLocalTime() const;
   /* Reads the current Linux uptime without rebuilding the full snapshot. */
   std::uint64_t currentUptimeSeconds() const;
   /* Reads the current Linux network-interface state. */

@@ -17,8 +17,16 @@ TEST(LinuxSystemInformationProviderTest, ReadsBasicInformationFromTheRunningLinu
   EXPECT_LE(systemInformation.availableMemoryBytes, systemInformation.totalMemoryBytes);
 }
 
-TEST(LinuxSystemInformationProviderTest, ReadsUptimeAndAvailableNetworkInterfaces) {
+TEST(LinuxSystemInformationProviderTest, ReadsCurrentTimeUptimeAndAvailableNetworkInterfaces) {
   LinuxSystemInformationProvider linuxSystemInformationProvider;
+  const std::string              currentLocalTime = linuxSystemInformationProvider.readCurrentLocalTime();
+
+  ASSERT_EQ(currentLocalTime.size(), 19U);
+  EXPECT_EQ(currentLocalTime[4], '-');
+  EXPECT_EQ(currentLocalTime[7], '-');
+  EXPECT_EQ(currentLocalTime[10], ' ');
+  EXPECT_EQ(currentLocalTime[13], ':');
+  EXPECT_EQ(currentLocalTime[16], ':');
   EXPECT_GT(linuxSystemInformationProvider.readUptimeSeconds(), 0U);
 
   for (const NetworkInterfaceInformation &networkInterface : linuxSystemInformationProvider.readNetworkInterfaces()) {

@@ -951,7 +951,8 @@ MicroPythonApplicationContext
   ├── ScreenManager
   ├── IFileDownloader
   ├── display information
-  └── system information
+  ├── startup system-information snapshot
+  └── ISystemInformationProvider for live system reads
 ```
 
 The input bridge does not use this context. Each Python gamepad object has its
@@ -1674,6 +1675,7 @@ small files:
 | CPU count | `sysconf()` |
 | CPU temperature | thermal zones under `/sys/class/thermal` |
 | Load average | `getloadavg()` |
+| Current local time | `time()`, `localtime_r()`, and `strftime()` |
 | Uptime and memory | `sysinfo()` and `/proc/meminfo` |
 | Root storage | `statvfs("/")` |
 | Network interfaces and IPv4 | `getifaddrs()` |
@@ -1682,6 +1684,10 @@ small files:
 
 Missing optional values do not fail the complete dashboard. Text values use
 `Unavailable`; optional numeric values become Python `None`.
+
+The system bridge also uses this provider for live values. It asks the
+provider for the current local time, uptime, and network interfaces instead of
+calling Linux directly.
 
 The I2C count reports interfaces such as `/dev/i2c-1`. It does not scan bus
 addresses. Blind I2C scanning can send unsafe commands to unknown devices, so

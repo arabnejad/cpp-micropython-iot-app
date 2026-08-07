@@ -13,6 +13,7 @@
 #include <map>
 #include <mutex>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
@@ -271,6 +272,13 @@ public:
     return testSystemInformation;
   }
 
+  std::string readCurrentLocalTime() const override {
+    if (failWhenReadingCurrentLocalTime) {
+      throw std::runtime_error("test system clock failed");
+    }
+    return currentLocalTime;
+  }
+
   std::uint64_t readUptimeSeconds() const override {
     return 99U;
   }
@@ -278,6 +286,9 @@ public:
   std::vector<system::NetworkInterfaceInformation> readNetworkInterfaces() const override {
     return {{"eth0", true, "192.0.2.10", 1000U}};
   }
+
+  std::string currentLocalTime{"2000-01-01 00:00:00"};
+  bool        failWhenReadingCurrentLocalTime{false};
 };
 
 } // namespace tests

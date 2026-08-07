@@ -52,7 +52,9 @@ public:
   virtual ~ISystemInformationProvider() = default;
 
   virtual SystemInformation readSystemInformation() const = 0;
-  virtual std::uint64_t     readUptimeSeconds() const     = 0;
+  /* Reads the current Linux local time as YYYY-MM-DD HH:MM:SS. */
+  virtual std::string   readCurrentLocalTime() const = 0;
+  virtual std::uint64_t readUptimeSeconds() const    = 0;
   /*
    * Reads interfaces that can connect to another device, such as eth0 and
    * wlan0. The local-only lo interface is not included.
@@ -64,6 +66,7 @@ public:
 class LinuxSystemInformationProvider final : public ISystemInformationProvider {
 public:
   SystemInformation                        readSystemInformation() const override;
+  std::string                              readCurrentLocalTime() const override;
   std::uint64_t                            readUptimeSeconds() const override;
   std::vector<NetworkInterfaceInformation> readNetworkInterfaces() const override;
 };

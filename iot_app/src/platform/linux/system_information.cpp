@@ -12,6 +12,7 @@
 #include <array>
 #include <cctype>
 #include <cerrno>
+#include <ctime>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -19,6 +20,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <system_error>
 
@@ -377,6 +379,20 @@ SystemInformation LinuxSystemInformationProvider::readSystemInformation() const 
   systemInformation.inputDeviceCount         = countInputDevices();
   systemInformation.blockDeviceCount         = countBlockDevices();
   return systemInformation;
+}
+
+std::string LinuxSystemInformationProvider::readCurrentLocalTime() const {
+  const std::time_t currentTime = std::time(nullptr);
+  std::tm           localTime{};
+  if (currentTime == static_cast<std::time_t>(-1) || localtime_r(&currentTime, &localTime) == nullptr) {
+    throw std::runtime_error("Linux could not read the current local time");
+  }
+
+  std::array<char, 20U> formattedTime{};
+  if (std::strftime(formattedTime.data(), formattedTime.size(), "%Y-%m-%d %H:%M:%S", &localTime) == 0U) {
+    throw std::runtime_error("Linux could not format the current local time");
+  }
+  return formattedTime.data();
 }
 
 std::uint64_t LinuxSystemInformationProvider::readUptimeSeconds() const {

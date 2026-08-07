@@ -6,8 +6,6 @@
 #include "py/misc.h"
 #include <lvgl.h>
 
-#include <array>
-#include <ctime>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -18,7 +16,7 @@
 
 namespace {
 
-thread_local std::string                                           currentTimeText;
+thread_local std::string                                           currentLocalTimeText;
 thread_local std::vector<iot::system::NetworkInterfaceInformation> latestNetworkInterfaces;
 /* System-information failures become RuntimeError messages in mod_iot_system.c. */
 thread_local iot::python::internal::NativeBridgeErrorHandler nativeBridgeErrorHandler{
@@ -81,18 +79,8 @@ extern "C" iot_native_result_t iot_system_current_time(const char **formatted_ti
       throw std::invalid_argument("Current-time output is missing");
     }
 
-    const std::time_t currentTime = std::time(nullptr);
-    std::tm           localTime{};
-    if (currentTime == static_cast<std::time_t>(-1) || localtime_r(&currentTime, &localTime) == nullptr) {
-      throw std::runtime_error("Linux could not read the current local time");
-    }
-
-    std::array<char, 20U> formattedTime{};
-    if (std::strftime(formattedTime.data(), formattedTime.size(), "%Y-%m-%d %H:%M:%S", &localTime) == 0U) {
-      throw std::runtime_error("Linux could not format the current local time");
-    }
-    currentTimeText = formattedTime.data();
-    *formatted_time = currentTimeText.c_str();
+    currentLocalTimeText = context().readCurrentLocalTime();
+    *formatted_time      = currentLocalTimeText.c_str();
   });
 }
 

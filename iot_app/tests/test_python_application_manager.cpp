@@ -31,6 +31,10 @@ public:
     throw std::runtime_error("system snapshot failed");
   }
 
+  std::string readCurrentLocalTime() const override {
+    return "2000-01-01 00:00:00";
+  }
+
   std::uint64_t readUptimeSeconds() const override {
     return 0U;
   }
@@ -402,7 +406,7 @@ TEST_F(PythonApplicationManagerTest, LetsPythonUseEveryDisplayAndSystemFunction)
                             "assert downloaded_file['content_type'] == 'image/jpeg'\n"
                             "assert downloaded_file['loaded_from_cache'] is False\n"
                             "assert system.uptime_seconds() == 99\n"
-                            "assert len(system.current_time()) == 19\n"));
+                            "assert system.current_time() == '2000-01-01 00:00:00'\n"));
 
   EXPECT_TRUE(activationResult.externalApplicationIsRunning) << activationResult.failureReason;
   EXPECT_EQ(m_fileDownloader.lastRequest.url, "https://example.com/image.jpg");
