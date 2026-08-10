@@ -1,4 +1,5 @@
 #include "input_cpp_bridge.h"
+#include "native_module_error.h"
 
 #include "py/runtime.h"
 
@@ -15,12 +16,6 @@ typedef struct {
   mp_obj_base_t base;
   mp_obj_t      gamepad_owner;
 } iot_gamepad_state_view_object_t;
-
-static void raise_native_error(iot_native_result_t nativeCallResult) {
-  if (!nativeCallResult.succeeded) {
-    mp_raise_msg_varg(&mp_type_RuntimeError, MP_ERROR_TEXT("%s"), nativeCallResult.error_message);
-  }
-}
 
 static iot_gamepad_object_t *gamepad_object(mp_obj_t object) {
   iot_gamepad_object_t *gamepad = MP_OBJ_TO_PTR(object);
@@ -76,13 +71,13 @@ static MP_DEFINE_CONST_FUN_OBJ_1(gamepad_close_object, gamepad_close);
 
 static mp_obj_t gamepad_model_name(mp_obj_t self_in) {
   const char *model_name = NULL;
-  raise_native_error(iot_gamepad_model_name(gamepad_object(self_in)->native_handle, &model_name));
+  iot_raise_native_error(iot_gamepad_model_name(gamepad_object(self_in)->native_handle, &model_name));
   return mp_obj_new_str(model_name, strlen(model_name));
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(gamepad_model_name_object, gamepad_model_name);
 
 static mp_obj_t gamepad_connect(mp_obj_t self_in) {
-  raise_native_error(iot_gamepad_connect(gamepad_object(self_in)->native_handle));
+  iot_raise_native_error(iot_gamepad_connect(gamepad_object(self_in)->native_handle));
   return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(gamepad_connect_object, gamepad_connect);
@@ -107,21 +102,21 @@ static mp_obj_t gamepad_calibrate_joystick(size_t number_of_arguments, const mp_
   }
 
   iot_gamepad_object_t *self = gamepad_object(positional_arguments[0]);
-  raise_native_error(iot_gamepad_calibrate_joystick(self->native_handle, (size_t)arguments[ARG_number_of_samples].u_int,
-                                                    (int)arguments[ARG_dead_zone].u_int));
+  iot_raise_native_error(iot_gamepad_calibrate_joystick(
+      self->native_handle, (size_t)arguments[ARG_number_of_samples].u_int, (int)arguments[ARG_dead_zone].u_int));
   return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_KW(gamepad_calibrate_joystick_object, 1, gamepad_calibrate_joystick);
 
 static mp_obj_t gamepad_refresh_input_state(mp_obj_t self_in) {
-  raise_native_error(iot_gamepad_refresh_input_state(gamepad_object(self_in)->native_handle));
+  iot_raise_native_error(iot_gamepad_refresh_input_state(gamepad_object(self_in)->native_handle));
   return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(gamepad_refresh_input_state_object, gamepad_refresh_input_state);
 
 static mp_obj_t gamepad_is_connected(mp_obj_t self_in) {
   int is_connected = 0;
-  raise_native_error(iot_gamepad_is_connected(gamepad_object(self_in)->native_handle, &is_connected));
+  iot_raise_native_error(iot_gamepad_is_connected(gamepad_object(self_in)->native_handle, &is_connected));
   return mp_obj_new_bool(is_connected != 0);
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(gamepad_is_connected_object, gamepad_is_connected);
@@ -133,7 +128,7 @@ static iot_gamepad_object_t *owner_from_state_view(mp_obj_t state_view_in) {
 
 static iot_gamepad_state_t read_state_from_view(mp_obj_t state_view_in) {
   iot_gamepad_state_t state = {0};
-  raise_native_error(iot_gamepad_read_state(owner_from_state_view(state_view_in)->native_handle, &state));
+  iot_raise_native_error(iot_gamepad_read_state(owner_from_state_view(state_view_in)->native_handle, &state));
   return state;
 }
 
@@ -158,7 +153,7 @@ static MP_DEFINE_CONST_FUN_OBJ_1(joystick_dead_zone_object, joystick_dead_zone);
 
 static mp_obj_t joystick_direction(mp_obj_t self_in) {
   const char *direction = NULL;
-  raise_native_error(iot_gamepad_joystick_direction(owner_from_state_view(self_in)->native_handle, &direction));
+  iot_raise_native_error(iot_gamepad_joystick_direction(owner_from_state_view(self_in)->native_handle, &direction));
   return mp_obj_new_str(direction, strlen(direction));
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(joystick_direction_object, joystick_direction);
@@ -249,7 +244,7 @@ static MP_DEFINE_CONST_FUN_OBJ_1(gamepad_buttons_object, gamepad_buttons);
 
 static mp_obj_t gamepad_connection_information(mp_obj_t self_in) {
   iot_gamepad_connection_information_t connection_information = {0};
-  raise_native_error(
+  iot_raise_native_error(
       iot_gamepad_read_connection_information(gamepad_object(self_in)->native_handle, &connection_information));
 
   mp_obj_t result = mp_obj_new_dict(3);
@@ -263,7 +258,7 @@ static MP_DEFINE_CONST_FUN_OBJ_1(gamepad_connection_information_object, gamepad_
 
 static iot_gamepad_device_information_t read_diagnostics(mp_obj_t self_in) {
   iot_gamepad_device_information_t diagnostics = {0};
-  raise_native_error(iot_gamepad_read_diagnostics(gamepad_object(self_in)->native_handle, &diagnostics));
+  iot_raise_native_error(iot_gamepad_read_diagnostics(gamepad_object(self_in)->native_handle, &diagnostics));
   return diagnostics;
 }
 

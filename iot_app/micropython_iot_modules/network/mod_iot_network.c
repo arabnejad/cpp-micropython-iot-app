@@ -1,15 +1,10 @@
 #include "network_cpp_bridge.h"
+#include "native_module_error.h"
 
 #include "py/objstr.h"
 #include "py/runtime.h"
 
 #include <string.h>
-
-static void raise_native_error(iot_native_result_t nativeCallResult) {
-  if (!nativeCallResult.succeeded) {
-    mp_raise_msg_varg(&mp_type_RuntimeError, MP_ERROR_TEXT("%s"), nativeCallResult.error_message);
-  }
-}
 
 static void store_download_value(mp_obj_t dictionary, qstr key, mp_obj_t value) {
   mp_obj_dict_store(dictionary, MP_OBJ_NEW_QSTR(key), value);
@@ -37,7 +32,7 @@ static mp_obj_t network_download_file(size_t number_of_arguments, const mp_obj_t
                                    : mp_obj_str_get_str(arguments[ARG_expected_sha256].u_obj);
 
   iot_downloaded_file_t downloadedFile = {0};
-  raise_native_error(iot_network_download_file(url, expectedSha256, &downloadedFile));
+  iot_raise_native_error(iot_network_download_file(url, expectedSha256, &downloadedFile));
 
   mp_obj_t downloadedFileDictionary = mp_obj_new_dict(5);
   store_download_string(downloadedFileDictionary, MP_QSTR_path, downloadedFile.file_path);

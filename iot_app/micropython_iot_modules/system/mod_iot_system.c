@@ -1,14 +1,9 @@
 #include "system_cpp_bridge.h"
+#include "native_module_error.h"
 
 #include "py/runtime.h"
 
 #include <string.h>
-
-static void raise_native_error(iot_native_result_t nativeCallResult) {
-  if (!nativeCallResult.succeeded) {
-    mp_raise_msg_varg(&mp_type_RuntimeError, MP_ERROR_TEXT("%s"), nativeCallResult.error_message);
-  }
-}
 
 static void store_value(mp_obj_t dictionary, qstr key, mp_obj_t value) {
   mp_obj_dict_store(dictionary, MP_OBJ_NEW_QSTR(key), value);
@@ -24,7 +19,7 @@ static void store_unsigned_integer(mp_obj_t dictionary, qstr key, uint64_t value
 
 static iot_system_information_t read_system_information(void) {
   iot_system_information_t systemInformation = {0};
-  raise_native_error(iot_system_read_information(&systemInformation));
+  iot_raise_native_error(iot_system_read_information(&systemInformation));
   return systemInformation;
 }
 
@@ -43,14 +38,14 @@ static MP_DEFINE_CONST_FUN_OBJ_0(system_information_object, system_information);
 
 static mp_obj_t system_current_time(void) {
   const char *formatted_time = NULL;
-  raise_native_error(iot_system_current_time(&formatted_time));
+  iot_raise_native_error(iot_system_current_time(&formatted_time));
   return mp_obj_new_str(formatted_time, strlen(formatted_time));
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(system_current_time_object, system_current_time);
 
 static mp_obj_t system_uptime_seconds(void) {
   uint64_t uptime_seconds = 0U;
-  raise_native_error(iot_system_uptime_seconds(&uptime_seconds));
+  iot_raise_native_error(iot_system_uptime_seconds(&uptime_seconds));
   return mp_obj_new_int_from_ull(uptime_seconds);
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(system_uptime_seconds_object, system_uptime_seconds);
@@ -80,12 +75,12 @@ static MP_DEFINE_CONST_FUN_OBJ_0(system_resources_object, system_resources);
 
 static mp_obj_t system_network_interfaces(void) {
   size_t networkInterfaceCount = 0;
-  raise_native_error(iot_system_network_interface_count(&networkInterfaceCount));
+  iot_raise_native_error(iot_system_network_interface_count(&networkInterfaceCount));
 
   mp_obj_t *networkInterfaceDictionaries = m_new(mp_obj_t, networkInterfaceCount);
   for (size_t index = 0; index < networkInterfaceCount; ++index) {
     iot_network_interface_information_t networkInterfaceInformation = {0};
-    raise_native_error(iot_system_read_network_interface(index, &networkInterfaceInformation));
+    iot_raise_native_error(iot_system_read_network_interface(index, &networkInterfaceInformation));
     mp_obj_t networkInterfaceDictionary = mp_obj_new_dict(4);
     store_string(networkInterfaceDictionary, MP_QSTR_name, networkInterfaceInformation.name);
     store_value(networkInterfaceDictionary, MP_QSTR_connected, mp_obj_new_bool(networkInterfaceInformation.connected));

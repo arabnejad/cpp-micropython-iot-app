@@ -44,6 +44,23 @@ TEST(NativeNetworkCppBridgeTest, ReturnsErrorsInsteadOfThrowingAcrossTheCMicroPy
   EXPECT_FALSE(iot_network_download_file("https://example.com/image.jpg", "", &downloadedFile).succeeded);
 }
 
+TEST(NativeBridgeContextTest, ReportsWhichModuleWasUsedWithoutAnActiveApplicationContext) {
+  const iot_native_result_t displayResult = iot_display_clear(0U, 0U, 0U);
+  EXPECT_FALSE(displayResult.succeeded);
+  EXPECT_STREQ(displayResult.error_message, "Python display module is not connected to the application runtime");
+
+  iot_downloaded_file_t     downloadedFile{};
+  const iot_native_result_t networkResult =
+      iot_network_download_file("https://example.com/image.jpg", "", &downloadedFile);
+  EXPECT_FALSE(networkResult.succeeded);
+  EXPECT_STREQ(networkResult.error_message, "Python network module is not connected to the application runtime");
+
+  const char               *formattedCurrentTime = nullptr;
+  const iot_native_result_t systemResult         = iot_system_current_time(&formattedCurrentTime);
+  EXPECT_FALSE(systemResult.succeeded);
+  EXPECT_STREQ(systemResult.error_message, "Python system module is not connected to the application runtime");
+}
+
 TEST(NativeSystemCppBridgeTest, RejectsSystemCallsWhenNoApplicationContextIsActive) {
   const char *formattedCurrentTime = nullptr;
 

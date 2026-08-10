@@ -1,16 +1,11 @@
 #include "display_cpp_bridge.h"
 #include "iot/ui/jpeg_limits.h"
+#include "native_module_error.h"
 
 #include "py/objstr.h"
 #include "py/runtime.h"
 
 #include <string.h>
-
-static void raise_native_error(iot_native_result_t nativeCallResult) {
-  if (!nativeCallResult.succeeded) {
-    mp_raise_msg_varg(&mp_type_RuntimeError, MP_ERROR_TEXT("%s"), nativeCallResult.error_message);
-  }
-}
 
 static uint8_t color_component(mp_int_t colorComponentValue) {
   if (colorComponentValue < 0 || colorComponentValue > 255) {
@@ -84,7 +79,7 @@ static mp_obj_t display_clear(size_t number_of_arguments, const mp_obj_t *positi
                    allowed_arguments, arguments);
 
   const iot_optional_color_t color = color_or_default(arguments[ARG_color].u_obj, 0U, 0U, 0U, "color");
-  raise_native_error(iot_display_clear(color.red, color.green, color.blue));
+  iot_raise_native_error(iot_display_clear(color.red, color.green, color.blue));
   return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_KW(display_clear_object, 0, display_clear);
@@ -134,7 +129,7 @@ static mp_obj_t display_draw_text_box(size_t number_of_arguments, const mp_obj_t
   };
 
   uint64_t widget_id = 0U;
-  raise_native_error(iot_display_draw_text_box(
+  iot_raise_native_error(iot_display_draw_text_box(
       signed_32_bit_value(arguments[ARG_x].u_int), signed_32_bit_value(arguments[ARG_y].u_int),
       signed_32_bit_value(arguments[ARG_width].u_int), signed_32_bit_value(arguments[ARG_height].u_int), text,
       &textBoxOptions, &widget_id));
@@ -148,7 +143,7 @@ static mp_obj_t display_update_text_box(mp_obj_t widget_id_object, mp_obj_t text
     mp_raise_ValueError(MP_ERROR_TEXT("widget_id must be a positive integer"));
   }
   const char *text = mp_obj_str_get_str(text_object);
-  raise_native_error(iot_display_update_text_box((uint64_t)widget_id, text));
+  iot_raise_native_error(iot_display_update_text_box((uint64_t)widget_id, text));
   return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(display_update_text_box_object, display_update_text_box);
@@ -159,8 +154,8 @@ static mp_obj_t display_move_text_box(mp_obj_t widget_id_object, mp_obj_t x_obje
     mp_raise_ValueError(MP_ERROR_TEXT("widget_id must be a positive integer"));
   }
 
-  raise_native_error(iot_display_move_text_box((uint64_t)widget_id, signed_32_bit_value(mp_obj_get_int(x_object)),
-                                               signed_32_bit_value(mp_obj_get_int(y_object))));
+  iot_raise_native_error(iot_display_move_text_box((uint64_t)widget_id, signed_32_bit_value(mp_obj_get_int(x_object)),
+                                                   signed_32_bit_value(mp_obj_get_int(y_object))));
   return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_3(display_move_text_box_object, display_move_text_box);
@@ -171,7 +166,7 @@ static mp_obj_t display_delete_text_box(mp_obj_t widget_id_object) {
     mp_raise_ValueError(MP_ERROR_TEXT("widget_id must be a positive integer"));
   }
 
-  raise_native_error(iot_display_delete_text_box((uint64_t)widget_id));
+  iot_raise_native_error(iot_display_delete_text_box((uint64_t)widget_id));
   return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(display_delete_text_box_object, display_delete_text_box);
@@ -211,37 +206,38 @@ static mp_obj_t display_draw_image(size_t number_of_arguments, const mp_obj_t *p
                    allowed_arguments, arguments);
 
   uint64_t image_widget_id = 0U;
-  raise_native_error(iot_display_draw_image(mp_obj_str_get_str(arguments[ARG_path].u_obj),
-                                            signed_32_bit_value(arguments[ARG_x].u_int),
-                                            signed_32_bit_value(arguments[ARG_y].u_int),
-                                            image_scale_percent(arguments[ARG_scale_percent].u_int), &image_widget_id));
+  iot_raise_native_error(
+      iot_display_draw_image(mp_obj_str_get_str(arguments[ARG_path].u_obj), signed_32_bit_value(arguments[ARG_x].u_int),
+                             signed_32_bit_value(arguments[ARG_y].u_int),
+                             image_scale_percent(arguments[ARG_scale_percent].u_int), &image_widget_id));
   return mp_obj_new_int_from_ull(image_widget_id);
 }
 static MP_DEFINE_CONST_FUN_OBJ_KW(display_draw_image_object, 0, display_draw_image);
 
 static mp_obj_t display_update_image(mp_obj_t widget_id_object, mp_obj_t path_object) {
-  raise_native_error(iot_display_update_image(positive_widget_id(widget_id_object), mp_obj_str_get_str(path_object)));
+  iot_raise_native_error(
+      iot_display_update_image(positive_widget_id(widget_id_object), mp_obj_str_get_str(path_object)));
   return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(display_update_image_object, display_update_image);
 
 static mp_obj_t display_move_image(mp_obj_t widget_id_object, mp_obj_t x_object, mp_obj_t y_object) {
-  raise_native_error(iot_display_move_image(positive_widget_id(widget_id_object),
-                                            signed_32_bit_value(mp_obj_get_int(x_object)),
-                                            signed_32_bit_value(mp_obj_get_int(y_object))));
+  iot_raise_native_error(iot_display_move_image(positive_widget_id(widget_id_object),
+                                                signed_32_bit_value(mp_obj_get_int(x_object)),
+                                                signed_32_bit_value(mp_obj_get_int(y_object))));
   return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_3(display_move_image_object, display_move_image);
 
 static mp_obj_t display_set_image_scale(mp_obj_t widget_id_object, mp_obj_t scale_percent_object) {
-  raise_native_error(iot_display_set_image_scale(positive_widget_id(widget_id_object),
-                                                 image_scale_percent(mp_obj_get_int(scale_percent_object))));
+  iot_raise_native_error(iot_display_set_image_scale(positive_widget_id(widget_id_object),
+                                                     image_scale_percent(mp_obj_get_int(scale_percent_object))));
   return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(display_set_image_scale_object, display_set_image_scale);
 
 static mp_obj_t display_delete_image(mp_obj_t widget_id_object) {
-  raise_native_error(iot_display_delete_image(positive_widget_id(widget_id_object)));
+  iot_raise_native_error(iot_display_delete_image(positive_widget_id(widget_id_object)));
   return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(display_delete_image_object, display_delete_image);
@@ -273,15 +269,15 @@ static mp_obj_t display_set_background_image(size_t number_of_arguments, const m
   mp_arg_parse_all(number_of_arguments, positional_arguments, keyword_arguments, MP_ARRAY_SIZE(allowed_arguments),
                    allowed_arguments, arguments);
 
-  raise_native_error(iot_display_set_background_image(mp_obj_str_get_str(arguments[ARG_path].u_obj),
-                                                      background_image_mode(arguments[ARG_mode].u_obj),
-                                                      image_scale_percent(arguments[ARG_scale_percent].u_int)));
+  iot_raise_native_error(iot_display_set_background_image(mp_obj_str_get_str(arguments[ARG_path].u_obj),
+                                                          background_image_mode(arguments[ARG_mode].u_obj),
+                                                          image_scale_percent(arguments[ARG_scale_percent].u_int)));
   return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_KW(display_set_background_image_object, 0, display_set_background_image);
 
 static mp_obj_t display_clear_background_image(void) {
-  raise_native_error(iot_display_clear_background_image());
+  iot_raise_native_error(iot_display_clear_background_image());
   return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(display_clear_background_image_object, display_clear_background_image);
@@ -302,7 +298,7 @@ static mp_obj_t display_fill_area(size_t number_of_arguments, const mp_obj_t *po
                    allowed_arguments, arguments);
 
   const iot_optional_color_t color = color_or_default(arguments[ARG_color].u_obj, 0U, 0U, 0U, "color");
-  raise_native_error(
+  iot_raise_native_error(
       iot_display_fill_area(signed_32_bit_value(arguments[ARG_x].u_int), signed_32_bit_value(arguments[ARG_y].u_int),
                             signed_32_bit_value(arguments[ARG_width].u_int),
                             signed_32_bit_value(arguments[ARG_height].u_int), color.red, color.green, color.blue));
@@ -313,7 +309,7 @@ static MP_DEFINE_CONST_FUN_OBJ_KW(display_fill_area_object, 0, display_fill_area
 static mp_obj_t display_size(void) {
   uint32_t width  = 0;
   uint32_t height = 0;
-  raise_native_error(iot_display_size(&width, &height));
+  iot_raise_native_error(iot_display_size(&width, &height));
   mp_obj_t size[] = {mp_obj_new_int_from_uint(width), mp_obj_new_int_from_uint(height)};
   return mp_obj_new_tuple(MP_ARRAY_SIZE(size), size);
 }
@@ -344,12 +340,12 @@ static mp_obj_t display_mode_dictionary(const iot_display_mode_information_t *di
 
 static mp_obj_t monitor_dictionary(size_t monitorIndex) {
   iot_monitor_information_t monitorInformation = {0};
-  raise_native_error(iot_display_monitor_information(monitorIndex, &monitorInformation));
+  iot_raise_native_error(iot_display_monitor_information(monitorIndex, &monitorInformation));
 
   mp_obj_t supportedModes = mp_obj_new_list(0, NULL);
   for (size_t modeIndex = 0; modeIndex < monitorInformation.supported_mode_count; ++modeIndex) {
     iot_display_mode_information_t modeInformation = {0};
-    raise_native_error(iot_display_supported_mode_information(monitorIndex, modeIndex, &modeInformation));
+    iot_raise_native_error(iot_display_supported_mode_information(monitorIndex, modeIndex, &modeInformation));
     mp_obj_list_append(supportedModes, display_mode_dictionary(&modeInformation));
   }
 
@@ -372,7 +368,7 @@ static mp_obj_t monitor_dictionary(size_t monitorIndex) {
 
 static mp_obj_t display_monitors(void) {
   size_t monitorCount = 0U;
-  raise_native_error(iot_display_monitor_count(&monitorCount));
+  iot_raise_native_error(iot_display_monitor_count(&monitorCount));
 
   mp_obj_t monitors = mp_obj_new_list(0, NULL);
   for (size_t monitorIndex = 0; monitorIndex < monitorCount; ++monitorIndex) {
@@ -384,11 +380,11 @@ static MP_DEFINE_CONST_FUN_OBJ_0(display_monitors_object, display_monitors);
 
 static mp_obj_t display_active_monitor(void) {
   size_t monitorCount = 0U;
-  raise_native_error(iot_display_monitor_count(&monitorCount));
+  iot_raise_native_error(iot_display_monitor_count(&monitorCount));
 
   for (size_t monitorIndex = 0; monitorIndex < monitorCount; ++monitorIndex) {
     iot_monitor_information_t monitorInformation = {0};
-    raise_native_error(iot_display_monitor_information(monitorIndex, &monitorInformation));
+    iot_raise_native_error(iot_display_monitor_information(monitorIndex, &monitorInformation));
     if (monitorInformation.active) {
       return monitor_dictionary(monitorIndex);
     }

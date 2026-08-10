@@ -1,8 +1,8 @@
 #include "network_cpp_bridge.h"
 
+#include "native_bridge_context.h"
 #include "native_bridge_error_handler.h"
 #include "iot/network/ifile_downloader.h"
-#include "iot/python/micropython_application_context.h"
 
 #include <stdexcept>
 #include <string>
@@ -14,11 +14,7 @@ thread_local iot::network::DownloadedFile latestDownloadedFile;
 thread_local iot::python::internal::NativeBridgeErrorHandler nativeBridgeErrorHandler{"Unknown C++ network error"};
 
 iot::python::MicroPythonApplicationContext &context() {
-  auto *activeContext = iot::python::MicroPythonApplicationContext::active();
-  if (activeContext == nullptr) {
-    throw std::logic_error("Python network module is not connected to the application runtime");
-  }
-  return *activeContext;
+  return iot::python::internal::requireActiveApplicationContext("network");
 }
 
 } // namespace

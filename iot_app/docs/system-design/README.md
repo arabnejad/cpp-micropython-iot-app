@@ -958,6 +958,11 @@ MicroPythonApplicationContext
 The input bridge does not use this context. Each Python gamepad object has its
 own C++ gamepad handle, so its bridge functions can use that handle directly.
 
+The display, network, and system bridges use one shared function to find the
+active application context. The four C modules also share the function that
+turns a failed native result into a Python `RuntimeError`. Each module still
+parses its own arguments and keeps its own error messages.
+
 When an application stops, fails, or is replaced, the manager destroys the
 interpreter before the context:
 

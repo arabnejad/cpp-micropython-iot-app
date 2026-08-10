@@ -1,7 +1,7 @@
 #include "system_cpp_bridge.h"
 
+#include "native_bridge_context.h"
 #include "native_bridge_error_handler.h"
-#include "iot/python/micropython_application_context.h"
 
 #include "py/misc.h"
 #include <lvgl.h>
@@ -28,11 +28,7 @@ constexpr const char micropythonVersion[] =
     MP_STRINGIFY(MICROPY_VERSION_MAJOR) "." MP_STRINGIFY(MICROPY_VERSION_MINOR) "." MP_STRINGIFY(MICROPY_VERSION_MICRO);
 
 iot::python::MicroPythonApplicationContext &context() {
-  auto *activeContext = iot::python::MicroPythonApplicationContext::active();
-  if (activeContext == nullptr) {
-    throw std::logic_error("Python system module is not connected to the application runtime");
-  }
-  return *activeContext;
+  return iot::python::internal::requireActiveApplicationContext("system");
 }
 
 } // namespace

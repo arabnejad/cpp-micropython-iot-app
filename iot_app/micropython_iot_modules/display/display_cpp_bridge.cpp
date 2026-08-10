@@ -1,7 +1,7 @@
 #include "display_cpp_bridge.h"
 
+#include "native_bridge_context.h"
 #include "native_bridge_error_handler.h"
-#include "iot/python/micropython_application_context.h"
 #include "iot/ui/screen_manager.h"
 #include "iot/ui/ui_types.h"
 
@@ -14,11 +14,7 @@ namespace {
 thread_local iot::python::internal::NativeBridgeErrorHandler nativeBridgeErrorHandler{"Unknown C++ display error"};
 
 iot::python::MicroPythonApplicationContext &context() {
-  auto *activeContext = iot::python::MicroPythonApplicationContext::active();
-  if (activeContext == nullptr) {
-    throw std::logic_error("Python display module is not connected to the application runtime");
-  }
-  return *activeContext;
+  return iot::python::internal::requireActiveApplicationContext("display");
 }
 
 bool readOptionalUnsignedValue(int32_t suppliedValue, int32_t minimum, int32_t maximum, const char *name,

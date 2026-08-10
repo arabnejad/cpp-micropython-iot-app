@@ -79,6 +79,8 @@ add_library(iot_runtime STATIC
   src/json/json_field_reader.cpp
   micropython_iot_modules/device/mod_iot.c
   micropython_iot_modules/common/micropython_traceback.c
+  micropython_iot_modules/common/native_bridge_context.cpp
+  micropython_iot_modules/common/native_module_error.c
   micropython_iot_modules/display/display_cpp_bridge.cpp
   micropython_iot_modules/display/mod_iot_display.c
   micropython_iot_modules/input/input_cpp_bridge.cpp
