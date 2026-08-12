@@ -673,6 +673,17 @@ backend keeps its own checks for unexpected internal errors.
 Downloading and drawing are separate operations. An application can download
 a file once, keep the returned path, and use it in more than one drawing call.
 
+`ScreenManager` owns the image-display work after Python supplies a file path.
+It checks the request, asks its private `JpegImageLoader` to decode the JPEG,
+keeps the bounded decoded-image cache, and sends the immutable pixels through
+the render queue. When an application changes, `PythonApplicationManager` only
+asks `ScreenManager` to clear the screen. `ScreenManager` then clears its image
+state and cache itself.
+
+The LVGL backend does not decode or cache images. It keeps a shared reference
+to the decoded pixels while the related widget is on the screen. Deleting,
+replacing, or clearing that widget releases the backend's reference.
+
 ```text
 Python application
   network.download_file(url, expected_sha256=...)
