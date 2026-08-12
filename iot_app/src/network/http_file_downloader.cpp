@@ -1,7 +1,8 @@
 #include "iot/network/http_file_downloader.h"
 
+#include "checksum/sha256.h"
+
 #include <curl/curl.h>
-#include <openssl/evp.h>
 
 #include <sys/stat.h>
 #include <unistd.h>
@@ -10,11 +11,8 @@
 #include <array>
 #include <cctype>
 #include <cstdio>
-#include <fstream>
-#include <iomanip>
 #include <limits>
 #include <memory>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <system_error>
@@ -194,43 +192,24 @@ void createPrivateCacheDirectory(const std::filesystem::path &downloadCacheDirec
   }
 }
 
-std::string calculateFileSha256(const std::filesystem::path &filePath) {
-  std::ifstream inputFile(filePath, std::ios::binary);
-  if (!inputFile) {
-    throw std::runtime_error("Could not read downloaded file while calculating SHA-256");
-  }
-
-  using UniqueDigestContext = std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>;
-  UniqueDigestContext digestContext(EVP_MD_CTX_new(), EVP_MD_CTX_free);
-  if (!digestContext || EVP_DigestInit_ex(digestContext.get(), EVP_sha256(), nullptr) != 1) {
-    throw std::runtime_error("OpenSSL could not start the downloaded file SHA-256 calculation");
-  }
-
-  std::array<char, 16U * 1024U> readBuffer{};
-  while (inputFile) {
-    inputFile.read(readBuffer.data(), static_cast<std::streamsize>(readBuffer.size()));
-    const auto numberOfBytesRead = inputFile.gcount();
-    if (numberOfBytesRead > 0 &&
-        EVP_DigestUpdate(digestContext.get(), readBuffer.data(), static_cast<std::size_t>(numberOfBytesRead)) != 1) {
+std::string calculateDownloadedFileSha256(const std::filesystem::path &filePath) {
+  try {
+    return internal::calculateFileSha256(filePath);
+  } catch (const internal::Sha256CalculationError &error) {
+    switch (error.failure()) {
+    case internal::Sha256Failure::FileCouldNotBeOpened:
+      throw std::runtime_error("Could not read downloaded file while calculating SHA-256");
+    case internal::Sha256Failure::CalculationCouldNotStart:
+      throw std::runtime_error("OpenSSL could not start the downloaded file SHA-256 calculation");
+    case internal::Sha256Failure::BytesCouldNotBeProcessed:
       throw std::runtime_error("OpenSSL could not update the downloaded file SHA-256 calculation");
+    case internal::Sha256Failure::FileCouldNotBeRead:
+      throw std::runtime_error("Could not finish reading downloaded file while calculating SHA-256");
+    case internal::Sha256Failure::CalculationCouldNotFinish:
+      throw std::runtime_error("OpenSSL could not finish the downloaded file SHA-256 calculation");
     }
   }
-  if (!inputFile.eof()) {
-    throw std::runtime_error("Could not finish reading downloaded file while calculating SHA-256");
-  }
-
-  std::array<unsigned char, EVP_MAX_MD_SIZE> digestBytes{};
-  unsigned int                               digestSize = 0U;
-  if (EVP_DigestFinal_ex(digestContext.get(), digestBytes.data(), &digestSize) != 1) {
-    throw std::runtime_error("OpenSSL could not finish the downloaded file SHA-256 calculation");
-  }
-
-  std::ostringstream hexadecimalDigest;
-  hexadecimalDigest << std::hex << std::setfill('0');
-  for (unsigned int byteIndex = 0U; byteIndex < digestSize; ++byteIndex) {
-    hexadecimalDigest << std::setw(2) << static_cast<unsigned int>(digestBytes[byteIndex]);
-  }
-  return hexadecimalDigest.str();
+  throw std::runtime_error("OpenSSL could not finish the downloaded file SHA-256 calculation");
 }
 
 } // namespace
@@ -361,7 +340,7 @@ DownloadedFile HttpFileDownloader::downloadFile(const FileDownloadRequest &fileD
 
   temporaryDownloadFile.closeForReading();
 
-  const std::string calculatedSha256 = calculateFileSha256(temporaryDownloadFile.filePath());
+  const std::string calculatedSha256 = calculateDownloadedFileSha256(temporaryDownloadFile.filePath());
   if (!expectedSha256.empty() && calculatedSha256 != expectedSha256) {
     throw std::runtime_error("Downloaded file does not match expected_sha256");
   }
@@ -405,7 +384,7 @@ std::optional<DownloadedFile> HttpFileDownloader::findValidCachedDownload(const 
   const DownloadedFile &cachedFile = cachedDownload->second;
   std::error_code       filesystemError;
   if (std::filesystem::is_regular_file(cachedFile.filePath, filesystemError) && !filesystemError &&
-      calculateFileSha256(cachedFile.filePath) == sha256) {
+      calculateDownloadedFileSha256(cachedFile.filePath) == sha256) {
     return cachedFile;
   }
 

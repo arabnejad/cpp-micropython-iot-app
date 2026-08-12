@@ -274,7 +274,7 @@ behavior.
 | libdrm | Finds connected displays and reads their connector, EDID, and active-mode information. It does not render the UI or change the display resolution. |
 | libmosquitto | Connects to the MQTT 5 broker, receives application-install messages, and publishes deployment results. Its network callbacks place received work in a queue for the main thread. |
 | cJSON | Reads application metadata and incoming deployment JSON, and creates the JSON used for deployment status replies. |
-| OpenSSL Crypto | Decodes the Base64 Python source carried in JSON and calculates SHA-256 for deployments and downloaded files. Base64 is only an encoding, and SHA-256 only detects inconsistent or damaged content; neither one proves who sent the application. |
+| OpenSSL Crypto | Decodes the Base64 Python source carried in JSON. One internal checksum helper uses it to calculate SHA-256 for deployments and downloaded files. Base64 is only an encoding, and SHA-256 only detects inconsistent or damaged content; neither one proves who sent the application. |
 | libcurl | Downloads HTTP and HTTPS files. Certificate and hostname checks remain enabled for HTTPS. |
 | libjpeg-turbo | Checks, scales, and decodes JPEG files before their pixels are sent to LVGL. |
 
@@ -1523,7 +1523,8 @@ applications are kept in their temporary directories instead.
 - SHA-256 matches the decoded source.
 
 SHA-256 detects damage or an inconsistent payload. It is not a digital
-signature and does not prove who sent the application.
+signature and does not prove who sent the application. Deployment validation
+and file downloads use the same internal SHA-256 helper.
 
 ### 17.6 Temporary installation
 

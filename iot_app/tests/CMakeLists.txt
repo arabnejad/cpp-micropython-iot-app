@@ -21,6 +21,7 @@ add_executable(iot_unit_tests
   test_application_deployment_controller.cpp
   test_application_message_queue.cpp
   test_application_metadata.cpp
+  test_sha256.cpp
   test_edid_parser.cpp
   test_display_manager.cpp
   scoped_linux_i2c_system_calls.cpp

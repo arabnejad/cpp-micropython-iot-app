@@ -1,19 +1,17 @@
 #include "iot/messaging/application_deployment_message.h"
 
+#include "checksum/sha256.h"
 #include "iot/python/application_metadata.h"
 #include "json/json_field_reader.h"
 
 #include <cjson/cJSON.h>
 #include <openssl/evp.h>
 
-#include <array>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
-#include <iomanip>
 #include <limits>
 #include <memory>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -130,19 +128,12 @@ std::string decodeBase64(const std::string &encodedText, std::size_t maximumDeco
   return decodedText;
 }
 
-std::string calculateSha256(const std::string &sourceCode) {
-  std::array<unsigned char, EVP_MAX_MD_SIZE> digestBytes{};
-  unsigned int                               digestSize = 0U;
-  if (EVP_Digest(sourceCode.data(), sourceCode.size(), digestBytes.data(), &digestSize, EVP_sha256(), nullptr) != 1) {
+std::string calculateDeploymentSourceSha256(const std::string &sourceCode) {
+  try {
+    return internal::calculateSha256(sourceCode);
+  } catch (const internal::Sha256CalculationError &) {
     throw std::runtime_error("OpenSSL could not calculate the source SHA-256 digest");
   }
-
-  std::ostringstream hexadecimalDigest;
-  hexadecimalDigest << std::hex << std::setfill('0');
-  for (unsigned int index = 0U; index < digestSize; ++index) {
-    hexadecimalDigest << std::setw(2) << static_cast<unsigned int>(digestBytes[index]);
-  }
-  return hexadecimalDigest.str();
 }
 
 void addJsonString(cJSON *jsonObject, const char *fieldName, const std::string &value) {
@@ -201,7 +192,8 @@ ApplicationDeploymentRequest ApplicationDeploymentMessageParser::parse(const std
   if (deploymentRequest.sourceCode.size() != declaredSourceSize) {
     throw std::runtime_error("Decoded Python source size does not match size_bytes");
   }
-  if (declaredSourceHash.size() != 64U || calculateSha256(deploymentRequest.sourceCode) != declaredSourceHash) {
+  if (declaredSourceHash.size() != 64U ||
+      calculateDeploymentSourceSha256(deploymentRequest.sourceCode) != declaredSourceHash) {
     throw std::runtime_error("Decoded Python source does not match its SHA-256 hash");
   }
   return deploymentRequest;

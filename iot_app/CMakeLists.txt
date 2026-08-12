@@ -69,6 +69,7 @@ iot_apply_compiler_warnings(iot_platform)
 
 add_library(iot_runtime STATIC
   ${IOT_MICROPYTHON_GENERATED_SOURCE_FILES}
+  src/checksum/sha256.cpp
   src/messaging/application_deployment_controller.cpp
   src/messaging/application_deployment_message.cpp
   src/messaging/application_message_queue.cpp
