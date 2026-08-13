@@ -1001,15 +1001,43 @@ Each Python application gets a new MicroPython interpreter. This prevents
 variables, timers, and other Python state from the previous application from
 being reused accidentally.
 
-PythonApplicationManager creates two objects for each application:
+`PythonApplicationManager` creates two objects because they do different jobs:
 
-- `MicroPythonApplicationContext` connects Python modules to the C++ services
-  and device information they need.
-- `MicroPythonRuntime` owns the interpreter and its fixed-size memory area.
+- `MicroPythonApplicationContext` gives the native bridge functions access to
+  the C++ services used by the current application. It does not start or stop
+  MicroPython.
+- `MicroPythonRuntime` owns the interpreter and its fixed-size heap. It does
+  not know about `ScreenManager`, downloads, or system information.
 
-The manager creates the context before the interpreter and destroys it after
-the interpreter. The C++ services are therefore still available while
-MicroPython shuts down. Only the main thread runs the interpreter.
+Their lifetime follows this order:
+
+```text
+No Python application is running
+  active context = nullptr
+          |
+          v
+Create MicroPythonApplicationContext
+  native bridge functions can now reach C++ services
+          |
+          v
+Create MicroPythonRuntime
+  MicroPython starts and runs the application
+          |
+          v
+Destroy MicroPythonRuntime
+  MicroPython stops and releases its heap
+          |
+          v
+Destroy MicroPythonApplicationContext
+  active context = nullptr again
+```
+
+The context is created first so it is ready before Python can call a native
+module. The runtime is destroyed first so the context remains available while
+MicroPython shuts down. The active-context pointer must be nullable because no
+context exists before an application starts, after it stops, or while one
+application is being replaced by another. Only the main thread runs the
+interpreter.
 
 ### 13.3 Running the Python entry point
 
