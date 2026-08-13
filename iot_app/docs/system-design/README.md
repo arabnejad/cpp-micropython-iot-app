@@ -289,6 +289,13 @@ installed MicroPython runtime.
 `main()` is the composition root. It creates the long-lived objects and keeps
 their lifetimes visible in one place.
 
+This is intentional. Startup is not hidden inside an `IoTApplication` or
+`RuntimeCoordinator` class. A reader can open `main.cpp` and see which objects
+exist, the order in which they start, and the dependencies passed between
+them. The small free functions in that file only select a display, print its
+details, build a temporary path, or record a stop signal; they do not own
+application components.
+
 ```text
 main()
 ├── DisplayManager
@@ -311,6 +318,12 @@ main()
 Most service objects are not copyable or movable. They own a thread, an open
 device, an interpreter, or references to another long-lived service. Keeping
 one owner avoids stale callbacks and double cleanup.
+
+During normal shutdown, `main()` stops the MQTT receiver, the Python
+application manager, and then `ScreenManager`. This is the reverse of the
+order in which those running components were started. If startup throws an
+exception, their local C++ objects are also destroyed in reverse construction
+order.
 
 ### 6.1 Lifetime groups
 
