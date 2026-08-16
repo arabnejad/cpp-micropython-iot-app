@@ -19,6 +19,7 @@ add_executable(iot_unit_tests
   main.cpp
   test_application_deployment_message.cpp
   test_application_deployment_controller.cpp
+  test_application_deployment_service.cpp
   test_application_message_queue.cpp
   test_application_metadata.cpp
   test_sha256.cpp

@@ -100,6 +100,12 @@ Ubuntu computer
 └───────────────────────────────────────────────────────────────────┘
 ```
 
+`ApplicationDeploymentService` owns the receiver, queue, and deployment
+controller shown above. `main.cpp` starts this service and asks it to process
+one queued message at a time. The three owned classes remain separate because
+receiving MQTT data, crossing a thread boundary, and processing a deployment
+are different jobs.
+
 The deployment result travels back separately:
 
 ```text
@@ -113,47 +119,50 @@ uses only the library and state it owns.
 
 ### 3.1 Application deployment pipeline
 
-The deployment code is split into small classes, but each received message
-follows one pipeline:
+`main.cpp` uses `ApplicationDeploymentService` as the single entry point for
+MQTT application deployment. Inside the service, each received message follows
+this pipeline:
 
 ```text
-MQTT network thread
+ApplicationDeploymentService
     |
-    v
-MqttApplicationReceiver::handleMessage()
-    |  checks the topic, payload, and message size
-    |  copies the raw JSON with tryPush()
-    v
-ApplicationMessageQueue
-    |  bounded boundary between the two threads
-    |  waitAndPopMessage() wakes the main thread
-    v
-Main thread
+    +-- MQTT network thread
+    |     |
+    |     v
+    |   MqttApplicationReceiver::handleMessage()
+    |     |  checks the topic, payload, and message size
+    |     |  copies the raw JSON with tryPush()
+    |     v
+    |   ApplicationMessageQueue
     |
-    v
-ApplicationDeploymentController::process()
-    |
-    +--> ApplicationDeploymentMessageParser
-    |      checks the JSON and reads the application
-    |
-    +--> TemporaryPythonApplicationInstaller
-    |      writes the checked application under /tmp
-    |
-    +--> PythonApplicationManager
-    |      replaces the running Python application
-    |
-    +--> MqttApplicationReceiver::publishStatus()
-           sends progress or an error back to the sender
+    +-- Main thread calls waitForAndProcessOneMessage()
+          |
+          |  removes one message with waitAndPopMessage()
+          v
+        ApplicationDeploymentController::process()
+          |
+          +--> ApplicationDeploymentMessageParser
+          |      checks the JSON and reads the application
+          |
+          +--> TemporaryPythonApplicationInstaller
+          |      writes the checked application under /tmp
+          |
+          +--> PythonApplicationManager
+          |      replaces the running Python application
+          |
+          +--> MqttApplicationReceiver::publishStatus()
+                 sends progress or an error back to the sender
 ```
 
 The queue only holds received JSON while it waits for the main thread. It is
 not a list of installed applications and it does not understand the JSON. The
 parser runs later, when the main thread calls the deployment controller.
 
-`ApplicationDeploymentController` coordinates the main-thread work. The other
-classes continue to handle MQTT, thread communication, validation, temporary
-files, and Python execution separately. This avoids one large class that would
-need to understand all of those jobs.
+`ApplicationDeploymentService` owns the pipeline and provides its start, stop,
+and main-loop operations. `ApplicationDeploymentController` coordinates the
+main-thread work. The other classes continue to handle MQTT, thread
+communication, validation, temporary files, and Python execution separately.
+This avoids one large class that would need to understand all of those jobs.
 
 The controller also publishes progress and any validation or installation
 error. Its final `accepted` reply confirms the package is installed, not that
@@ -308,22 +317,23 @@ main()
 ├── PythonApplicationManager
 │   ├── MicroPythonApplicationContext    created per Python app
 │   └── MicroPythonRuntime               created per Python app
-├── ApplicationMessageQueue
-├── MqttApplicationReceiver
-└── ApplicationDeploymentController
-    ├── ApplicationDeploymentMessageParser
-    └── TemporaryPythonApplicationInstaller
+└── ApplicationDeploymentService
+    ├── ApplicationMessageQueue
+    ├── MqttApplicationReceiver
+    └── ApplicationDeploymentController
+        ├── ApplicationDeploymentMessageParser
+        └── TemporaryPythonApplicationInstaller
 ```
 
 Most service objects are not copyable or movable. They own a thread, an open
 device, an interpreter, or references to another long-lived service. Keeping
 one owner avoids stale callbacks and double cleanup.
 
-During normal shutdown, `main()` stops the MQTT receiver, the Python
-application manager, and then `ScreenManager`. This is the reverse of the
-order in which those running components were started. If startup throws an
-exception, their local C++ objects are also destroyed in reverse construction
-order.
+During normal shutdown, `main()` stops the deployment service, the Python
+application manager, and then `ScreenManager`. Stopping the deployment service
+stops its MQTT receiver. This is the reverse of the order in which those
+running components were started. If startup throws an exception, their local
+C++ objects are also destroyed in reverse construction order.
 
 ### 6.1 Lifetime groups
 
@@ -402,7 +412,7 @@ operations stay on the main thread.
 
 | Sender | Receiver | What happens |
 |---|---|---|
-| MQTT network thread | Main thread | The MQTT callback copies the received JSON text into `ApplicationMessageQueue`. The main thread wakes up, removes the message with `waitAndPopMessage()`, and processes it. If the queue is full, the new message is rejected. |
+| MQTT network thread | Main thread | The MQTT callback copies the received JSON text into the deployment service's `ApplicationMessageQueue`. The service wakes the main thread, removes one message, and gives it to `ApplicationDeploymentController`. If the queue is full, the new message is rejected. |
 | Main thread | Render thread | A Python drawing request becomes a C++ drawing command. `ScreenManager::enqueueRenderCommand()` adds it to the render queue and wakes the render thread. The render thread handles commands in groups of up to 16 and lets LVGL refresh between groups. If the queue is full, the drawing request reports an error. |
 | Render thread, during startup | Main thread | The render thread reports whether the display backend opened successfully. It uses a promise to send the result and the main thread waits for it through a future. |
 | Render thread, after startup | Main thread | If rendering fails, the render thread saves the exception. The main loop finds it through `ScreenManager::throwIfRenderThreadFailed()` and stops the process safely. |
@@ -430,7 +440,7 @@ Normal startup follows this order:
 7. Create the Python application manager
 8. Create a fresh MicroPython interpreter
 9. Run the default application's main.py
-10. Start the MQTT receiver
+10. Start `ApplicationDeploymentService`, which starts its MQTT receiver
 11. Enter the main event loop
 ```
 
@@ -453,9 +463,9 @@ check render thread
 ask Python scheduler for its next deadline
        |
        v
-wait for MQTT message until that deadline
+ask ApplicationDeploymentService to wait until that deadline
        |
-       +---- message arrived ----> process one deployment
+       +---- message arrived ----> process one deployment through the service
        |
        v
 run Python callbacks that are now due
@@ -463,9 +473,11 @@ run Python callbacks that are now due
        +----> repeat
 ```
 
-The wait is never longer than one second. The message queue wakes it early when
-MQTT receives a deployment. If several messages are already queued, the next
-wait returns immediately.
+The wait is never longer than one second. The deployment service waits on its
+message queue, which wakes it early when MQTT receives a deployment. If several
+messages are already queued, the next wait returns immediately. The main loop
+does not need to know which deployment component receives, stores, or processes
+the message.
 
 Using the next timer deadline means the runtime does not wake every second just
 to ask Python whether work exists. A clock may run every second while another
@@ -925,6 +937,9 @@ PythonApplicationManager
 An application received through MQTT has two extra steps at the beginning:
 
 ```text
+ApplicationDeploymentService
+  |
+  v
 ApplicationDeploymentController
   |
   +--> validates the deployment message
@@ -1433,6 +1448,15 @@ widgets before drawing the error.
 
 ## 17. MQTT deployment subsystem
 
+`ApplicationDeploymentService` is the runtime's entry point to this subsystem.
+It owns the MQTT receiver, the bounded message queue, and the deployment
+controller. `main.cpp` starts and stops the service and asks it to process one
+message during each main-loop pass.
+
+The owned classes still have separate jobs. The receiver handles Mosquitto,
+the queue carries data between threads, and the controller validates and
+installs an application on the main thread.
+
 ### 17.1 Ubuntu sender
 
 `iot_app_sender/send_app.py` is the development-side command-line tool. Its
@@ -1544,14 +1568,18 @@ payload, and total message size. It then copies the JSON text into the bounded
 These are transport checks only. The callback does not check JSON fields,
 decode Python source, calculate its hash, write files, or call MicroPython.
 
-The main thread waits in `ApplicationMessageQueue::waitAndPopMessage()`. When a
-message is available, the main thread removes it from the queue and passes it
-to `ApplicationDeploymentController::process()`. The controller can then parse
-the JSON, install the application, and start MicroPython.
+The main thread calls
+`ApplicationDeploymentService::waitForAndProcessOneMessage()`. The service
+waits in `ApplicationMessageQueue::waitAndPopMessage()`. When a message is
+available, it removes that message and passes it to
+`ApplicationDeploymentController::process()`. The controller can then parse the
+JSON, install the application, and start MicroPython.
 
-`MqttApplicationReceiver` owns the libmosquitto client, callbacks, connection,
-subscription, and publication work. Other components use the message queue or
-the status-publishing interface instead of calling libmosquitto directly.
+`ApplicationDeploymentService` owns these deployment components, but it does
+not merge their work. `MqttApplicationReceiver` still owns the libmosquitto
+client, callbacks, connection, subscription, and publication work. The
+controller uses the receiver's status-publishing interface instead of calling
+libmosquitto directly.
 
 The MQTT callback can arrive at any time. It puts the message in the queue and
 returns without calling MicroPython. The main thread later removes the message
@@ -1910,8 +1938,8 @@ src/python/
   application loading, interpreter ownership, supervision, and failure handling
 
 src/messaging/
-  MQTT receiving, deployment parsing, queueing, temporary installation,
-  status, and activation
+  deployment service, MQTT receiving, parsing, queueing, temporary
+  installation, status, and activation
 
 micropython_iot_modules/
   thin MicroPython C bindings and C-to-C++ bridges

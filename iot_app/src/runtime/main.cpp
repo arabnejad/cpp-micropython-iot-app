@@ -2,9 +2,7 @@
 
 #include "iot/display/display_manager.h"
 #include "iot/logging/logger.h"
-#include "iot/messaging/application_deployment_controller.h"
-#include "iot/messaging/application_message_queue.h"
-#include "iot/messaging/mqtt_application_receiver.h"
+#include "iot/messaging/application_deployment_service.h"
 #include "iot/network/http_file_downloader.h"
 #include "iot/python/python_application_manager.h"
 #include "iot/python/python_application_loader.h"
@@ -129,7 +127,6 @@ int main(int argc, char **argv) {
     IOT_LOG_INFO(applicationLogger, "Running Python app '", pythonApplicationManager.activeScreenName(),
                  "'. Press Ctrl+C to stop");
 
-    iot::messaging::ApplicationMessageQueue applicationMessageQueue{iot::runtime::maximumQueuedApplicationMessages};
     iot::messaging::MqttApplicationReceiverSettings mqttSettings;
     mqttSettings.deviceId                  = runtimeConfig.deviceId;
     mqttSettings.brokerHost                = runtimeConfig.mqttBrokerHost;
@@ -139,17 +136,18 @@ int main(int argc, char **argv) {
     mqttSettings.password                  = runtimeConfig.mqttPassword;
     mqttSettings.maximumMessageSizeInBytes = iot::runtime::maximumMqttMessageSizeInBytes;
 
-    iot::messaging::MqttApplicationReceiver mqttApplicationReceiver{std::move(mqttSettings), applicationMessageQueue,
-                                                                    iot::messaging::internal::mqttClientApi()};
-    iot::messaging::ApplicationDeploymentController deploymentController{runtimeConfig.deviceId,
-                                                                         iot::runtime::maximumPythonSourceSizeInBytes,
-                                                                         temporaryRuntimeDirectory / "applications",
-                                                                         pythonApplicationManager,
-                                                                         mqttApplicationReceiver,
-                                                                         iot::runtime::maximumRememberedDeployments};
+    iot::messaging::ApplicationDeploymentServiceSettings deploymentServiceSettings;
+    deploymentServiceSettings.mqttReceiverSettings              = std::move(mqttSettings);
+    deploymentServiceSettings.maximumQueuedApplicationMessages  = iot::runtime::maximumQueuedApplicationMessages;
+    deploymentServiceSettings.maximumPythonSourceSizeInBytes    = iot::runtime::maximumPythonSourceSizeInBytes;
+    deploymentServiceSettings.temporaryApplicationRootDirectory = temporaryRuntimeDirectory / "applications";
+    deploymentServiceSettings.maximumRememberedDeployments      = iot::runtime::maximumRememberedDeployments;
+
+    iot::messaging::ApplicationDeploymentService applicationDeploymentService{
+        std::move(deploymentServiceSettings), pythonApplicationManager, iot::messaging::internal::mqttClientApi()};
 
     try {
-      mqttApplicationReceiver.start();
+      applicationDeploymentService.start();
     } catch (const std::exception &error) {
       // Keep the default dashboard running even when MQTT cannot start.
       IOT_LOG_ERROR(applicationLogger, "MQTT application receiver could not start: ", error.what());
@@ -160,15 +158,12 @@ int main(int argc, char **argv) {
       screenManager.throwIfRenderThreadFailed();
       const auto scheduledDelay = pythonApplicationManager.timeUntilNextScheduledCallback();
       const auto waitDuration   = scheduledDelay ? std::min(*scheduledDelay, maximumMainLoopWait) : maximumMainLoopWait;
-      const auto receivedMessage = applicationMessageQueue.waitAndPopMessage(waitDuration);
-      if (receivedMessage) {
-        deploymentController.process(*receivedMessage);
-      }
+      applicationDeploymentService.waitForAndProcessOneMessage(waitDuration);
 
       pythonApplicationManager.runScheduledCallbacks();
     }
 
-    mqttApplicationReceiver.stop();
+    applicationDeploymentService.stop();
     pythonApplicationManager.stop();
     screenManager.stop();
     return 0;

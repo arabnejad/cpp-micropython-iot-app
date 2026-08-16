@@ -72,6 +72,7 @@ add_library(iot_runtime STATIC
   src/checksum/sha256.cpp
   src/messaging/application_deployment_controller.cpp
   src/messaging/application_deployment_message.cpp
+  src/messaging/application_deployment_service.cpp
   src/messaging/application_message_queue.cpp
   src/messaging/temporary_python_application_installer.cpp
   src/messaging/mqtt_client_api.cpp
