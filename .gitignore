@@ -1,0 +1,52 @@
+# Build and generated output
+/build/
+/build-*/
+/out/
+/generated/
+/buildroot/output/
+/iot_app/build/
+/iot_app/build-*/
+/iot_app/out/
+/iot_app/generated/
+
+# Temporary reference/source directories
+/cppColorLog/
+/sample_code/
+
+# CMake-generated files
+**/CMakeCache.txt
+**/CMakeFiles/
+**/cmake_install.cmake
+**/compile_commands.json
+
+# Compiled files
+*.a
+*.dll
+*.exe
+*.mpy
+*.o
+*.obj
+*.so
+
+# Python and tool caches
+**/__pycache__/
+**/.cache/
+.venv/
+*.pyc
+sender_config.json
+
+# Local Buildroot credentials
+/iot_app/buildroot_external/board/raspberrypi4/wpa_supplicant.conf
+
+# Editor and operating-system files
+*.swp
+*.swo
+*~
+.DS_Store
+
+# VS Code workspace settings and local state
+/.vscode/
+
+# Ignore Markdown documents except files named README.md.
+*.md
+!README.md

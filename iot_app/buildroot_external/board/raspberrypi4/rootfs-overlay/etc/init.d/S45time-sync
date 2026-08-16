@@ -1,0 +1,93 @@
+#!/bin/sh
+
+DAEMON="/usr/sbin/ntpd"
+PIDFILE="/var/run/ntpd.pid"
+TIME_SYNC_WAIT_SECONDS=30
+EARLIEST_REASONABLE_YEAR=2000
+
+ntpd_is_running() {
+	[ -r "$PIDFILE" ] || return 1
+	ntpd_pid="$(cat "$PIDFILE")"
+	[ -n "$ntpd_pid" ] && kill -0 "$ntpd_pid" 2>/dev/null
+}
+
+system_clock_is_valid() {
+	current_year="$(date +%Y 2>/dev/null)"
+	[ -n "$current_year" ] && [ "$current_year" -ge "$EARLIEST_REASONABLE_YEAR" ]
+}
+
+start() {
+	printf "Starting network time synchronization: "
+	if ntpd_is_running; then
+		echo "already running"
+		return 0
+	fi
+	rm -f "$PIDFILE"
+
+	# Keep ntpd in foreground mode from its own point of view. The service
+	# launcher puts it in the background, records its PID, and detaches it from
+	# the console. Multiple servers give it alternatives if one is unavailable.
+	start-stop-daemon --start --background --make-pidfile \
+		--pidfile "$PIDFILE" --exec "$DAEMON" -- \
+		-n \
+		-p 0.pool.ntp.org \
+		-p 1.pool.ntp.org \
+		-p 2.pool.ntp.org
+	status=$?
+	if [ "$status" -ne 0 ]; then
+		echo "FAIL"
+		return "$status"
+	fi
+
+	# IoT App shows the system clock as soon as it starts. Wait briefly for the
+	# first NTP update so the initial dashboard does not show 1970. If the
+	# network is unavailable, ntpd keeps running and can synchronize later.
+	waited_seconds=0
+	while ! system_clock_is_valid && ntpd_is_running &&
+	      [ "$waited_seconds" -lt "$TIME_SYNC_WAIT_SECONDS" ]; do
+		sleep 1
+		waited_seconds=$((waited_seconds + 1))
+	done
+
+	if system_clock_is_valid; then
+		echo "synchronized"
+	else
+		echo "started; clock is not synchronized yet"
+	fi
+}
+
+stop() {
+	printf "Stopping network time synchronization: "
+	if ! ntpd_is_running; then
+		rm -f "$PIDFILE"
+		echo "not running"
+		return 0
+	fi
+
+	start-stop-daemon --stop --quiet --pidfile "$PIDFILE" --exec "$DAEMON"
+	status=$?
+	rm -f "$PIDFILE"
+	if [ "$status" -eq 0 ]; then
+		echo "OK"
+	else
+		echo "FAIL"
+	fi
+	return "$status"
+}
+
+case "$1" in
+	start)
+		start
+		;;
+	stop)
+		stop
+		;;
+	restart)
+		stop
+		start
+		;;
+	*)
+		echo "Usage: $0 {start|stop|restart}"
+		exit 1
+		;;
+esac

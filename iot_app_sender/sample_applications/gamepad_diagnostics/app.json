@@ -1,0 +1,5 @@
+{
+  "id": "gamepad-diagnostics",
+  "name": "Gamepad diagnostics",
+  "entry_point": "main.py"
+}

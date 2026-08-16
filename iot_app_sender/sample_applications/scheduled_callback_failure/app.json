@@ -1,0 +1,5 @@
+{
+  "id": "scheduled-callback-failure",
+  "name": "Scheduled callback failure",
+  "entry_point": "main.py"
+}

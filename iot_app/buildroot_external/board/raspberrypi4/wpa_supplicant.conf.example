@@ -1,0 +1,9 @@
+# Copy this file to wpa_supplicant.conf, then replace the sample values.
+# The real wpa_supplicant.conf file is ignored by Git.
+update_config=0
+country=GB
+
+network={
+    ssid="YOUR_WIFI_NAME"
+    psk="YOUR_WIFI_PASSWORD"
+}

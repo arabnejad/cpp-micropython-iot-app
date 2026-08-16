@@ -1,0 +1,5 @@
+{
+  "id": "gamepad-menu",
+  "name": "Gamepad menu",
+  "entry_point": "main.py"
+}

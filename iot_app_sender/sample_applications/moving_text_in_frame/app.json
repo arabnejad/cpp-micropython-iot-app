@@ -1,0 +1,5 @@
+{
+  "id": "moving-text-in-frame",
+  "name": "Moving text and clock",
+  "entry_point": "main.py"
+}

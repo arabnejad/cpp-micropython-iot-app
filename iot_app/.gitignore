@@ -1,0 +1,30 @@
+# Build output
+/build/
+/build-*/
+/out/
+/generated/
+
+# CMake-generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+Makefile
+
+# Compiled output
+*.a
+*.dll
+*.exe
+*.mpy
+*.o
+*.obj
+*.so
+
+# Editors and local tools
+.cache/
+.idea/
+.vscode/
+*.swp
+*.swo
+*.user
+.DS_Store

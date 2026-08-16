@@ -1,0 +1,28 @@
+# Project-owned Raspberry Pi CM4 firmware configuration.
+
+start_file=start4.elf
+fixup_file=fixup4.dat
+kernel=Image
+arm_64bit=1
+
+# Use the full HDMI image without overscan borders.
+disable_overscan=1
+
+# Keep enough legacy GPU memory for firmware-managed display setup.
+gpu_mem_256=100
+gpu_mem_512=100
+gpu_mem_1024=100
+
+# Enable the serial console used during image bring-up.
+dtoverlay=miniuart-bt
+
+# Enable /dev/i2c-1 at the 400 kHz rate recommended for the Adafruit gamepad.
+# https://learn.adafruit.com/gamepad-qt/circuitpython-and-python
+dtparam=i2c_arm=on,i2c_arm_baudrate=400000
+
+# Keep the CM4 IO Board real-time clock bus and device enabled.
+dtparam=i2c_vc=on
+dtoverlay=i2c-rtc,pcf85063a,i2c_csi_dsi
+
+# Enable the CM4 IO Board USB 2.0 host controller.
+dtoverlay=dwc2,dr_mode=host

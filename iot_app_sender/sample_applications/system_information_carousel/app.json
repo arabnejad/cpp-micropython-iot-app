@@ -1,0 +1,5 @@
+{
+  "id": "system-information-carousel",
+  "name": "System information carousel",
+  "entry_point": "main.py"
+}

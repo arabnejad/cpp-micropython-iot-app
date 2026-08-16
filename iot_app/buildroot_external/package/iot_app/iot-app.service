@@ -1,0 +1,18 @@
+[Unit]
+Description=IoT App MicroPython runtime
+Requires=dev-fb0.device
+After=dev-fb0.device network.target mosquitto.service
+Wants=network.target
+
+[Service]
+Type=simple
+User=iot-app
+Group=iot-app
+SupplementaryGroups=video render i2c input
+ExecStartPre=/usr/libexec/iot-app-wait-ready 30
+ExecStart=/usr/bin/iot_app
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
