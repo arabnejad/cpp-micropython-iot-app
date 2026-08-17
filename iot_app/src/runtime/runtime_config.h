@@ -1,7 +1,7 @@
 #pragma once
 
-#include <cstddef>
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <string>
@@ -37,11 +37,30 @@ struct RuntimeConfig {
 };
 
 /*
+ * Temporary directories used by the running process.
+ *
+ * The downloads and received applications directories have the same
+ * per-user root. Keeping the paths together prevents different parts of
+ * startup from building slightly different directory names.
+ */
+struct RuntimePaths {
+  std::filesystem::path temporaryRootDirectory;
+  std::filesystem::path downloadedFilesDirectory;
+  std::filesystem::path receivedApplicationsDirectory;
+};
+
+/*
  * Checks whether --help was requested, finds the installed default Python
  * application, and reads the device ID and MQTT connection values from the
  * environment. The collected values are returned in a RuntimeConfig object.
  */
 RuntimeConfig loadRuntimeConfig(int argc, char **argv);
+
+/*
+ * Calculates the per-user temporary paths used by this process. It returns
+ * path values only; the downloader and installer create their own directories.
+ */
+RuntimePaths calculateRuntimePathsForCurrentUser();
 
 /* Builds the short help text shown by --help. */
 std::string runtimeUsage(const char *programPath);

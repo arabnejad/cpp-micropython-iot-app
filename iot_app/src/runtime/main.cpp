@@ -16,13 +16,10 @@
 #include <chrono>
 #include <csignal>
 #include <exception>
-#include <filesystem>
 #include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
-
-#include <unistd.h>
 
 namespace {
 
@@ -63,10 +60,6 @@ void printDisplaySummary(const iot::display::ActiveDisplay &activeDisplay) {
                activeDisplayMode.refreshRateHz, " Hz");
 }
 
-std::filesystem::path runtimeTemporaryRootDirectory() {
-  return std::filesystem::path{"/tmp"} / ("iot-app-" + std::to_string(static_cast<unsigned long>(::getuid())));
-}
-
 } // namespace
 
 int main(int argc, char **argv) {
@@ -104,15 +97,15 @@ int main(int argc, char **argv) {
 
     const iot::python::PythonApplicationLoader applicationLoader{iot::runtime::maximumPythonSourceSizeInBytes};
     IOT_LOG_INFO(applicationLogger, "Loading default application: ", runtimeConfig.defaultApplicationDirectory);
-    const auto defaultPythonApplication  = applicationLoader.load(runtimeConfig.defaultApplicationDirectory);
-    const auto temporaryRuntimeDirectory = runtimeTemporaryRootDirectory();
+    const auto defaultPythonApplication = applicationLoader.load(runtimeConfig.defaultApplicationDirectory);
+    const auto runtimePaths             = iot::runtime::calculateRuntimePathsForCurrentUser();
 
     iot::ui::ScreenManager screenManager{activeDisplay, iot::ui::makeLvglFramebufferRenderBackend(),
                                          iot::runtime::maximumPendingRenderCommands};
     screenManager.start();
 
     iot::network::HttpFileDownloader fileDownloader{
-        temporaryRuntimeDirectory / "downloads",
+        runtimePaths.downloadedFilesDirectory,
         {iot::runtime::maximumDownloadedFileSizeInBytes, iot::runtime::maximumStoredDownloadedFilesSizeInBytes,
          iot::runtime::downloadConnectionTimeout, iot::runtime::downloadTotalTimeout}};
 
@@ -140,7 +133,7 @@ int main(int argc, char **argv) {
     deploymentServiceSettings.mqttReceiverSettings              = std::move(mqttSettings);
     deploymentServiceSettings.maximumQueuedApplicationMessages  = iot::runtime::maximumQueuedApplicationMessages;
     deploymentServiceSettings.maximumPythonSourceSizeInBytes    = iot::runtime::maximumPythonSourceSizeInBytes;
-    deploymentServiceSettings.temporaryApplicationRootDirectory = temporaryRuntimeDirectory / "applications";
+    deploymentServiceSettings.temporaryApplicationRootDirectory = runtimePaths.receivedApplicationsDirectory;
     deploymentServiceSettings.maximumRememberedDeployments      = iot::runtime::maximumRememberedDeployments;
 
     iot::messaging::ApplicationDeploymentService applicationDeploymentService{

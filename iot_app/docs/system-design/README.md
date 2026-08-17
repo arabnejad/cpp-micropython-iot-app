@@ -302,11 +302,11 @@ This is intentional. Startup is not hidden inside an `IoTApplication` or
 `RuntimeCoordinator` class. A reader can open `main.cpp` and see which objects
 exist, the order in which they start, and the dependencies passed between
 them. The small free functions in that file only select a display, print its
-details, build a temporary path, or record a stop signal; they do not own
-application components.
+details, or record a stop signal; they do not own application components.
 
 ```text
 main()
+├── RuntimeConfig and RuntimePaths
 ├── DisplayManager
 ├── LinuxSystemInformationProvider
 ├── PythonApplicationLoader
@@ -342,7 +342,7 @@ Process-long objects:
 - Display discovery and system-information providers
 - `ScreenManager` and the LVGL framebuffer backend
 - `HttpFileDownloader` and its per-application download directory
-- MQTT receiver and message queue
+- `ApplicationDeploymentService` and its MQTT receiver and message queue
 - Application loader, installer, deployment controller, and application
   manager
 
@@ -1850,6 +1850,20 @@ and these environment variables:
 The display connector and default application are not command-line choices.
 The runtime follows its fixed display-selection policy and always begins with
 the shipped default app.
+
+Startup also creates one `RuntimePaths` value for temporary files:
+
+```text
+RuntimePaths
+└── /tmp/iot-app-<user-id>/
+    ├── downloads/
+    └── applications/
+```
+
+`runtime_config.cpp` calculates these paths once. `main.cpp` gives the
+downloads directory to `HttpFileDownloader` and the applications directory to
+`ApplicationDeploymentService`. Both therefore use the same per-user root
+without rebuilding directory names in different parts of startup.
 
 ### 20.1 Bounded resources
 

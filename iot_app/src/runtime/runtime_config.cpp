@@ -4,6 +4,8 @@
 #include <stdexcept>
 #include <string>
 
+#include <unistd.h>
+
 namespace iot {
 namespace runtime {
 namespace {
@@ -95,6 +97,15 @@ RuntimeConfig loadRuntimeConfig(int argc, char **argv) {
     throw std::runtime_error("The shipped default application directory could not be determined");
   }
   return runtimeConfig;
+}
+
+RuntimePaths calculateRuntimePathsForCurrentUser() {
+  RuntimePaths runtimePaths;
+  runtimePaths.temporaryRootDirectory =
+      std::filesystem::path{"/tmp"} / ("iot-app-" + std::to_string(static_cast<unsigned long>(::getuid())));
+  runtimePaths.downloadedFilesDirectory      = runtimePaths.temporaryRootDirectory / "downloads";
+  runtimePaths.receivedApplicationsDirectory = runtimePaths.temporaryRootDirectory / "applications";
+  return runtimePaths;
 }
 
 std::string runtimeUsage(const char *programPath) {

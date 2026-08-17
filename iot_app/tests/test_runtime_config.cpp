@@ -6,6 +6,8 @@
 
 #include <filesystem>
 
+#include <unistd.h>
+
 namespace iot {
 namespace runtime {
 namespace {
@@ -38,6 +40,16 @@ TEST(RuntimeConfigTest, ReadsMqttSettingsFromEnvironmentVariables) {
   EXPECT_EQ(runtimeConfig.deviceId, "test-device");
   EXPECT_EQ(runtimeConfig.mqttBrokerHost, "mqtt.example.test");
   EXPECT_EQ(runtimeConfig.mqttBrokerPort, 2883U);
+}
+
+TEST(RuntimePathsTest, CalculatesDownloadAndApplicationPathsUnderOnePerUserRoot) {
+  const RuntimePaths runtimePaths = calculateRuntimePathsForCurrentUser();
+  const auto         expectedTemporaryRootDirectory =
+      std::filesystem::path{"/tmp"} / ("iot-app-" + std::to_string(static_cast<unsigned long>(::getuid())));
+
+  EXPECT_EQ(runtimePaths.temporaryRootDirectory, expectedTemporaryRootDirectory);
+  EXPECT_EQ(runtimePaths.downloadedFilesDirectory, expectedTemporaryRootDirectory / "downloads");
+  EXPECT_EQ(runtimePaths.receivedApplicationsDirectory, expectedTemporaryRootDirectory / "applications");
 }
 
 TEST(RuntimeConfigTest, RejectsAnInvalidMqttPort) {

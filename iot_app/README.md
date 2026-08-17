@@ -436,6 +436,10 @@ Received applications and downloaded files share one per-user temporary root:
     └── <calculated-sha256>.download
 ```
 
+The runtime calculates this layout once and keeps the three paths together in
+one `RuntimePaths` value. The downloader and deployment service receive their
+directories from that value instead of constructing paths independently.
+
 The runtime clears its temporary application directory when it starts. It also
 clears downloaded files before each Python application starts, so one
 application cannot reuse files left by another. The operating system clears
