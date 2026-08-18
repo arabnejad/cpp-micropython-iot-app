@@ -1023,6 +1023,11 @@ builds the error text, and sends it to the still-running ScreenManager. The
 failure details are no longer needed after the screen command has copied the
 completed text.
 
+The failure time comes from the same system-information provider used by
+`iot.system.current_time()`. If Linux cannot provide the time, the emergency
+screen shows `Time unavailable` and still includes the original Python
+traceback.
+
 ### 13.2 Starting an interpreter
 
 Each Python application gets a new MicroPython interpreter. This prevents
@@ -1773,7 +1778,8 @@ Missing optional values do not fail the complete dashboard. Text values use
 
 The system bridge also uses this provider for live values. It asks the
 provider for the current local time, uptime, and network interfaces instead of
-calling Linux directly.
+calling Linux directly. PythonApplicationManager also asks this provider for
+the time placed on the emergency screen.
 
 The I2C count reports interfaces such as `/dev/i2c-1`. It does not scan bus
 addresses. Blind I2C scanning can send unsafe commands to unknown devices, so

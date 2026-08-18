@@ -312,7 +312,8 @@ If a scheduled callback raises an exception, the interpreter is stopped. The
 C++ runtime shows a red emergency screen with the failed application's name,
 failure phase, time, and Python traceback. The shipped default app is not
 started again. It runs again only after `iot_app` restarts. The traceback is
-also written to the terminal or service log.
+also written to the terminal or service log. If the system time cannot be
+read, the screen shows `Time unavailable` without hiding the Python error.
 
 The runtime keeps at most 8 KiB from the end of a traceback, where the final
 exception message normally appears. It writes the traceback to the log and

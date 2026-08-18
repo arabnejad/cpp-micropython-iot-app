@@ -4,9 +4,7 @@
 #include "iot/ui/screen_manager.h"
 
 #include <algorithm>
-#include <array>
 #include <cstdint>
-#include <ctime>
 #include <exception>
 #include <stdexcept>
 #include <utility>
@@ -21,20 +19,6 @@ struct PythonApplicationFailure {
   std::string timestamp;
   std::string traceback;
 };
-
-std::string currentLocalTimestamp() {
-  const std::time_t currentTime = std::time(nullptr);
-  std::tm           localTime{};
-  if (currentTime == static_cast<std::time_t>(-1) || localtime_r(&currentTime, &localTime) == nullptr) {
-    return "Time unavailable";
-  }
-
-  std::array<char, 20U> timestamp{};
-  if (std::strftime(timestamp.data(), timestamp.size(), "%Y-%m-%d %H:%M:%S", &localTime) == 0U) {
-    return "Time unavailable";
-  }
-  return timestamp.data();
-}
 
 std::string shortenTracebackForScreen(const std::string &traceback) {
   constexpr std::size_t maximumVisibleCharacters = 2500U;
@@ -249,8 +233,18 @@ bool PythonApplicationManager::showEmergencyScreenForApplicationFailure(std::str
 
   IOT_LOG_ERROR(m_logger, "Python application failed; name='", applicationName, "', phase=", failurePhase, ", reason='",
                 tracebackSummaryForLog(traceback), "', tracebackBytes=", traceback.size());
+
+  std::string failureTime = "Time unavailable";
+  try {
+    failureTime = m_systemInformationProvider.readCurrentLocalTime();
+  } catch (const std::exception &error) {
+    IOT_LOG_WARNING(m_logger, "Could not read the local time for the emergency screen: ", error.what());
+  } catch (...) {
+    IOT_LOG_WARNING(m_logger, "Could not read the local time for the emergency screen because of an unknown error");
+  }
+
   const PythonApplicationFailure applicationFailure{std::move(applicationName), std::move(failurePhase),
-                                                    currentLocalTimestamp(), std::move(traceback)};
+                                                    std::move(failureTime), std::move(traceback)};
 
   stopPythonInterpreter();
   m_state            = ApplicationState::EmergencyScreen;

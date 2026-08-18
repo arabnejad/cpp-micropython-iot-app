@@ -422,6 +422,21 @@ TEST_F(PythonApplicationManagerTest, ShowsTheEmergencyScreenWhenTheDefaultApplic
   EXPECT_EQ(pythonApplicationManager.state(), ApplicationState::EmergencyScreen);
   ASSERT_TRUE(waitForEmergencyScreen());
   EXPECT_NE(emergencyScreenText().find("Broken default"), std::string::npos);
+  EXPECT_NE(emergencyScreenText().find("Time: 2000-01-01 00:00:00"), std::string::npos);
+}
+
+TEST_F(PythonApplicationManagerTest, KeepsThePythonErrorWhenTheEmergencyScreenCannotReadTheLocalTime) {
+  auto pythonApplicationManager                               = createApplicationManager();
+  m_systemInformationProvider.failWhenReadingCurrentLocalTime = true;
+
+  const auto activationResult = pythonApplicationManager.activateExternalApplication(
+      createPythonApplication("Broken external", "raise RuntimeError('original Python error')\n"));
+
+  EXPECT_FALSE(activationResult.externalApplicationIsRunning);
+  EXPECT_EQ(pythonApplicationManager.state(), ApplicationState::EmergencyScreen);
+  ASSERT_TRUE(waitForEmergencyScreen());
+  EXPECT_NE(emergencyScreenText().find("Time: Time unavailable"), std::string::npos);
+  EXPECT_NE(emergencyScreenText().find("original Python error"), std::string::npos);
 }
 
 TEST_F(PythonApplicationManagerTest, LetsPythonCatchInvalidTextBoxRequestsAndContinueDrawing) {
