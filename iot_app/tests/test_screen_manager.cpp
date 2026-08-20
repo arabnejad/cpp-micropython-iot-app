@@ -286,17 +286,35 @@ TEST(ScreenManagerTest, RejectedCreationLeavesNoTextBoxIdAndRejectedDeletionKeep
   EXPECT_NO_THROW(screenManager.throwIfRenderThreadFailed());
 }
 
-TEST(ScreenManagerTest, RejectsTextBoxIdsFromBeforeTheRenderThreadWasStopped) {
-  auto          recordingRenderBackend = std::make_unique<tests::RecordingRenderBackend>();
+TEST(ScreenManagerTest, RejectsWidgetIdsAndReleasesCachedImagesWhenTheRenderThreadStops) {
+  tests::TemporaryDirectory temporaryDirectory;
+  const auto                jpegPath = temporaryDirectory.path() / "picture.jpg";
+  tests::writeTestJpegFile(jpegPath);
+  auto          recordingRenderBackend     = std::make_unique<tests::RecordingRenderBackend>();
+  auto         *recordingRenderBackendView = recordingRenderBackend.get();
   ScreenManager screenManager(tests::testActiveDisplay(), std::move(recordingRenderBackend), 8U);
   screenManager.start();
   const auto previousTextBoxId = screenManager.drawTextBox({{0, 0, 100, 40}, "Old renderer"});
+  const auto previousImageId   = screenManager.drawJpegImage({jpegPath, 10, 20, 100U});
+  ASSERT_TRUE(tests::waitUntil([&] {
+    std::lock_guard<std::mutex> renderStateLock(recordingRenderBackendView->renderStateMutex);
+    return recordingRenderBackendView->jpegImagesById.count(previousImageId) == 1U;
+  }));
+  std::weak_ptr<const DecodedJpegImage> previousImagePixels;
+  {
+    std::lock_guard<std::mutex> renderStateLock(recordingRenderBackendView->renderStateMutex);
+    previousImagePixels = recordingRenderBackendView->jpegImagesById.at(previousImageId).decodedImage;
+  }
+
   screenManager.stop();
+  EXPECT_TRUE(previousImagePixels.expired());
   screenManager.start();
 
   EXPECT_THROW(screenManager.updateTextBox(previousTextBoxId, "Stale"), std::invalid_argument);
   EXPECT_THROW(screenManager.moveTextBox(previousTextBoxId, 10, 20), std::invalid_argument);
   EXPECT_THROW(screenManager.deleteTextBox(previousTextBoxId), std::invalid_argument);
+  EXPECT_THROW(screenManager.moveJpegImage(previousImageId, 10, 20), std::invalid_argument);
+  EXPECT_THROW(screenManager.deleteJpegImage(previousImageId), std::invalid_argument);
   const auto newTextBoxId = screenManager.drawTextBox({{0, 0, 100, 40}, "New renderer"});
   EXPECT_NE(newTextBoxId, previousTextBoxId);
   EXPECT_NO_THROW(screenManager.throwIfRenderThreadFailed());
@@ -332,6 +350,42 @@ TEST(ScreenManagerTest, SendsFillDeleteClearAndEmergencyScreenCommandsToTheRende
   });
   screenManager.stop();
   EXPECT_TRUE(allCommandsWereProcessed);
+}
+
+TEST(ScreenManagerTest, ClearReleasesWidgetIdsAndDecodedImagesFromThePreviousScreen) {
+  tests::TemporaryDirectory temporaryDirectory;
+  const auto                jpegPath = temporaryDirectory.path() / "picture.jpg";
+  tests::writeTestJpegFile(jpegPath);
+  auto          recordingRenderBackend     = std::make_unique<tests::RecordingRenderBackend>();
+  auto         *recordingRenderBackendView = recordingRenderBackend.get();
+  ScreenManager screenManager(tests::testActiveDisplay(), std::move(recordingRenderBackend), 8U);
+  screenManager.start();
+
+  const auto textBoxId = screenManager.drawTextBox({{0, 0, 100, 40}, "Previous screen"});
+  const auto imageId   = screenManager.drawJpegImage({jpegPath, 10, 20, 100U});
+  screenManager.setBackgroundJpegImage({jpegPath, BackgroundImageMode::Center, 100U});
+  ASSERT_TRUE(tests::waitUntil([&] {
+    std::lock_guard<std::mutex> renderStateLock(recordingRenderBackendView->renderStateMutex);
+    return recordingRenderBackendView->textBoxesById.count(textBoxId) == 1U &&
+           recordingRenderBackendView->jpegImagesById.count(imageId) == 1U &&
+           recordingRenderBackendView->backgroundJpegImage.has_value();
+  }));
+  std::weak_ptr<const DecodedJpegImage> decodedImagePixels;
+  {
+    std::lock_guard<std::mutex> renderStateLock(recordingRenderBackendView->renderStateMutex);
+    decodedImagePixels = recordingRenderBackendView->jpegImagesById.at(imageId).decodedImage;
+  }
+
+  screenManager.clear({8, 13, 22});
+
+  EXPECT_THROW(screenManager.updateTextBox(textBoxId, "Stale"), std::invalid_argument);
+  EXPECT_THROW(screenManager.moveJpegImage(imageId, 20, 30), std::invalid_argument);
+  EXPECT_TRUE(tests::waitUntil([&] {
+    std::lock_guard<std::mutex> renderStateLock(recordingRenderBackendView->renderStateMutex);
+    return recordingRenderBackendView->textBoxesById.empty() && recordingRenderBackendView->jpegImagesById.empty() &&
+           !recordingRenderBackendView->backgroundJpegImage.has_value() && decodedImagePixels.expired();
+  }));
+  screenManager.stop();
 }
 
 TEST(ScreenManagerTest, SendsNormalAndBackgroundJpegCommandsToTheRenderThread) {
@@ -399,7 +453,8 @@ TEST(ScreenManagerTest, FailedImageReplacementKeepsTheExistingWidgetAndBackgroun
   auto         *recordingRenderBackendView = recordingRenderBackend.get();
   ScreenManager screenManager(tests::testActiveDisplay(), std::move(recordingRenderBackend), 8U);
   screenManager.start();
-  const auto imageId = screenManager.drawJpegImage({jpegPath, 10, 20, 100U});
+  const auto textBoxId = screenManager.drawTextBox({{0, 0, 100, 40}, "Previous screen"});
+  const auto imageId   = screenManager.drawJpegImage({jpegPath, 10, 20, 100U});
   screenManager.setBackgroundJpegImage({jpegPath, BackgroundImageMode::Center, 100U});
   ASSERT_TRUE(tests::waitUntil([&] {
     std::lock_guard<std::mutex> renderStateLock(recordingRenderBackendView->renderStateMutex);
@@ -426,7 +481,36 @@ TEST(ScreenManagerTest, FailedImageReplacementKeepsTheExistingWidgetAndBackgroun
   EXPECT_NO_THROW(screenManager.throwIfRenderThreadFailed());
 
   screenManager.showErrorScreen({{0, 0, 300, 200}, "Application failed"});
+  EXPECT_THROW(screenManager.updateTextBox(textBoxId, "Stale"), std::invalid_argument);
+  EXPECT_THROW(screenManager.moveJpegImage(imageId, 20, 30), std::invalid_argument);
   EXPECT_TRUE(tests::waitUntil([&] { return originalWidgetPixels.expired() && originalBackgroundPixels.expired(); }));
+  screenManager.stop();
+}
+
+TEST(ScreenManagerTest, RejectedImageDeletionKeepsTheImageId) {
+  tests::TemporaryDirectory temporaryDirectory;
+  const auto                jpegPath = temporaryDirectory.path() / "picture.jpg";
+  tests::writeTestJpegFile(jpegPath);
+  auto          pausedRenderBackend     = std::make_unique<tests::PausedRecordingRenderBackend>();
+  auto         *pausedRenderBackendView = pausedRenderBackend.get();
+  ScreenManager screenManager(tests::testActiveDisplay(), std::move(pausedRenderBackend), 1U);
+  screenManager.start();
+  const bool rendererPaused = pausedRenderBackendView->waitUntilRenderThreadIsPaused();
+
+  const auto imageId = screenManager.drawJpegImage({jpegPath, 10, 20, 100U});
+  EXPECT_THROW(screenManager.deleteJpegImage(imageId), std::runtime_error);
+
+  pausedRenderBackendView->letRenderThreadContinue();
+  ASSERT_TRUE(rendererPaused);
+  ASSERT_TRUE(tests::waitUntil([&] {
+    std::lock_guard<std::mutex> renderStateLock(pausedRenderBackendView->renderStateMutex);
+    return pausedRenderBackendView->jpegImagesById.count(imageId) == 1U;
+  }));
+  EXPECT_NO_THROW(screenManager.moveJpegImage(imageId, 30, 40));
+  EXPECT_TRUE(tests::waitUntil([&] {
+    std::lock_guard<std::mutex> renderStateLock(pausedRenderBackendView->renderStateMutex);
+    return pausedRenderBackendView->jpegImagesById.at(imageId).x == 30;
+  }));
   screenManager.stop();
 }
 

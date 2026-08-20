@@ -407,7 +407,9 @@ through the public API.
 
 It also clears the backend's text-box and image maps because those LVGL
 objects no longer exist. `ScreenManager` releases its decoded JPEG cache at
-the same time.
+the same time. `ScreenManager` forgets text-box IDs, image IDs, and cached
+pixels together, but only after the clear command has been accepted. A
+rejected clear therefore leaves the current screen state available.
 
 ### 6.9 Show the emergency screen
 
@@ -416,6 +418,10 @@ full-screen object on `lv_layer_top()` and places the error text box inside it.
 
 The top layer appears above the active screen. A normal Python application
 widget cannot cover the runtime-owned error message.
+
+An accepted emergency-screen command performs the same state reset as
+`clear()`. Stopping `ScreenManager` also uses this reset after the render
+thread has finished.
 
 ## 7. Important LVGL calls in the backend
 

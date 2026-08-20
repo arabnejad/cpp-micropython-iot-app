@@ -100,6 +100,11 @@ public:
     wasInitialized = true;
   }
   void shutdown() noexcept override {
+    std::lock_guard<std::mutex> lock(renderStateMutex);
+    textBoxesById.clear();
+    jpegImagesById.clear();
+    backgroundJpegImage.reset();
+    lastErrorScreenText.clear();
     shutdownWasCalled = true;
   }
   void createTextBox(ui::WidgetId textBoxId, const ui::TextBoxSpec &textBoxSpec) override {

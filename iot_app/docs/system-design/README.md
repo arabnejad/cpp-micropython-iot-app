@@ -575,6 +575,14 @@ Dropping pending commands during `clear()` matters during an application
 switch. It prevents delayed drawing from the old app appearing on the new app's
 screen.
 
+`clear()`, `showErrorScreen()`, and `stop()` use the same rule for state owned
+by the previous application. They remove its text-box IDs, image IDs, and
+decoded JPEG cache together. A clear or error-screen request does this only
+after its replacement command has been accepted by the render queue. If the
+request is rejected, the existing IDs and cache are left unchanged. During
+shutdown, the reset happens after the render thread has stopped, when no
+queued command can still need the cached pixels.
+
 ### 11.2 LVGL framebuffer backend
 
 During startup, the backend creates an LVGL display and opens `/dev/fb0` through
@@ -684,9 +692,10 @@ If queuing creation fails, its ID is removed from the set. A deletion removes
 the ID only after its command has been queued successfully.
 
 Clearing the screen, showing an emergency screen, or stopping the renderer
-invalidates the text-box IDs. Application replacement clears the screen, so
-the new application cannot use an old application's IDs. Width and height
-are also checked before filled-area and emergency-screen requests are queued.
+invalidates both text-box and image IDs. Application replacement clears the
+screen, so the new application cannot use an old application's IDs. The same
+reset releases decoded images kept for reuse. Width and height are also
+checked before filled-area and emergency-screen requests are queued.
 
 Invalid sizes or IDs raise an error on the main/Python thread. Python can
 catch that error and continue. An unhandled error goes through the normal

@@ -108,6 +108,8 @@ private:
   void enqueueRenderCommand(RenderCommand command);
   /* Discards queued drawing work and makes this the next render command. */
   void replacePendingRenderCommandsWith(RenderCommand replacementCommand);
+  /* Forgets the previous screen's widget IDs and cached images after replacement or shutdown. */
+  void clearApplicationVisualState() noexcept;
   /* Runs the backend and queued commands on the render thread. */
   void runRenderLoop(std::promise<void> initialization) noexcept;
   /* Saves an exception raised by the render thread. */

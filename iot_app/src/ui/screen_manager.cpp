@@ -94,21 +94,29 @@ void ScreenManager::start() {
 }
 
 void ScreenManager::stop() noexcept {
+  bool renderThreadWasRunning = false;
   {
     std::lock_guard<std::mutex> lock(m_renderStateMutex);
-    if (!m_renderThread.joinable()) {
-      return;
+    if (m_renderThread.joinable()) {
+      m_stopping             = true;
+      renderThreadWasRunning = true;
     }
-    m_stopping = true;
   }
-  m_renderCommandAvailable.notify_one();
-  m_renderThread.join();
+  if (renderThreadWasRunning) {
+    m_renderCommandAvailable.notify_one();
+    m_renderThread.join();
+  }
 
-  std::lock_guard<std::mutex> lock(m_renderStateMutex);
-  std::queue<RenderCommand>   emptyQueue;
-  m_pendingRenderCommands.swap(emptyQueue);
-  m_textBoxIds.clear();
-  IOT_LOG_INFO(m_logger, "Render thread stopped");
+  {
+    std::lock_guard<std::mutex> lock(m_renderStateMutex);
+    std::queue<RenderCommand>   emptyQueue;
+    m_pendingRenderCommands.swap(emptyQueue);
+  }
+  clearApplicationVisualState();
+
+  if (renderThreadWasRunning) {
+    IOT_LOG_INFO(m_logger, "Render thread stopped");
+  }
 }
 
 WidgetId ScreenManager::drawTextBox(const TextBoxSpec &textBoxSpec) {
@@ -145,11 +153,9 @@ void ScreenManager::showErrorScreen(const TextBoxSpec &errorBoxSpec) {
                 "}, backgroundColor=rgb(", static_cast<unsigned int>(errorBoxSpec.backgroundColor.red), ',',
                 static_cast<unsigned int>(errorBoxSpec.backgroundColor.green), ',',
                 static_cast<unsigned int>(errorBoxSpec.backgroundColor.blue), ')');
-  m_jpegImageSourceStatesById.clear();
-  m_jpegImageLoader->clearCache();
   replacePendingRenderCommandsWith(
       [errorBoxSpec](IRenderBackend &renderBackend) { renderBackend.showErrorScreen(errorBoxSpec); });
-  m_textBoxIds.clear();
+  clearApplicationVisualState();
 }
 
 void ScreenManager::updateTextBox(WidgetId textBoxId, std::string updatedText) {
@@ -262,6 +268,10 @@ void ScreenManager::clear(Color screenBackgroundColor) {
                 static_cast<unsigned int>(screenBackgroundColor.blue), ')');
   replacePendingRenderCommandsWith(
       [screenBackgroundColor](IRenderBackend &renderBackend) { renderBackend.clear(screenBackgroundColor); });
+  clearApplicationVisualState();
+}
+
+void ScreenManager::clearApplicationVisualState() noexcept {
   m_textBoxIds.clear();
   m_jpegImageSourceStatesById.clear();
   m_jpegImageLoader->clearCache();
