@@ -1806,6 +1806,10 @@ closes the descriptor through RAII.
 and transfer bytes. Hardware drivers use `II2cDevice` and do not call Linux
 `open()`, `ioctl()`, `read()`, `write()`, or `close()` themselves.
 
+`I2cDevice` stores access to these Linux operations as a reference because it
+cannot work without them. The referenced implementation remains available
+until the `I2cDevice` is destroyed.
+
 It supports:
 
 - One write transfer

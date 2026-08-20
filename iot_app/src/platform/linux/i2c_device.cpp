@@ -85,7 +85,7 @@ I2cDevice::I2cDevice(int i2cBusNumber, std::uint8_t i2cAddress)
 
 I2cDevice::I2cDevice(int i2cBusNumber, std::uint8_t i2cAddress, internal::ILinuxI2cSystemCalls &linuxSystemCalls)
     : m_i2cDevicePath("/dev/i2c-" + std::to_string(i2cBusNumber)), m_i2cBusNumber(i2cBusNumber),
-      m_i2cAddress(i2cAddress), m_linuxSystemCalls(&linuxSystemCalls) {
+      m_i2cAddress(i2cAddress), m_linuxSystemCalls(linuxSystemCalls) {
   if (i2cBusNumber < 0 || i2cBusNumber > 255) {
     throw std::invalid_argument("I2C bus number must be between 0 and 255");
   }
@@ -93,25 +93,25 @@ I2cDevice::I2cDevice(int i2cBusNumber, std::uint8_t i2cAddress, internal::ILinux
     throw std::invalid_argument("I2C address must be between 0x03 and 0x77");
   }
 
-  m_fileDescriptor = m_linuxSystemCalls->openDevice(m_i2cDevicePath.c_str(), O_RDWR | O_CLOEXEC);
+  m_fileDescriptor = m_linuxSystemCalls.openDevice(m_i2cDevicePath.c_str(), O_RDWR | O_CLOEXEC);
   if (m_fileDescriptor < 0) {
     const int savedError = errno;
     throw std::runtime_error("Could not open " + m_i2cDevicePath + ": " + std::strerror(savedError));
   }
 
-  if (m_linuxSystemCalls->deviceControl(m_fileDescriptor, I2C_FUNCS,
-                                        reinterpret_cast<unsigned long>(&m_adapterFunctions)) < 0) {
+  if (m_linuxSystemCalls.deviceControl(m_fileDescriptor, I2C_FUNCS,
+                                       reinterpret_cast<unsigned long>(&m_adapterFunctions)) < 0) {
     const int savedError = errno;
-    m_linuxSystemCalls->closeDevice(m_fileDescriptor);
+    m_linuxSystemCalls.closeDevice(m_fileDescriptor);
     m_fileDescriptor = -1;
     throw std::runtime_error("Could not read capabilities from " + m_i2cDevicePath + ": " + std::strerror(savedError));
   }
 
   // Setting the address only configures this file descriptor. The first real
   // register read is what proves that the device is present.
-  if (m_linuxSystemCalls->deviceControl(m_fileDescriptor, I2C_SLAVE, static_cast<unsigned long>(m_i2cAddress)) < 0) {
+  if (m_linuxSystemCalls.deviceControl(m_fileDescriptor, I2C_SLAVE, static_cast<unsigned long>(m_i2cAddress)) < 0) {
     const int savedError = errno;
-    m_linuxSystemCalls->closeDevice(m_fileDescriptor);
+    m_linuxSystemCalls.closeDevice(m_fileDescriptor);
     m_fileDescriptor = -1;
     throw std::runtime_error("Could not select I2C address " + formatAddress(m_i2cAddress) + " on " + m_i2cDevicePath +
                              ": " + std::strerror(savedError));
@@ -120,7 +120,7 @@ I2cDevice::I2cDevice(int i2cBusNumber, std::uint8_t i2cAddress, internal::ILinux
 
 I2cDevice::~I2cDevice() {
   if (m_fileDescriptor >= 0) {
-    m_linuxSystemCalls->closeDevice(m_fileDescriptor);
+    m_linuxSystemCalls.closeDevice(m_fileDescriptor);
   }
 }
 
@@ -166,7 +166,7 @@ std::vector<std::uint8_t> I2cDevice::writeRead(const std::vector<std::uint8_t> &
   int result = -1;
   do {
     result =
-        m_linuxSystemCalls->deviceControl(m_fileDescriptor, I2C_RDWR, reinterpret_cast<unsigned long>(&transaction));
+        m_linuxSystemCalls.deviceControl(m_fileDescriptor, I2C_RDWR, reinterpret_cast<unsigned long>(&transaction));
   } while (result < 0 && errno == EINTR);
 
   if (result != 2) {
@@ -209,7 +209,7 @@ void I2cDevice::writeUnlocked(const std::vector<std::uint8_t> &bytesToWrite) {
 
   ssize_t bytesWritten = -1;
   do {
-    bytesWritten = m_linuxSystemCalls->writeBytes(m_fileDescriptor, bytesToWrite.data(), bytesToWrite.size());
+    bytesWritten = m_linuxSystemCalls.writeBytes(m_fileDescriptor, bytesToWrite.data(), bytesToWrite.size());
   } while (bytesWritten < 0 && errno == EINTR);
 
   if (bytesWritten < 0) {
@@ -229,7 +229,7 @@ std::vector<std::uint8_t> I2cDevice::readUnlocked(std::size_t numberOfBytesToRea
 
   ssize_t bytesRead = -1;
   do {
-    bytesRead = m_linuxSystemCalls->readBytes(m_fileDescriptor, bytesReadFromDevice.data(), bytesReadFromDevice.size());
+    bytesRead = m_linuxSystemCalls.readBytes(m_fileDescriptor, bytesReadFromDevice.data(), bytesReadFromDevice.size());
   } while (bytesRead < 0 && errno == EINTR);
 
   if (bytesRead < 0) {

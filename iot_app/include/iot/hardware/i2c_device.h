@@ -27,7 +27,7 @@ class I2cDevice : public II2cDevice {
 public:
   /* Opens the Linux I2C device using the normal system calls. */
   I2cDevice(int i2cBusNumber, std::uint8_t i2cAddress);
-  /* Opens the device using the supplied Linux-call implementation. */
+  /* Opens the device using Linux calls supplied by a longer-lived owner. */
   I2cDevice(int i2cBusNumber, std::uint8_t i2cAddress, internal::ILinuxI2cSystemCalls &linuxSystemCalls);
   ~I2cDevice() override;
 
@@ -85,7 +85,7 @@ private:
   std::uint8_t m_i2cAddress{0};
   /* Feature flags reported by the Linux adapter through I2C_FUNCS. */
   unsigned long                   m_adapterFunctions{0};
-  internal::ILinuxI2cSystemCalls *m_linuxSystemCalls{nullptr};
+  internal::ILinuxI2cSystemCalls &m_linuxSystemCalls;
   std::mutex                      m_transactionMutex;
 };
 
