@@ -10,7 +10,7 @@ typedef struct {
   size_t used_size;
 } traceback_capture_t;
 
-/** Prints one traceback piece and keeps its newest text in the buffer. */
+/* Prints one traceback piece and keeps its newest text in the buffer. */
 static void capture_traceback_text(void *capture_data, const char *text, size_t text_size) {
   traceback_capture_t *capture = (traceback_capture_t *)capture_data;
   mp_plat_print.print_strn(mp_plat_print.data, text, text_size);

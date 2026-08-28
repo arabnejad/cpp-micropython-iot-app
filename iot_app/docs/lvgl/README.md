@@ -238,7 +238,7 @@ LVGL backend
 LVGL framebuffer driver -> /dev/fb0 -> HDMI
 ```
 
-The steps are:
+Here is what happens:
 
 1. `display_draw_text_box()` checks the Python arguments.
 2. `iot_display_draw_text_box()` creates a C++ `TextBoxSpec`.
@@ -287,7 +287,7 @@ is [`IRenderBackend`](../../include/iot/ui/render_backend.h).
 Normal text is centred in its box. The error-screen label is aligned to the
 top-left because a traceback is easier to read that way.
 
-The backend stores the two pointers in `textBoxes_`, indexed by the IoT App
+The backend stores the two pointers in `m_textBoxes`, indexed by the IoT App
 widget ID:
 
 ```text
@@ -350,7 +350,7 @@ widget cannot cover the runtime-owned error message.
 
 ## 7. Important LVGL calls in the backend
 
-The calls below are all made from
+These calls are all made from
 [`lvgl_framebuffer_render_backend.cpp`](../../src/ui/lvgl_framebuffer_render_backend.cpp).
 
 ### 7.1 Lifecycle and display calls

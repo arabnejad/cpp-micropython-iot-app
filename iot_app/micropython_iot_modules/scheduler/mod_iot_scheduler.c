@@ -11,14 +11,14 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/** One Python app can keep at most this many active timers. */
+/* One Python app can keep at most this many active timers. */
 #define IOT_SCHEDULER_MAXIMUM_TASK_COUNT (128U)
 
-/**
- * One repeating callback registered by `scheduler.every()`.
+/*
+ * One repeating callback registered by scheduler.every().
  *
  * MicroPython's VM keeps the head of this linked list. This prevents the timer
- * and its Python callback from being collected after `main.py` returns.
+ * and its Python callback from being collected after main.py returns.
  */
 typedef struct _iot_scheduled_task_t {
   struct _iot_scheduled_task_t *next;
@@ -29,7 +29,7 @@ typedef struct _iot_scheduled_task_t {
 } iot_scheduled_task_t;
 
 // MicroPython puts this declaration in a generated header used by the VM. Keep
-// it as `void *` there because the task structure belongs only to this file.
+// it as void * there because the task structure belongs only to this file.
 MP_REGISTER_ROOT_POINTER(void *iot_scheduler_task_head);
 
 static uint32_t next_task_id = 1U;

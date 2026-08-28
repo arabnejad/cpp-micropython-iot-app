@@ -31,20 +31,20 @@ std::size_t numberOfHeapWords(std::size_t heapSizeInBytes) {
 } // namespace
 
 MicroPythonRuntime::MicroPythonRuntime(std::size_t heapSizeInBytes)
-    : heapWords_(numberOfHeapWords(heapSizeInBytes)), ownerThreadId_(std::this_thread::get_id()) {
-  IOT_LOG_DEBUG(logger_, "Starting MicroPython interpreter; requestedHeapBytes=", heapSizeInBytes,
-                ", allocatedHeapBytes=", heapWords_.size() * sizeof(std::uintptr_t));
+    : m_heapWords(numberOfHeapWords(heapSizeInBytes)), m_ownerThreadId(std::this_thread::get_id()) {
+  IOT_LOG_DEBUG(m_logger, "Starting MicroPython interpreter; requestedHeapBytes=", heapSizeInBytes,
+                ", allocatedHeapBytes=", m_heapWords.size() * sizeof(std::uintptr_t));
   // MicroPython needs an address near the top of this thread's stack so the
   // garbage collector knows which area to scan.
   std::uintptr_t stackTopMarker = 0U;
-  mp_embed_init(heapWords_.data(), heapWords_.size() * sizeof(std::uintptr_t), &stackTopMarker);
+  mp_embed_init(m_heapWords.data(), m_heapWords.size() * sizeof(std::uintptr_t), &stackTopMarker);
   // The embed port reuses some global VM state. Clear old timer references
   // before the new interpreter starts using its own heap.
   iot_scheduler_reset();
 }
 
 MicroPythonRuntime::~MicroPythonRuntime() {
-  IOT_LOG_DEBUG(logger_, "Stopping MicroPython interpreter");
+  IOT_LOG_DEBUG(m_logger, "Stopping MicroPython interpreter");
   mp_embed_deinit();
 }
 
@@ -56,15 +56,15 @@ PythonExecutionResult MicroPythonRuntime::executeApplication(const PythonApplica
   }
 
   const std::string entryPointName = pythonApplication.entryPointPath.string();
-  IOT_LOG_INFO(logger_, "Python app '", pythonApplication.applicationName, "' is starting ", entryPointName);
+  IOT_LOG_INFO(m_logger, "Python app '", pythonApplication.applicationName, "' is starting ", entryPointName);
   std::array<char, maximumCapturedTracebackSizeInBytes + 1U> tracebackBuffer{};
   const int succeeded = iot_micropython_execute_source(entryPointName.c_str(), pythonApplication.sourceCode.data(),
                                                        pythonApplication.sourceCode.size(), tracebackBuffer.data(),
                                                        tracebackBuffer.size());
   if (succeeded != 0) {
-    IOT_LOG_INFO(logger_, "Python app '", pythonApplication.applicationName, "' started successfully");
+    IOT_LOG_INFO(m_logger, "Python app '", pythonApplication.applicationName, "' started successfully");
   } else {
-    IOT_LOG_ERROR(logger_, "Python app '", pythonApplication.applicationName, "' failed during startup");
+    IOT_LOG_ERROR(m_logger, "Python app '", pythonApplication.applicationName, "' failed during startup");
   }
   return {succeeded != 0, tracebackBuffer.data()};
 }
@@ -97,7 +97,7 @@ PythonExecutionResult MicroPythonRuntime::runScheduledCallbacks(std::chrono::mil
 }
 
 void MicroPythonRuntime::throwIfCalledFromAnotherThread() const {
-  if (std::this_thread::get_id() != ownerThreadId_) {
+  if (std::this_thread::get_id() != m_ownerThreadId) {
     throw std::logic_error("MicroPython must be used from the thread that created it");
   }
 }

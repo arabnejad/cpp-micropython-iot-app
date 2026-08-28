@@ -6,7 +6,7 @@
 extern "C" {
 #endif
 
-/**
+/*
  * Runs Python source from C, where MicroPython exceptions can be caught safely.
  * It returns 1 on success. On failure it prints the exception, copies the end
  * of the traceback into the provided buffer, and returns 0.

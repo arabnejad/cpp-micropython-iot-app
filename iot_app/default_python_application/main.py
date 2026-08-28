@@ -16,7 +16,7 @@ PINK = (244, 114, 182)
 
 
 def format_duration(total_seconds):
-    """Change an uptime such as 6138 seconds into `01:42:18`."""
+    """Change an uptime such as 6138 seconds into 01:42:18."""
     hours = total_seconds // 3600
     minutes = (total_seconds % 3600) // 60
     seconds = total_seconds % 60

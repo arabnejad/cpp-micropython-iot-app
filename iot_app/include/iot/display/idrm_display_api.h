@@ -7,15 +7,17 @@
 namespace iot {
 namespace display {
 
-/** Reads connected displays from Linux DRM/KMS. */
+/*
+ * Small wrapper around the libdrm calls needed by DisplayManager.
+ * Other parts of the application should use IDisplayManager. This lower level
+ * interface exists so DisplayManager does not depend directly on
+ * libdrm calls.
+ */
 class IDrmDisplayApi {
 public:
   virtual ~IDrmDisplayApi()                                  = default;
   virtual std::vector<DisplayInfo> connectedDisplays() const = 0;
 };
-
-/** Returns the Linux DRM implementation used outside tests. */
-IDrmDisplayApi &drmDisplayApi();
 
 } // namespace display
 } // namespace iot

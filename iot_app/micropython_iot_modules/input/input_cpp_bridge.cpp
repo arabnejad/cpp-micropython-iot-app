@@ -27,19 +27,19 @@ iot::input::AdafruitMiniI2cGamepad &gamepad(void *handle) {
   return *static_cast<iot::input::AdafruitMiniI2cGamepad *>(handle);
 }
 
-/**
- * Runs one C++ function and converts any exception into a result understood by
- * the MicroPython C binding.
+/*
+ * Runs a C++ operation without letting its exception cross into MicroPython's
+ * C code.
  *
- * `FunctionToRun` is the compiler-generated type of the lambda passed to this
- * function. For example:
+ * FunctionToRun is the compiler-generated type of the lambda passed here. For
+ * example:
  *
  *   return runSafely([=] {
  *     gamepad(gamepad_handle).connect();
  *   });
  *
- * In this example, `functionToRun()` executes the code inside the lambda. The
- * template lets us accept that lambda directly without using `std::function`.
+ * functionToRun() executes the lambda body. Using a template avoids wrapping
+ * every bridge call in std::function.
  */
 template <typename FunctionToRun> iot_native_result_t runSafely(FunctionToRun functionToRun) noexcept {
   try {
@@ -52,7 +52,7 @@ template <typename FunctionToRun> iot_native_result_t runSafely(FunctionToRun fu
   }
 }
 
-/** Converts a C++ direction into the text returned to Python. */
+/* Converts a C++ direction into the text returned to Python. */
 const char *joystickDirectionName(iot::input::JoystickDirection direction) noexcept {
   switch (direction) {
   case iot::input::JoystickDirection::Center:

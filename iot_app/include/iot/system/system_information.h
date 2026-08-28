@@ -9,7 +9,10 @@
 namespace iot {
 namespace system {
 
-/** Information about one Linux network interface, excluding loopback. */
+/*
+ * Current state of a Linux network interface that can connect to another
+ * device, such as eth0 or wlan0. The local-only lo interface is not included.
+ */
 struct NetworkInterfaceInformation {
   std::string                  name;
   bool                         connected{false};
@@ -17,7 +20,7 @@ struct NetworkInterfaceInformation {
   std::optional<std::uint64_t> speedMegabitsPerSecond;
 };
 
-/** System and hardware values collected at one point in time. */
+/* Snapshot of the system and hardware values shown by the dashboard. */
 struct SystemInformation {
   std::string hostname;
   std::string deviceModel;
@@ -43,20 +46,21 @@ struct SystemInformation {
   std::size_t blockDeviceCount{0};
 };
 
-/** Common interface used to read system information. */
+/* System information needed by the native Python module. */
 class ISystemInformationProvider {
 public:
   virtual ~ISystemInformationProvider() = default;
 
-  /** Reads a fresh set of system and hardware values. */
   virtual SystemInformation readSystemInformation() const = 0;
-  /** Reads only uptime, which is cheaper than rebuilding the full snapshot. */
-  virtual std::uint64_t readUptimeSeconds() const = 0;
-  /** Reads the current state of every non-loopback network interface. */
+  virtual std::uint64_t     readUptimeSeconds() const     = 0;
+  /*
+   * Reads interfaces that can connect to another device, such as eth0 and
+   * wlan0. The local-only lo interface is not included.
+   */
   virtual std::vector<NetworkInterfaceInformation> readNetworkInterfaces() const = 0;
 };
 
-/** Reads system information from Linux APIs, `/proc`, `/sys`, and `/dev`. */
+/* Reads system information from Linux APIs, /proc, /sys, and /dev. */
 class LinuxSystemInformationProvider final : public ISystemInformationProvider {
 public:
   SystemInformation                        readSystemInformation() const override;

@@ -47,8 +47,8 @@ std::string readFileWithLimit(const std::filesystem::path &filePath, std::size_t
 } // namespace
 
 PythonApplicationLoader::PythonApplicationLoader(std::size_t maximumSourceSizeInBytes)
-    : maximumSourceSizeInBytes_(maximumSourceSizeInBytes) {
-  if (maximumSourceSizeInBytes_ == 0U) {
+    : m_maximumSourceSizeInBytes(maximumSourceSizeInBytes) {
+  if (m_maximumSourceSizeInBytes == 0U) {
     throw std::invalid_argument("Python application source-size limit must be greater than zero");
   }
 }
@@ -78,7 +78,7 @@ PythonApplication PythonApplicationLoader::load(const std::filesystem::path &app
     throw std::runtime_error("Application entry point resolves outside its application directory");
   }
 
-  auto sourceCode = readFileWithLimit(canonicalEntryPoint, maximumSourceSizeInBytes_, "application entry point");
+  auto sourceCode = readFileWithLimit(canonicalEntryPoint, m_maximumSourceSizeInBytes, "application entry point");
   if (sourceCode.find('\0') != std::string::npos) {
     throw std::runtime_error("Application entry point contains a null byte and is not valid Python source");
   }

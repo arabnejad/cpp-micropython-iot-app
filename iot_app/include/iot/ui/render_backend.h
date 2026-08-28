@@ -11,7 +11,7 @@ namespace ui {
 
 class ILvglFramebufferDriver;
 
-/** Drawing operations that ScreenManager runs on its render thread. */
+/* Drawing operations executed by the ScreenManager render thread. */
 class IRenderBackend {
 public:
   virtual ~IRenderBackend() = default;
@@ -22,35 +22,37 @@ public:
   IRenderBackend(IRenderBackend &&)                 = delete;
   IRenderBackend &operator=(IRenderBackend &&)      = delete;
 
-  /** Opens the output and prepares it for drawing. */
+  /* Opens the output and prepares LVGL. */
   virtual void initialize(const display::ActiveDisplay &activeDisplay) = 0;
-  /** Releases the output. It is safe to call this more than once. */
-  virtual void shutdown() noexcept = 0;
-  /** Creates a text box and associates it with `textBoxId`. */
+  /* Releases the output. */
+  virtual void shutdown() noexcept                                               = 0;
   virtual void createTextBox(WidgetId textBoxId, const TextBoxSpec &textBoxSpec) = 0;
-  /** Changes the text in an existing text box. */
   virtual void updateTextBox(WidgetId textBoxId, const std::string &updatedText) = 0;
-  /** Moves an existing text box without creating a new widget. */
-  virtual void moveTextBox(WidgetId textBoxId, std::int32_t x, std::int32_t y) = 0;
-  /** Deletes an existing text box and its label. */
-  virtual void deleteTextBox(WidgetId textBoxId) = 0;
-  /** Draws one solid rectangle. */
-  virtual void fillArea(const FilledAreaSpec &filledAreaSpec) = 0;
-  /** Clears application widgets and shows the runtime-owned error screen. */
+  virtual void moveTextBox(WidgetId textBoxId, std::int32_t x, std::int32_t y)   = 0;
+  virtual void deleteTextBox(WidgetId textBoxId)                                 = 0;
+  virtual void fillArea(const FilledAreaSpec &filledAreaSpec)                    = 0;
+  /* Clears application widgets and shows the runtime-owned error screen. */
   virtual void showErrorScreen(const TextBoxSpec &errorBoxSpec) = 0;
-  /** Removes all widgets and fills the screen with one colour. */
+  /* Removes all widgets and fills the screen with one colour. */
   virtual void clear(Color screenBackgroundColor) = 0;
-  /** Updates the display and returns how many milliseconds it can wait. */
+  /* Lets LVGL update the display and returns its requested wait time. */
   virtual std::uint32_t processEventsAndGetWaitMilliseconds() = 0;
 
 protected:
   IRenderBackend() = default;
 };
 
-/** Creates the LVGL backend that draws through Linux `/dev/fb0`. */
+/*
+ * Creates the render backend used by main.cpp. The factory hides the LVGL
+ * framebuffer implementation and returns the IRenderBackend object required
+ * by ScreenManager.
+ */
 std::unique_ptr<IRenderBackend> makeLvglFramebufferRenderBackend();
 
-/** Creates the LVGL backend with a supplied framebuffer driver. */
+/*
+ * Creates the same backend with a caller-supplied framebuffer driver. This
+ * allows the backend to be checked without opening the real Linux framebuffer.
+ */
 std::unique_ptr<IRenderBackend>
 makeLvglFramebufferRenderBackend(std::unique_ptr<ILvglFramebufferDriver> framebufferDriver);
 

@@ -1,12 +1,14 @@
 #pragma once
 
-#include "iot/display/display_types.h"
+#include "iot/display/display_manager.h"
 #include "iot/logging/logger.h"
+#include "iot/python/micropython_runtime.h"
 #include "iot/python/python_application.h"
-#include "iot/python/python_application_failure.h"
-#include "iot/python/python_application_runner.h"
+#include "iot/system/system_information.h"
 
 #include <chrono>
+#include <cstddef>
+#include <memory>
 #include <optional>
 #include <string>
 
@@ -17,7 +19,11 @@ class ScreenManager;
 
 namespace python {
 
-/** Current application and runtime display state. */
+class MicroPythonApplicationContext;
+
+/* Current application and runtime display state.
+ * What the runtime is currently showing.
+ */
 enum class ApplicationState {
   Stopped,
   DefaultApplication,
@@ -25,71 +31,73 @@ enum class ApplicationState {
   EmergencyScreen,
 };
 
-/** Result of trying to start an application received from outside. */
+/* Result of trying to start an application received from outside. */
 struct ExternalApplicationActivationResult {
   bool        externalApplicationIsRunning{false};
   std::string failureReason;
 };
 
-/** Result of running the Python callbacks that were due. */
-struct ScheduledApplicationUpdateResult {
-  bool        succeeded{true};
-  std::string failedApplicationName;
-  std::string failureReason;
-};
-
-/**
- * Switches Python applications and shows the emergency screen when one fails.
+/*
+ * Controls the lifetime of the current Python application.
  *
- * `PythonApplicationRunner` owns the current interpreter. This class decides
- * which app to run, keeps the latest error, and shows the emergency screen
- * when an app fails. `ScreenManager` stays alive during a switch.
+ * Each application gets a fresh MicroPython interpreter and context. The
+ * manager also advances timers, stops the old interpreter during a switch, and
+ * shows the emergency screen after an unhandled Python exception.
  */
 class PythonApplicationManager {
 public:
-  PythonApplicationManager(PythonApplicationRunner &applicationRunner, ui::ScreenManager &screenManager,
-                           display::ActiveDisplay activeDisplay);
+  PythonApplicationManager(ui::ScreenManager &screenManager, display::ActiveDisplay activeDisplay,
+                           const display::IDisplayManager           &displayManager,
+                           const system::ISystemInformationProvider &systemInformationProvider,
+                           std::size_t                               pythonHeapSizeInBytes);
   ~PythonApplicationManager();
 
-  // Controls one runner and display; copying and moving are disabled.
+  // Owns one interpreter and its application context. Copying and moving are
+  // disabled so that ownership cannot be split between manager objects.
   PythonApplicationManager(const PythonApplicationManager &)            = delete;
   PythonApplicationManager &operator=(const PythonApplicationManager &) = delete;
   PythonApplicationManager(PythonApplicationManager &&)                 = delete;
   PythonApplicationManager &operator=(PythonApplicationManager &&)      = delete;
 
-  /** Starts the default app shipped with the executable. */
+  /* Starts the default app shipped with IoT App. */
   void startDefaultApplication(const PythonApplication &defaultApplication);
 
-  /** Stops the current app and tries to start an app received from outside. */
+  /* Stops the current app and tries to start an app received from outside. */
   ExternalApplicationActivationResult activateExternalApplication(const PythonApplication &pythonApplication);
 
-  /** Stops the current Python app. Calling this more than once is safe. */
+  /* Stops the current Python app. */
   void stop() noexcept;
 
-  /** Gets what is currently running. */
+  /* Gets the current runtime state. */
   ApplicationState state() const noexcept;
 
-  /** Gets the name of the current app or emergency screen. */
+  /* Gets the name of the active app, or "Emergency screen" after a failure. */
   const std::string &activeScreenName() const noexcept;
 
-  /** Gets the time until the current app's next callback. */
+  /* Gets the time remaining before the current app's next callback. */
   std::optional<std::chrono::milliseconds> timeUntilNextScheduledCallback() const;
 
-  /** Runs due callbacks and shows the emergency screen if a callback fails. */
-  ScheduledApplicationUpdateResult runScheduledCallbacks();
+  /* Runs callbacks that are due and shows the emergency screen if one fails. */
+  void runScheduledCallbacks();
 
 private:
-  void prepareForApplicationStart();
-  void recordApplicationFailure(std::string applicationName, std::string phase, std::string traceback);
-  bool showEmergencyFailureScreen(std::string explanation) noexcept;
+  PythonExecutionResult startApplicationInNewInterpreter(const PythonApplication &pythonApplication);
+  void                  stopPythonInterpreter() noexcept;
+  void                  prepareForApplicationStart();
+  bool                  showEmergencyScreenForApplicationFailure(std::string explanation, std::string applicationName,
+                                                                 std::string failurePhase, std::string traceback) noexcept;
 
-  logging::Logger                         logger_{"PythonApplicationManager"};
-  PythonApplicationRunner                &applicationRunner_;
-  ui::ScreenManager                      &screenManager_;
-  display::ActiveDisplay                  activeDisplay_;
-  ApplicationState                        state_{ApplicationState::Stopped};
-  std::string                             activeScreenName_;
-  std::optional<PythonApplicationFailure> caughtPythonApplicationError_;
+  logging::Logger                                      m_logger{"PythonApplicationManager"};
+  ui::ScreenManager                                   &m_screenManager;
+  display::ActiveDisplay                               m_activeDisplay;
+  const display::IDisplayManager                      &m_displayManager;
+  const system::ISystemInformationProvider            &m_systemInformationProvider;
+  std::size_t                                          m_pythonHeapSizeInBytes{0};
+  std::unique_ptr<MicroPythonApplicationContext>       m_microPythonApplicationContext;
+  std::unique_ptr<MicroPythonRuntime>                  m_microPythonRuntime;
+  std::optional<std::chrono::steady_clock::time_point> m_previousSchedulerUpdateTime;
+  ApplicationState                                     m_state{ApplicationState::Stopped};
+  std::string                                          m_activeScreenName;
 };
 
 } // namespace python

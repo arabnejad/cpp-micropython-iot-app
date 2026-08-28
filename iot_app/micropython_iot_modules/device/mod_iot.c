@@ -6,9 +6,13 @@ extern const mp_obj_module_t iot_private_scheduler_module;
 extern const mp_obj_module_t iot_private_system_module;
 
 /*
- * Applications import one public `iot` module. It exposes the private native
- * modules under stable names. Python helper functions can be added later
- * without changing the C++ drivers.
+ * Python applications import iot and use iot.display, iot.input,
+ * iot.scheduler, and iot.system. The table below connects those public names
+ * to the built-in C modules that implement them.
+ *
+ * Applications do not need to know the internal module names. This also lets
+ * the public iot API add Python helper functions later without changing the
+ * low-level C++ drivers.
  */
 static const mp_rom_map_elem_t iot_module_globals_table[] = {
     {MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_iot)},

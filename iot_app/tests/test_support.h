@@ -17,7 +17,7 @@
 namespace iot {
 namespace tests {
 
-/** Waits briefly for work performed by another thread to become visible. */
+/* Waits briefly for work performed by another thread to become visible. */
 inline bool waitUntil(const std::function<bool()> &condition,
                       std::chrono::milliseconds    timeout = std::chrono::milliseconds(200)) {
   const auto deadline = std::chrono::steady_clock::now() + timeout;
@@ -30,40 +30,40 @@ inline bool waitUntil(const std::function<bool()> &condition,
   return condition();
 }
 
-/** Removes a private temporary directory when a test ends. */
+/* Removes a private temporary directory when a test ends. */
 class TemporaryDirectory {
 public:
   TemporaryDirectory() {
     const auto uniqueName =
         "iot-app-test-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
-    path_ = std::filesystem::temp_directory_path() / uniqueName;
-    std::filesystem::create_directories(path_);
+    m_path = std::filesystem::temp_directory_path() / uniqueName;
+    std::filesystem::create_directories(m_path);
   }
 
   ~TemporaryDirectory() {
     std::error_code cleanupError;
-    std::filesystem::remove_all(path_, cleanupError);
+    std::filesystem::remove_all(m_path, cleanupError);
   }
 
   TemporaryDirectory(const TemporaryDirectory &)            = delete;
   TemporaryDirectory &operator=(const TemporaryDirectory &) = delete;
 
   const std::filesystem::path &path() const noexcept {
-    return path_;
+    return m_path;
   }
 
 private:
-  std::filesystem::path path_;
+  std::filesystem::path m_path;
 };
 
-/** Restores one environment variable when a test ends. */
+/* Restores one environment variable when a test ends. */
 class ScopedEnvironmentVariable {
 public:
-  ScopedEnvironmentVariable(const char *name, const char *value) : name_(name) {
+  ScopedEnvironmentVariable(const char *name, const char *value) : m_name(name) {
     const char *oldValue = std::getenv(name);
     if (oldValue != nullptr) {
-      oldValue_ = oldValue;
-      existed_  = true;
+      m_oldValue = oldValue;
+      m_existed  = true;
     }
     if (value == nullptr) {
       ::unsetenv(name);
@@ -73,10 +73,10 @@ public:
   }
 
   ~ScopedEnvironmentVariable() {
-    if (!existed_) {
-      ::unsetenv(name_.c_str());
+    if (!m_existed) {
+      ::unsetenv(m_name.c_str());
     } else {
-      ::setenv(name_.c_str(), oldValue_.c_str(), 1);
+      ::setenv(m_name.c_str(), m_oldValue.c_str(), 1);
     }
   }
 
@@ -84,12 +84,12 @@ public:
   ScopedEnvironmentVariable &operator=(const ScopedEnvironmentVariable &) = delete;
 
 private:
-  std::string name_;
-  std::string oldValue_;
-  bool        existed_{false};
+  std::string m_name;
+  std::string m_oldValue;
+  bool        m_existed{false};
 };
 
-/** Small renderer used to check commands without opening /dev/fb0. */
+/* Small renderer used to check commands without opening /dev/fb0. */
 class RecordingRenderBackend final : public ui::IRenderBackend {
 public:
   void initialize(const display::ActiveDisplay &) override {
@@ -151,7 +151,7 @@ inline display::ActiveDisplay testActiveDisplay() {
   return display::ActiveDisplay{testDisplayInformation, testDisplayMode};
 }
 
-/** Display data with no DRM calls, used by embedded-Python tests. */
+/* Display data with no DRM calls, used by embedded-Python tests. */
 class TestDisplayManager final : public display::IDisplayManager {
 public:
   std::vector<display::DisplayInfo> connectedDisplays() const override {
@@ -163,7 +163,7 @@ public:
   }
 };
 
-/** Fixed Linux values used by tests that call the native system module. */
+/* Fixed Linux values used by tests that call the native system module. */
 class TestSystemInformationProvider final : public system::ISystemInformationProvider {
 public:
   system::SystemInformation readSystemInformation() const override {

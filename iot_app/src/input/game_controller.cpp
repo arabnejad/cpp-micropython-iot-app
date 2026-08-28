@@ -11,11 +11,11 @@ constexpr int maximumJoystickValue = 1023;
 } // namespace
 
 int GamepadJoystick::x() const noexcept {
-  return x_;
+  return m_x;
 }
 
 int GamepadJoystick::y() const noexcept {
-  return y_;
+  return m_y;
 }
 
 JoystickPosition GamepadJoystick::position() const noexcept {
@@ -23,11 +23,11 @@ JoystickPosition GamepadJoystick::position() const noexcept {
 }
 
 JoystickPosition GamepadJoystick::centre() const noexcept {
-  return {centreX_, centreY_};
+  return {m_centreX, m_centreY};
 }
 
 int GamepadJoystick::deadZone() const noexcept {
-  return deadZone_;
+  return m_deadZone;
 }
 
 JoystickDirection GamepadJoystick::direction() const noexcept {
@@ -68,21 +68,21 @@ JoystickDirection GamepadJoystick::direction() const noexcept {
 }
 
 void GamepadJoystick::update(JoystickPosition position) noexcept {
-  x_ = position.x;
-  y_ = position.y;
+  m_x = position.x;
+  m_y = position.y;
 }
 
 void GamepadJoystick::setCalibration(JoystickPosition centre, int deadZone) {
   if (deadZone < 0 || deadZone > maximumJoystickValue) {
     throw std::invalid_argument("Joystick dead zone must be between 0 and 1023");
   }
-  centreX_  = centre.x;
-  centreY_  = centre.y;
-  deadZone_ = deadZone;
+  m_centreX  = centre.x;
+  m_centreY  = centre.y;
+  m_deadZone = deadZone;
 }
 
 bool GamepadButtons::isPressed(GamepadButton button) const noexcept {
-  return (pressedMask_ & static_cast<std::uint32_t>(button)) != 0U;
+  return (m_pressedMask & static_cast<std::uint32_t>(button)) != 0U;
 }
 
 std::vector<GamepadButton> GamepadButtons::pressed() const {
@@ -92,7 +92,7 @@ std::vector<GamepadButton> GamepadButtons::pressed() const {
   };
 
   std::vector<GamepadButton> pressedButtons;
-  const std::uint32_t        currentMask = pressedMask_;
+  const std::uint32_t        currentMask = m_pressedMask;
   for (GamepadButton button : allButtons) {
     if ((currentMask & static_cast<std::uint32_t>(button)) != 0U) {
       pressedButtons.push_back(button);
@@ -102,27 +102,27 @@ std::vector<GamepadButton> GamepadButtons::pressed() const {
 }
 
 void GamepadButtons::update(std::uint32_t pressedMask) noexcept {
-  pressedMask_ = pressedMask;
+  m_pressedMask = pressedMask;
 }
 
 const GamepadJoystick &GameController::joystick() const noexcept {
-  return joystick_;
+  return m_joystick;
 }
 
 const GamepadButtons &GameController::buttons() const noexcept {
-  return buttons_;
+  return m_buttons;
 }
 
 void GameController::updateJoystick(JoystickPosition position) noexcept {
-  joystick_.update(position);
+  m_joystick.update(position);
 }
 
 void GameController::setJoystickCalibration(JoystickPosition centre, int deadZone) {
-  joystick_.setCalibration(centre, deadZone);
+  m_joystick.setCalibration(centre, deadZone);
 }
 
 void GameController::updateButtons(std::uint32_t pressedMask) noexcept {
-  buttons_.update(pressedMask);
+  m_buttons.update(pressedMask);
 }
 
 } // namespace input

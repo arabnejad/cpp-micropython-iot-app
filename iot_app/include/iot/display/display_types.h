@@ -8,13 +8,13 @@
 namespace iot {
 namespace display {
 
-/** Identifies one monitor connector on one Linux DRM device. */
+/* Identifies a monitor connector on a Linux DRM device. */
 struct DisplayId {
-  /**
-   * Path to a primary DRM device, normally `/dev/dri/cardN`.
+  /*
+   * Path to a primary DRM device, normally /dev/dri/cardN.
    *
-   * Linux calls every graphics device a "card". On a Raspberry Pi this is
-   * normally the built-in display hardware, not a separate graphics card.
+   * Linux calls each graphics device a "card". On a Raspberry Pi this usually
+   * means the built-in GPU called VideoCore IV (VC4) display hardware, not an add-in graphics card.
    */
   std::string   devicePath;
   std::string   connectorName;
@@ -26,7 +26,7 @@ inline bool operator==(const DisplayId &left, const DisplayId &right) {
          left.connectorId == right.connectorId;
 }
 
-/** Describes one resolution and refresh rate reported by DRM. */
+/* Resolution and refresh rate reported by DRM. */
 struct DisplayMode {
   std::string   name;
   std::uint32_t width{0};
@@ -36,7 +36,7 @@ struct DisplayMode {
   bool          interlaced{false};
 };
 
-/** Information reported for one connected monitor. */
+/* Details reported for a connected monitor. */
 struct DisplayInfo {
   DisplayId                  displayId;
   std::string                manufacturer;
@@ -48,7 +48,7 @@ struct DisplayInfo {
   std::vector<DisplayMode>   supportedModes;
 };
 
-/** Holds the selected monitor and the mode that is active on it now. */
+/* The selected monitor together with its current mode. */
 class ActiveDisplay {
 public:
   ActiveDisplay(DisplayInfo displayInformation, DisplayMode activeDisplayMode);
@@ -57,8 +57,8 @@ public:
   const DisplayMode &mode() const noexcept;
 
 private:
-  DisplayInfo displayInformation_;
-  DisplayMode activeDisplayMode_;
+  DisplayInfo m_displayInformation;
+  DisplayMode m_activeDisplayMode;
 };
 
 } // namespace display

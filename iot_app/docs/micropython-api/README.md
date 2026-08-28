@@ -11,8 +11,8 @@ These modules are built into the IoT App executable. They are not part of
 standard MicroPython or CPython, and they are not available when the same
 script is run with a normal `python3` command.
 
-For the C++ ownership, threading, deployment, and failure-handling design behind these
-modules, see the [system design document](../system-design/README.md).
+The [system design document](../system-design/README.md) explains the C++
+ownership, threading, deployment, and failure handling behind these modules.
 
 The public modules are:
 
@@ -398,9 +398,9 @@ shipped default application is not started again until `iot_app` restarts.
 
 ## `iot.system`
 
-Most system functions return values from a snapshot captured when the current
-Python application started. This gives one consistent view without repeatedly
-reading `/proc`, `/sys`, and `/dev`.
+Most system functions use a snapshot taken when the current Python application
+started. Related values therefore come from the same point in time, and the
+runtime does not keep scanning `/proc`, `/sys`, and `/dev`.
 
 `current_time()`, `uptime_seconds()`, and `network_interfaces()` are live reads.
 Call them when a screen needs to show changing time, uptime, or network state.
@@ -487,7 +487,8 @@ network_interfaces = system.network_interfaces()
 ```
 
 Takes no arguments, reads Linux at the time of the call, and returns a tuple
-containing each non-loopback network interface:
+containing interfaces that can connect to another device, such as `eth0` and
+`wlan0`. The local-only `lo` interface is not included:
 
 ```python
 (

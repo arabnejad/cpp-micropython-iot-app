@@ -15,11 +15,11 @@
 namespace iot {
 namespace messaging {
 
-/**
- * Processes application deployments from validation through activation.
+/*
+ * Handles a received application from validation through startup.
  *
- * Only the main thread calls this class. This keeps all MicroPython startup and
- * shutdown work on the thread that created the interpreter.
+ * It is called only by the main thread because MicroPython must start and stop
+ * on the thread that owns the interpreter.
  */
 class ApplicationDeploymentController {
 public:
@@ -35,21 +35,21 @@ public:
   ApplicationDeploymentController(ApplicationDeploymentController &&)                 = delete;
   ApplicationDeploymentController &operator=(ApplicationDeploymentController &&)      = delete;
 
-  /** Handles one queued MQTT message and publishes progress and final status. */
+  /* Processes one queued MQTT message and publishes its status updates. */
   void process(const ReceivedApplicationMessage &receivedMessage);
 
 private:
   void publishAndRememberFinalStatus(const ApplicationDeploymentStatus &deploymentStatus);
 
-  logging::Logger                              logger_{"ApplicationDeploymentController"};
-  std::string                                  deviceId_;
-  ApplicationDeploymentMessageParser           messageParser_;
-  python::TemporaryPythonApplicationInstaller &applicationInstaller_;
-  python::PythonApplicationManager            &applicationManager_;
-  IMqttApplicationReceiver                    &mqttApplicationReceiver_;
-  std::size_t                                  maximumRememberedDeployments_{0};
-  std::deque<ApplicationDeploymentStatus>      rememberedFinalStatuses_;
-  std::filesystem::path                        activeExternalApplicationInstallDirectory_;
+  logging::Logger                              m_logger{"ApplicationDeploymentController"};
+  std::string                                  m_deviceId;
+  ApplicationDeploymentMessageParser           m_messageParser;
+  python::TemporaryPythonApplicationInstaller &m_applicationInstaller;
+  python::PythonApplicationManager            &m_applicationManager;
+  IMqttApplicationReceiver                    &m_mqttApplicationReceiver;
+  std::size_t                                  m_maximumRememberedDeployments{0};
+  std::deque<ApplicationDeploymentStatus>      m_rememberedFinalStatuses;
+  std::filesystem::path                        m_activeExternalApplicationInstallDirectory;
 };
 
 } // namespace messaging

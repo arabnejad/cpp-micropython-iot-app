@@ -7,7 +7,7 @@
 namespace iot {
 namespace logging {
 
-/** ANSI terminal colours used by the console logger. */
+/* ANSI terminal colours used by the console logger. */
 namespace Color {
 extern const char reset[];
 extern const char red[];
@@ -16,35 +16,35 @@ extern const char yellow[];
 extern const char cyan[];
 } // namespace Color
 
-/** Importance assigned to one log message. */
+/* Available log levels. */
 enum class LogLevel {
   Debug,
   Info,
   Warning,
   Error,
-  /** Does not write any log messages. */
+  /* Does not write any log messages. */
   None,
 };
 
-/**
- * Writes messages with a class name, function name, and severity.
+/*
+ * Writes one-line messages with their level, class, and function names.
  *
  * Give a class logger its class name, for example:
  *
- *   Logger logger_{"ScreenManager"};
+ *   Logger m_logger{"ScreenManager"};
  *
- * A logger used by standalone functions has no class name. Use the IOT_LOG_*
- * macros below so C++ adds the calling function name automatically.
+ * A logger used by a standalone function has no class name. The IOT_LOG_*
+ * macros add the current function name automatically.
  */
 class Logger {
 public:
-  /** Creates a logger for standalone functions. */
+  /* Creates a logger for standalone functions. */
   Logger() = default;
 
-  /** Creates a logger that identifies messages from one class. */
+  /* Creates a logger that identifies messages from one class. */
   explicit Logger(std::string className);
 
-  /** Returns true when a message at this level would be written. */
+  /* Returns true when a message at this level would be written. */
   bool isEnabled(LogLevel level) const noexcept;
 
   template <typename... MessageParts>
@@ -93,7 +93,7 @@ private:
 
   void write(LogLevel level, const char *functionName, const std::string &message) const noexcept;
 
-  std::string className_;
+  std::string m_className;
 };
 
 } // namespace logging

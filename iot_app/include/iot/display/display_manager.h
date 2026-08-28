@@ -9,19 +9,19 @@ namespace display {
 
 class IDrmDisplayApi;
 
-/** Provides monitor discovery without exposing libdrm to the rest of the app. */
+/* Monitor discovery used by the rest of the application. */
 class IDisplayManager {
 public:
   virtual ~IDisplayManager() = default;
 
-  /** Finds every connected monitor that has at least one usable mode. */
+  /* Lists connected monitors that report at least one usable mode. */
   virtual std::vector<DisplayInfo> connectedDisplays() const = 0;
 
-  /** Reads the monitor again and returns the mode that is active right now. */
+  /* Reads the monitor again to find its current mode. */
   virtual ActiveDisplay readActiveDisplay(const DisplayId &displayId) const = 0;
 };
 
-/** Linux implementation of display discovery using DRM/KMS. */
+/* Finds monitors through Linux DRM/KMS. */
 class DisplayManager final : public IDisplayManager {
 public:
   DisplayManager();
@@ -31,7 +31,7 @@ public:
   ActiveDisplay            readActiveDisplay(const DisplayId &displayId) const override;
 
 private:
-  IDrmDisplayApi &drmDisplayApi_;
+  IDrmDisplayApi &m_drmDisplayApi;
 };
 
 } // namespace display

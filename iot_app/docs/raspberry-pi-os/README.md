@@ -34,7 +34,8 @@ You have three options.
 
 ### Recommended first stage: compile on the Pi
 
-This is the simplest approach while bringing up C++, MicroPython, DRM, LVGL, and hardware access.
+This is the easiest way to begin while C++, MicroPython, DRM, LVGL, and the
+hardware are still being tested together.
 
 ```bash
 sudo apt update
@@ -48,7 +49,8 @@ cmake -S iot_app -B build/iot_app -G Ninja
 cmake --build build/iot_app
 ```
 
-VS Code Remote SSH is also useful: edit from your Ubuntu machine while compiling and debugging directly on the Pi.
+VS Code Remote SSH lets you edit from Ubuntu while compiling and debugging on
+the Pi.
 
 ### Cross-compile on Ubuntu
 
@@ -78,7 +80,8 @@ A binary built against a newer Ubuntu glibc may fail on Raspberry Pi OS with an 
 version `GLIBC_2.xx' not found
 ```
 
-A proper cross-build therefore needs a Raspberry Pi OS-compatible sysroot and CMake toolchain file. Buildroot will eventually provide both automatically.
+A reliable cross-build needs a Raspberry Pi OS-compatible sysroot and CMake
+toolchain file. Buildroot provides both for the final image.
 
 ### Practical recommendation
 
@@ -116,9 +119,13 @@ IoT App draws through the Linux framebuffer at `/dev/fb0` and uses DRM/KMS only
 to discover the connected display. Booting into console mode is recommended so
 the desktop compositor does not redraw over the framebuffer.
 
-Modern Raspberry Pi OS uses DRM/KMS. Do not disable the KMS driver in `/boot/firmware/config.txt`; your application needs it for direct display access. Recent Raspberry Pi OS releases no longer support the old legacy graphics mode. [Raspberry Pi display configuration](https://www.raspberrypi.com/documentation/configuration/config-txt/memory.md)
+Modern Raspberry Pi OS uses DRM/KMS. Do not disable the KMS driver in
+`/boot/firmware/config.txt` because IoT App needs it for direct display access.
+Recent Raspberry Pi OS releases no longer support the old legacy graphics
+mode. See [Raspberry Pi display configuration](https://www.raspberrypi.com/documentation/configuration/config-txt/memory.md).
 
-You do not need Raspberry Pi OS Lite. You can install the normal desktop image and configure it to boot into console mode. That lets you restore the GUI later.
+Raspberry Pi OS Lite is not required. The normal desktop image can boot into
+console mode, and the GUI remains available if it is needed later.
 
 ### Permanently boot into console mode
 
@@ -141,7 +148,8 @@ Expected result:
 multi-user.target
 ```
 
-Systemd stores this choice through the `/etc/systemd/system/default.target` symlink. You should use `systemctl` instead of manually editing it.
+Systemd stores this choice in the `/etc/systemd/system/default.target` symlink.
+Use `systemctl` to change it rather than editing the link by hand.
 
 ### Permanently switch back to the GUI
 

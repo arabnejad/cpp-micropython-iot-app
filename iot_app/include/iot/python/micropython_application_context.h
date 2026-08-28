@@ -13,18 +13,17 @@ class ScreenManager;
 
 namespace python {
 
-/**
- * Connects native MicroPython modules to the current C++ application.
+/*
+ * Gives native MicroPython modules access to the current C++ services.
  *
- * The MicroPython display and system modules call plain C functions in their
- * C++ bridge files. Those calls do not include objects such as ScreenManager
- * or the active display. This context keeps those objects in one place so the
- * bridge functions can find and use them.
+ * The display and system modules enter C++ through plain C bridge functions.
+ * Those functions cannot receive ScreenManager and the other service objects
+ * as normal C++ arguments, so they read them from the active context.
  *
- * PythonApplicationRunner creates the context before it starts MicroPython.
- * Functions in display_cpp_bridge.cpp and system_cpp_bridge.cpp then call
- * active() whenever Python asks for display or system work. The runner removes
- * the context after the MicroPython interpreter has stopped.
+ * Before MicroPython starts, PythonApplicationManager makes this context
+ * active. When Python requests display or system work, the bridge calls
+ * active() to get the required C++ services. The context stays active until
+ * MicroPython has completely stopped.
  *
  * Only one context can be active because IoT App runs one Python application
  * at a time.
@@ -43,27 +42,27 @@ public:
   MicroPythonApplicationContext(MicroPythonApplicationContext &&)                 = delete;
   MicroPythonApplicationContext &operator=(MicroPythonApplicationContext &&)      = delete;
 
-  ui::ScreenManager &screenManager() const noexcept;
-  std::uint32_t displayWidth() const noexcept;
-  std::uint32_t displayHeight() const noexcept;
-  const display::ActiveDisplay &activeDisplay() const noexcept;
+  ui::ScreenManager                       &screenManager() const noexcept;
+  std::uint32_t                            displayWidth() const noexcept;
+  std::uint32_t                            displayHeight() const noexcept;
+  const display::ActiveDisplay            &activeDisplay() const noexcept;
   const std::vector<display::DisplayInfo> &connectedDisplays() const noexcept;
-  const system::SystemInformation &systemInformation() const noexcept;
-  /** Reads the current Linux uptime without rebuilding the full snapshot. */
+  const system::SystemInformation         &systemInformation() const noexcept;
+  /* Reads the current Linux uptime without rebuilding the full snapshot. */
   std::uint64_t currentUptimeSeconds() const;
-  /** Reads the current Linux network-interface state. */
+  /* Reads the current Linux network-interface state. */
   std::vector<system::NetworkInterfaceInformation> readCurrentNetworkInterfaces() const;
-  const std::string &applicationName() const noexcept;
-  /** Gets the active context, or `nullptr` while no Python app is running. */
+  const std::string                               &applicationName() const noexcept;
+  /* Gets the active context, or nullptr when no Python app is running. */
   static MicroPythonApplicationContext *active() noexcept;
 
 private:
-  ui::ScreenManager                        *screenManager_{nullptr};
-  display::ActiveDisplay                    activeDisplay_;
-  std::vector<display::DisplayInfo>         connectedDisplays_;
-  const system::ISystemInformationProvider *systemInformationProvider_{nullptr};
-  system::SystemInformation                 systemInformation_;
-  std::string                               applicationName_;
+  ui::ScreenManager                        *m_screenManager{nullptr};
+  display::ActiveDisplay                    m_activeDisplay;
+  std::vector<display::DisplayInfo>         m_connectedDisplays;
+  const system::ISystemInformationProvider *m_systemInformationProvider{nullptr};
+  system::SystemInformation                 m_systemInformation;
+  std::string                               m_applicationName;
 };
 
 } // namespace python

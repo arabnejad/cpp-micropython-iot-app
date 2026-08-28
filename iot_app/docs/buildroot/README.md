@@ -30,9 +30,9 @@ Username: root
 Password: root
 ```
 
-This password is simple because the image is for initial testing. Do not use this
-configuration for a production device. A production image should use an SSH
-key, disable password login, and avoid direct root access.
+The root password is deliberately simple because this image is for initial
+testing. Do not use this setup on a production device. Use an SSH key, disable
+password login, and avoid direct root access there.
 
 The development MQTT listener also accepts anonymous, unencrypted connections
 from the local network. Use this only on a trusted test network. Before using
@@ -163,7 +163,7 @@ make buildroot-prepare \
   BUILDROOT_OUTPUT=/mnt/builds/raspberry-pi-4
 ```
 
-The commands in the following sections use this persistent output directory.
+The remaining commands use this persistent output directory.
 
 ## 6. Load the Raspberry Pi 4 configuration
 
@@ -237,8 +237,8 @@ env -u LD_LIBRARY_PATH \
   O=/opt/iot-app-builds/raspberry-pi-4
 ```
 
-The first build can take a long time because Buildroot downloads and compiles
-the cross-toolchain, Linux kernel, libraries, and application dependencies.
+The first build takes a while because Buildroot must download and compile the
+cross-toolchain, Linux kernel, libraries, and application dependencies.
 
 `env -u LD_LIBRARY_PATH` removes `LD_LIBRARY_PATH` only for this command. It
 does not change the current terminal. Buildroot needs this because a host
@@ -695,7 +695,7 @@ result says `x86-64`.
 
 ### 15.2 Copy the executable to a running Raspberry Pi
 
-Replace `RASPBERRY_PI_IP` in the following commands with the Pi's address.
+Use the Pi's address in place of `RASPBERRY_PI_IP` in these commands.
 Upload the executable under a temporary name so a running executable is not
 overwritten:
 
@@ -836,10 +836,10 @@ env -u LD_LIBRARY_PATH \
 ## 16. Update the pinned submodules
 
 Buildroot, LVGL, and MicroPython are separate Git repositories stored as
-submodules. The main IoT project records one exact commit for each of them.
-This keeps builds repeatable.
+submodules. This repository records one exact commit for each dependency, so
+another checkout uses the same source versions.
 
-The following command does not look for newer versions:
+This command does not look for newer versions:
 
 ```bash
 git submodule update --init --recursive
@@ -864,8 +864,8 @@ git -C micropython status --short
 Do not update a submodule while it contains local source changes. The project
 treats all three submodules as read-only upstream dependencies.
 
-Update one dependency at a time. This makes a build failure much easier to
-trace than updating Buildroot, LVGL, and MicroPython together.
+Update one dependency at a time. If the build then fails, it is much easier to
+tell which update caused it.
 
 ### 16.2 Select a new revision
 

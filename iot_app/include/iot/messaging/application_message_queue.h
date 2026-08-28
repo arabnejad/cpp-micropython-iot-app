@@ -11,13 +11,13 @@
 namespace iot {
 namespace messaging {
 
-/** Copy of one MQTT application message waiting for the main thread. */
+/* MQTT payload waiting for the main thread. */
 struct ReceivedApplicationMessage {
   std::string payload;
 };
 
-/**
- * Passes MQTT messages from libmosquitto's network thread to the main thread.
+/*
+ * Passes application messages from the MQTT thread to the main thread.
  */
 class ApplicationMessageQueue {
 public:
@@ -29,22 +29,22 @@ public:
   ApplicationMessageQueue(ApplicationMessageQueue &&)                 = delete;
   ApplicationMessageQueue &operator=(ApplicationMessageQueue &&)      = delete;
 
-  /**
-   * Tries to add a message without waiting for space in the queue.
+  /*
+   * Adds a message if space is available.
    *
-   * A full queue returns false. This fixed limit stops a fast sender from using
-   * all device memory while the main thread is switching applications.
+   * The call returns false when the queue is full. The limit prevents a sender
+   * from filling device memory while the main thread changes applications.
    */
   bool tryPush(ReceivedApplicationMessage receivedApplicationMessage);
 
-  /** Waits for a message, removes it from the queue, or returns empty on timeout. */
+  /* Waits for one message and removes it, or returns empty after the timeout. */
   std::optional<ReceivedApplicationMessage> waitAndPopMessage(std::chrono::milliseconds maximumWaitTime);
 
 private:
-  std::size_t                            maximumQueuedMessages_{0};
-  std::mutex                             queueMutex_;
-  std::condition_variable                messageAvailable_;
-  std::deque<ReceivedApplicationMessage> queuedMessages_;
+  std::size_t                            m_maximumQueuedMessages{0};
+  std::mutex                             m_queueMutex;
+  std::condition_variable                m_messageAvailable;
+  std::deque<ReceivedApplicationMessage> m_queuedMessages;
 };
 
 } // namespace messaging

@@ -10,9 +10,7 @@
 #include <thread>
 #include <vector>
 
-/**
- * @file adafruit_mini_i2c_gamepad.cpp
- *
+/*
  * Implements the Seesaw commands needed by Adafruit gamepad 5743. The register
  * order and delays match the test program that worked on the Raspberry Pi.
  */
@@ -70,31 +68,31 @@ constexpr int buttonSelectInputNumber = 0;  // BUTTON_SELECT
 constexpr int buttonStartInputNumber  = 16; // BUTTON_START
 
 // Each joystick axis returns 0 to 1023. The board is mounted so the raw values
-// run backwards, so `1023 - rawValue` makes right and up increase the result.
+// run backwards, so 1023 - rawValue makes right and up increase the result.
 constexpr std::uint8_t joystickXAxisAnalogInputNumber = 14;   // Joystick X analog input
 constexpr std::uint8_t joystickYAxisAnalogInputNumber = 15;   // Joystick Y analog input
 constexpr int          joystickAxisMaximumValue       = 1023; // Maximum 10-bit ADC value
 
 // These numbers come from the board wiring. The buttons are active-low, which
 // means zero is pressed. The driver converts those input bits into the button
-// bits defined by `GamepadButton`. See
-// `iot_app/docs/hardware/README.md` for the complete example.
+// bits defined by GamepadButton. The full mapping is explained in
+// iot_app/docs/hardware/README.md.
 
-/** Makes the bit used to select one numbered button input. */
+/* Makes the bit used to select one numbered button input. */
 constexpr std::uint32_t createButtonInputMask(int inputNumber) {
   return static_cast<std::uint32_t>(1UL << inputNumber);
 }
 
-/** Bit mask that selects all six button inputs at once. */
+/* Bit mask that selects all six button inputs at once. */
 constexpr std::uint32_t allGamepadButtonInputsMask =
     createButtonInputMask(buttonXInputNumber) | createButtonInputMask(buttonYInputNumber) |
     createButtonInputMask(buttonAInputNumber) | createButtonInputMask(buttonBInputNumber) |
     createButtonInputMask(buttonSelectInputNumber) | createButtonInputMask(buttonStartInputNumber);
 
-/**
+/*
  * Splits a 32-bit number into the four bytes expected by the gamepad.
  *
- * For example, `0x12345678` becomes `{0x12, 0x34, 0x56, 0x78}`. The gamepad
+ * For example, 0x12345678 becomes {0x12, 0x34, 0x56, 0x78}. The gamepad
  * expects the highest byte first, which is called big-endian order.
  */
 std::vector<std::uint8_t> encodeUint32AsBigEndianBytes(std::uint32_t value) {
@@ -106,10 +104,10 @@ std::vector<std::uint8_t> encodeUint32AsBigEndianBytes(std::uint32_t value) {
   };
 }
 
-/**
+/*
  * Joins four bytes received from the gamepad into one 32-bit number.
  *
- * For example, `{0x12, 0x34, 0x56, 0x78}` becomes `0x12345678`. The first byte
+ * For example, {0x12, 0x34, 0x56, 0x78} becomes 0x12345678. The first byte
  * is the highest part of the number because the gamepad uses big-endian order.
  * The function throws if it does not receive exactly four bytes.
  */
@@ -136,8 +134,8 @@ AdafruitMiniI2cGamepad::AdafruitMiniI2cGamepad(int i2cBusNumber, std::uint8_t i2
     : AdafruitMiniI2cGamepad(std::make_unique<hardware::I2cDevice>(i2cBusNumber, i2cAddress)) {}
 
 AdafruitMiniI2cGamepad::AdafruitMiniI2cGamepad(std::unique_ptr<hardware::II2cDevice> gamepadI2cDevice)
-    : gamepadI2cDevice_(std::move(gamepadI2cDevice)) {
-  if (!gamepadI2cDevice_) {
+    : m_gamepadI2cDevice(std::move(gamepadI2cDevice)) {
+  if (!m_gamepadI2cDevice) {
     throw std::invalid_argument("Adafruit gamepad requires an I2C device");
   }
 }
@@ -147,10 +145,10 @@ const char *AdafruitMiniI2cGamepad::modelName() const noexcept {
 }
 
 void AdafruitMiniI2cGamepad::connect() {
-  isConnected_ = false;
+  m_isConnected = false;
 
-  // Read real identity registers instead of sending an SMBus probe. This proves
-  // the expected device is present and works on adapters without Quick Write.
+  // Read the identity registers instead of using an SMBus probe. This checks
+  // the actual device and also works on adapters without Quick Write.
   resetGamepadProcessor();
   const std::uint8_t  reportedHardwareId                   = readProcessorHardwareIdFromDevice();
   const std::uint32_t reportedProductIdAndFirmwareDateCode = readProductIdAndFirmwareDateCodeFromDevice();
@@ -161,18 +159,18 @@ void AdafruitMiniI2cGamepad::connect() {
                              ", not Adafruit Mini I2C Gamepad product 5743");
   }
 
-  processorHardwareId_          = reportedHardwareId;
-  productIdAndFirmwareDateCode_ = reportedProductIdAndFirmwareDateCode;
+  m_processorHardwareId          = reportedHardwareId;
+  m_productIdAndFirmwareDateCode = reportedProductIdAndFirmwareDateCode;
 
   // Prepare the six button connections so their pressed state can be read.
   configureButtonInputs();
 
-  // Read the buttons once so they have a valid state as soon as connect() returns.
+  // Give callers a valid button state as soon as connect() returns.
   updateButtons(readPressedButtonMask());
 
-  // Read the joystick once so it has a valid position as soon as connect() returns.
+  // Give callers a valid joystick position as soon as connect() returns.
   updateJoystick(readJoystickPosition());
-  isConnected_ = true;
+  m_isConnected = true;
 }
 
 void AdafruitMiniI2cGamepad::calibrateJoystick(std::size_t numberOfCalibrationSamples, int joystickDeadZone) {
@@ -207,27 +205,27 @@ void AdafruitMiniI2cGamepad::refreshInputState() {
 }
 
 bool AdafruitMiniI2cGamepad::isConnected() const noexcept {
-  return isConnected_;
+  return m_isConnected;
 }
 
 std::uint8_t AdafruitMiniI2cGamepad::processorHardwareId() const noexcept {
-  return processorHardwareId_;
+  return m_processorHardwareId;
 }
 
 std::uint32_t AdafruitMiniI2cGamepad::productIdAndFirmwareDateCode() const noexcept {
-  return productIdAndFirmwareDateCode_;
+  return m_productIdAndFirmwareDateCode;
 }
 
 std::uint16_t AdafruitMiniI2cGamepad::firmwareProductId() const noexcept {
-  return static_cast<std::uint16_t>((productIdAndFirmwareDateCode_ >> 16U) & 0xffffU);
+  return static_cast<std::uint16_t>((m_productIdAndFirmwareDateCode >> 16U) & 0xffffU);
 }
 
 std::uint16_t AdafruitMiniI2cGamepad::firmwareDateCode() const noexcept {
-  return static_cast<std::uint16_t>(productIdAndFirmwareDateCode_ & 0xffffU);
+  return static_cast<std::uint16_t>(m_productIdAndFirmwareDateCode & 0xffffU);
 }
 
 void AdafruitMiniI2cGamepad::throwIfGamepadIsNotConnected() const {
-  if (!isConnected_) {
+  if (!m_isConnected) {
     throw std::logic_error("AdafruitMiniI2cGamepad must be connected before it can be read");
   }
 }
@@ -285,7 +283,7 @@ std::uint16_t AdafruitMiniI2cGamepad::readAnalogInputValue(std::uint8_t inputNum
   const std::uint8_t analogChannelAddress = static_cast<std::uint8_t>(adcChannelOffset + inputNumber);
 
   // Analog values arrive as two bytes, highest byte first. For example,
-  // `{0x01, 0xff}` is decimal 511.
+  // {0x01, 0xff} is decimal 511.
   const auto analogValueBytes = readRegister(adcModuleAddress, analogChannelAddress, 2U);
   return static_cast<std::uint16_t>((static_cast<std::uint16_t>(analogValueBytes[0]) << 8U) |
                                     static_cast<std::uint16_t>(analogValueBytes[1]));
@@ -302,15 +300,15 @@ void AdafruitMiniI2cGamepad::writeRegister(std::uint8_t moduleAddress, std::uint
   i2cRequestBytes[0] = moduleAddress;
   i2cRequestBytes[1] = registerAddress;
   std::copy(payloadBytes.begin(), payloadBytes.end(), i2cRequestBytes.begin() + 2);
-  gamepadI2cDevice_->write(i2cRequestBytes);
+  m_gamepadI2cDevice->write(i2cRequestBytes);
 }
 
 std::vector<std::uint8_t> AdafruitMiniI2cGamepad::readRegister(std::uint8_t moduleAddress, std::uint8_t registerAddress,
                                                                std::size_t numberOfBytesToRead) {
   // The board needs a short delay after the register is selected. The tested
   // Raspberry Pi program uses 8 ms.
-  return gamepadI2cDevice_->writeThenRead({moduleAddress, registerAddress}, numberOfBytesToRead,
-                                          std::chrono::milliseconds(8));
+  return m_gamepadI2cDevice->writeThenRead({moduleAddress, registerAddress}, numberOfBytesToRead,
+                                           std::chrono::milliseconds(8));
 }
 
 } // namespace input

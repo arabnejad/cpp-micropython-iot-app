@@ -10,7 +10,7 @@ typedef struct {
   void         *native_handle;
 } iot_gamepad_object_t;
 
-/** Python view of joystick or button data that keeps its gamepad alive. */
+/* Python view of joystick or button data that keeps its gamepad alive. */
 typedef struct {
   mp_obj_base_t base;
   mp_obj_t      gamepad_owner;

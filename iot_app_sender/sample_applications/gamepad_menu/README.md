@@ -11,9 +11,10 @@ the gamepad:
 
 It requires the Adafruit gamepad on I2C bus 1 at address `0x50`. Leave the
 joystick untouched for about one second during startup calibration. Navigation
-uses a five-sample median filter, separate movement and release thresholds, and
-confirmation of joystick and button states so input noise does not change the
-selected item.
+reads the gamepad every 50 milliseconds. One calibrated dead zone decides when
+the joystick has moved, and the joystick must return to the centre before the
+next menu movement. Button actions run only when a button changes from released
+to pressed.
 
 Use this directory in `sender_config.json`:
 

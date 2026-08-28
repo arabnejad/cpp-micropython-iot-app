@@ -30,7 +30,7 @@ def clamp(value, minimum, maximum):
 
 
 def create_axis_bar(axis_value, centre_value):
-    """Places O at the live position and | at the measured centre."""
+    """Places O at the live position and a vertical bar (|) at the measured centre."""
     axis_value = clamp(
         axis_value,
         JOYSTICK_MINIMUM_VALUE,

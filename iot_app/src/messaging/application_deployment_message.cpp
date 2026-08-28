@@ -168,8 +168,8 @@ void addJsonString(cJSON *jsonObject, const char *fieldName, const std::string &
 } // namespace
 
 ApplicationDeploymentMessageParser::ApplicationDeploymentMessageParser(std::size_t maximumSourceSizeInBytes)
-    : maximumSourceSizeInBytes_(maximumSourceSizeInBytes) {
-  if (maximumSourceSizeInBytes_ == 0U) {
+    : m_maximumSourceSizeInBytes(maximumSourceSizeInBytes) {
+  if (m_maximumSourceSizeInBytes == 0U) {
     throw std::invalid_argument("Deployment parser requires a non-zero Python source limit");
   }
 }
@@ -206,9 +206,9 @@ ApplicationDeploymentRequest ApplicationDeploymentMessageParser::parse(const std
     throw std::runtime_error("Deployment source encoding is not supported");
   }
 
-  const std::size_t declaredSourceSize = requireSizeField(source, "size_bytes", maximumSourceSizeInBytes_);
+  const std::size_t declaredSourceSize = requireSizeField(source, "size_bytes", m_maximumSourceSizeInBytes);
   const std::string declaredSourceHash = requireStringField(source, "sha256");
-  deploymentRequest.sourceCode         = decodeBase64(requireStringField(source, "content"), maximumSourceSizeInBytes_);
+  deploymentRequest.sourceCode = decodeBase64(requireStringField(source, "content"), m_maximumSourceSizeInBytes);
   if (deploymentRequest.sourceCode.empty() || deploymentRequest.sourceCode.find('\0') != std::string::npos) {
     throw std::runtime_error("Decoded Python source is empty or contains a null byte");
   }

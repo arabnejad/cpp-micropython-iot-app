@@ -15,7 +15,7 @@
 namespace iot {
 namespace tests {
 
-/** In-memory I2C board used by C++ and MicroPython gamepad-binding tests. */
+/* In-memory I2C board used by C++ and MicroPython gamepad-binding tests. */
 class SimulatedGamepadI2cBoard final : public hardware::ILinuxI2cSystemCalls {
 public:
   int openDevice(const char *, int) override {
@@ -38,16 +38,16 @@ public:
   }
 
   std::ptrdiff_t readBytes(int, std::uint8_t *bytes, std::size_t byteCount) override {
-    EXPECT_FALSE(queuedReplies.empty());
-    const std::vector<std::uint8_t> queuedReply = std::move(queuedReplies.front());
-    queuedReplies.pop_front();
+    EXPECT_FALSE(m_queuedReplies.empty());
+    const std::vector<std::uint8_t> queuedReply = std::move(m_queuedReplies.front());
+    m_queuedReplies.pop_front();
     EXPECT_EQ(queuedReply.size(), byteCount);
     std::memcpy(bytes, queuedReply.data(), byteCount);
     return static_cast<std::ptrdiff_t>(byteCount);
   }
 
   void addReply(std::vector<std::uint8_t> replyBytes) {
-    queuedReplies.push_back(std::move(replyBytes));
+    m_queuedReplies.push_back(std::move(replyBytes));
   }
 
   void addSuccessfulConnectionReplies(std::uint32_t buttonInputLogicLevels = 0xffffffffU,
@@ -63,14 +63,14 @@ public:
   }
 
 private:
-  std::deque<std::vector<std::uint8_t>> queuedReplies;
+  std::deque<std::vector<std::uint8_t>> m_queuedReplies;
 };
 
-/** Routes the real gamepad driver's Linux I2C calls to this test board. */
+/* Routes the real gamepad driver's Linux I2C calls to this test board. */
 class UseSimulatedGamepadI2cBoard {
 public:
   explicit UseSimulatedGamepadI2cBoard(SimulatedGamepadI2cBoard &simulatedGamepadBoard)
-      : scopedCalls_(simulatedGamepadBoard) {}
+      : m_scopedCalls(simulatedGamepadBoard) {}
 
   ~UseSimulatedGamepadI2cBoard() = default;
 
@@ -78,7 +78,7 @@ public:
   UseSimulatedGamepadI2cBoard &operator=(const UseSimulatedGamepadI2cBoard &) = delete;
 
 private:
-  ScopedLinuxI2cSystemCalls scopedCalls_;
+  ScopedLinuxI2cSystemCalls m_scopedCalls;
 };
 
 } // namespace tests

@@ -5,17 +5,17 @@
 namespace iot {
 namespace python {
 
-/** The three metadata values required for every Python application. */
+/* Required fields from app.json. */
 struct ApplicationMetadata {
   std::string applicationId;
   std::string applicationName;
   std::string entryPoint;
 };
 
-/** Reads application metadata from JSON and checks all required fields. */
+/* Parses and validates app.json content. */
 ApplicationMetadata parseApplicationMetadata(const std::string &metadataJson);
 
-/** Checks application metadata values that have already been read from JSON. */
+/* Validates application metadata that has already been read from JSON. */
 void validateApplicationMetadata(const ApplicationMetadata &metadata);
 
 } // namespace python

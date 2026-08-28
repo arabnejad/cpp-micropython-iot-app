@@ -11,9 +11,7 @@
 #include <cstdint>
 #include <string>
 
-/**
- * @file edid_parser.cpp
- *
+/*
  * Reads a monitor's EDID data and extracts the name, manufacturer, and serial
  * number used by IoT App.
  */
@@ -23,7 +21,7 @@ namespace display {
 namespace internal {
 namespace {
 
-/**
+/*
  * Turns a fixed-width EDID text field into a normal C++ string.
  *
  * EDID text is padded with newlines, null bytes, or spaces. Remove that padding
@@ -43,7 +41,7 @@ std::string trimDescriptor(const std::uint8_t *bytes, std::size_t length) {
 
 } // namespace
 
-/**
+/*
  * Reads the manufacturer, model, and serial number from raw EDID bytes.
  *
  * Bad or incomplete EDID leaves the affected fields empty. A monitor with bad

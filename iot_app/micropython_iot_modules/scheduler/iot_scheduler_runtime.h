@@ -7,15 +7,15 @@
 extern "C" {
 #endif
 
-/** Clears timers left by the previous Python application. */
+/* Clears timers left by the previous Python application. */
 void iot_scheduler_reset(void);
 
-/**
+/*
  * Finds how long the main loop can wait before the next Python timer is due.
  *
  * The function checks every active timer and selects the one with the shortest
  * time remaining. For example, if two timers have 600 ms and 4600 ms left, it
- * writes 600 to `delay_milliseconds`.
+ * writes 600 to delay_milliseconds.
  *
  *   0 ms          600 ms                              4600 ms
  *   |-------------|-----------------------------------|
@@ -26,14 +26,14 @@ void iot_scheduler_reset(void);
  * remaining time or run any callback.
  *
  * Returns 1 after writing a delay. Returns 0 when there are no active timers or
- * `delay_milliseconds` is null.
+ * delay_milliseconds is null.
  */
 int iot_scheduler_next_delay_milliseconds(uint32_t *delay_milliseconds);
 
-/**
+/*
  * Updates the Python timers using the time passed since the previous update.
  *
- * `elapsed_milliseconds` does not make this function wait. It tells the
+ * elapsed_milliseconds does not make this function wait. It tells the
  * scheduler how much time has already passed. The function subtracts that time
  * from every active timer and immediately runs each callback that is now due.
  *

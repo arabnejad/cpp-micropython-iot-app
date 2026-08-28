@@ -39,7 +39,7 @@ std::string trim(std::string value) {
   return value;
 }
 
-/** Reads a small text file and removes trailing newline or null characters. */
+/* Reads a small text file and removes trailing newline or null characters. */
 std::optional<std::string> readTextFile(const std::filesystem::path &path) {
   std::ifstream input{path, std::ios::binary};
   if (!input) {

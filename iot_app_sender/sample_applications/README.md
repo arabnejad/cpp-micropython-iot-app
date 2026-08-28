@@ -40,18 +40,6 @@ The gamepad examples expect the Adafruit Mini I2C STEMMA QT Gamepad on I2C bus
 1 at address `0x50`. Those values are explicit constants near the top of each
 `main.py`; change them before sending when the hardware configuration differs.
 
-## Planned applications
-
-The following directories contain design READMEs but no `app.json` or
-`main.py`, because the required runtime API does not exist yet:
-
-| Directory | Missing capability |
-|---|---|
-| `network_weather_dashboard` | Safe asynchronous HTTP/HTTPS requests and app configuration |
-
-Keeping these as documentation avoids presenting a placeholder as a working
-application.
-
 ## Select an application
 
 The sender reads its application directory from `sender_config.json`. For example,

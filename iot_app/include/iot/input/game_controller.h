@@ -7,15 +7,14 @@
 namespace iot {
 namespace input {
 
-/**
+/*
  * Buttons that every supported game controller can report.
  *
- * These values describe where each button is stored in the application's
- * pressed-button mask. They are separate from the physical input numbers used
- * by a particular gamepad board.
+ * Each value is a bit in the application's pressed-button mask. These are not
+ * the physical input numbers wired on a particular board.
  *
- * For example, `buttonAInputNumber = 5` means the Adafruit board's A button is
- * physically connected to input 5. `GamepadButton::A = 1U << 2U` means the
+ * For example, buttonAInputNumber = 5 means the Adafruit board's A button is
+ * physically connected to input 5. GamepadButton::A = 1U << 2U means the
  * application stores the A button in bit 2 of its pressed-button mask.
  */
 enum class GamepadButton : std::uint32_t {
@@ -27,7 +26,7 @@ enum class GamepadButton : std::uint32_t {
   Start  = 1U << 5U,
 };
 
-/** Direction of the joystick after its centre and dead zone are applied. */
+/* Direction of the joystick after its centre and dead zone are applied. */
 enum class JoystickDirection {
   Center,
   Left,
@@ -40,23 +39,23 @@ enum class JoystickDirection {
   DownRight,
 };
 
-/** Horizontal and vertical joystick values, each from 0 to 1023. */
+/* Horizontal and vertical joystick values, each from 0 to 1023. */
 struct JoystickPosition {
   int x{0};
   int y{0};
 };
 
-/** Keeps the latest joystick reading and turns it into a direction. */
+/* Keeps the latest joystick reading and turns it into a direction. */
 class GamepadJoystick {
 public:
-  int x() const noexcept;
-  int y() const noexcept;
+  int              x() const noexcept;
+  int              y() const noexcept;
   JoystickPosition position() const noexcept;
-  /** Gets the centre measured during the last calibration. */
+  /* Gets the centre measured during the last calibration. */
   JoystickPosition centre() const noexcept;
-  /** Gets how far the stick must move before a direction is reported. */
+  /* Gets distance that the stick must move before a direction is reported. */
   int deadZone() const noexcept;
-  /** Calculates the direction from the latest position and calibration. */
+  /* Calculates the direction from the latest position and calibration. */
   JoystickDirection direction() const noexcept;
 
 private:
@@ -65,19 +64,19 @@ private:
   void update(JoystickPosition position) noexcept;
   void setCalibration(JoystickPosition centre, int deadZone);
 
-  int x_{0};
-  int y_{0};
-  int centreX_{512};
-  int centreY_{512};
-  int deadZone_{100};
+  int m_x{0};
+  int m_y{0};
+  int m_centreX{512};
+  int m_centreY{512};
+  int m_deadZone{100};
 };
 
-/** Keeps the latest pressed/released state of all gamepad buttons. */
+/* Keeps the latest pressed/released state of all gamepad buttons. */
 class GamepadButtons {
 public:
-  /** Checks whether one button is held down. */
+  /* Checks whether one button is held down. */
   bool isPressed(GamepadButton button) const noexcept;
-  /** Gets all buttons that are currently held down. */
+  /* All buttons currently held down. */
   std::vector<GamepadButton> pressed() const;
 
 private:
@@ -85,11 +84,11 @@ private:
 
   void update(std::uint32_t pressedMask) noexcept;
 
-  std::uint32_t pressedMask_{0};
+  std::uint32_t m_pressedMask{0};
 };
 
-/**
- * Common interface for game controllers, regardless of how they are connected.
+/*
+ * Common game-controller interface, independent of its connection type.
  *
  * The current driver uses I2C. A future USB or GPIO driver can implement the
  * same interface without changing application code. Each driver updates the
@@ -109,31 +108,31 @@ public:
   GameController &operator=(GameController &&)      = delete;
 
   virtual const char *modelName() const noexcept = 0;
-  /** Connects to the device and prepares its inputs. */
+  /* Connects to the device and prepares its inputs. */
   virtual void connect() = 0;
-  /** Measures the joystick position while it is at rest. */
+  /* Measures the joystick position while it is at rest. */
   virtual void calibrateJoystick(std::size_t numberOfCalibrationSamples = 20U, int joystickDeadZone = 100) = 0;
-  /** Reads the current joystick and buttons from the device. */
+  /* Reads the current joystick and buttons from the device. */
   virtual void refreshInputState() = 0;
-  /** Checks whether `connect()` completed successfully. */
+  /* Checks whether connect() completed successfully. */
   virtual bool isConnected() const noexcept = 0;
 
   const GamepadJoystick &joystick() const noexcept;
-  const GamepadButtons &buttons() const noexcept;
+  const GamepadButtons  &buttons() const noexcept;
 
 protected:
   GameController() = default;
 
-  /** Stores a joystick position read by the hardware driver. */
+  /* Stores a joystick position read by the hardware driver. */
   void updateJoystick(JoystickPosition position) noexcept;
-  /** Stores the centre and dead zone measured during calibration. */
+  /* Stores the centre and dead zone measured during calibration. */
   void setJoystickCalibration(JoystickPosition centre, int deadZone);
-  /** Stores the pressed-button mask read by the hardware driver. */
+  /* Stores the pressed-button mask read by the hardware driver. */
   void updateButtons(std::uint32_t pressedMask) noexcept;
 
 private:
-  GamepadJoystick joystick_;
-  GamepadButtons  buttons_;
+  GamepadJoystick m_joystick;
+  GamepadButtons  m_buttons;
 };
 
 } // namespace input

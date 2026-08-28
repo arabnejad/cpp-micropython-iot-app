@@ -1,8 +1,8 @@
 # Joystick Visualizer
 
 The current display API cannot move an existing rectangle, so this working
-version uses two text bars. `O` shows the current axis position and `|` shows
-the measured centre. It also displays the numeric values, dead zone, and
+version uses two text bars. The letter `O` shows the current axis position, and
+a vertical bar (`|`) shows the measured centre. It also displays the numeric values, dead zone, and
 direction name.
 
 The gamepad is sampled every 50 milliseconds. It requires the Adafruit gamepad

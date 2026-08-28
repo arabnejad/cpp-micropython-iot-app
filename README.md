@@ -26,9 +26,9 @@ Buildroot customization.
 
 The first version was a small prototype. Over the following year, I extended
 and refactored it several times as I learned more and tested different designs.
-The work was supported by public documentation, tutorials, open-source code,
-GitHub projects, and other online resources. I also used AI tools to help
-rewrite parts of the documentation and review and polish parts of the code.
+I learned from public documentation, tutorials, open-source code, GitHub
+projects, and other online resources along the way. I also used AI tools to
+help rewrite some of the documentation and review parts of the code.
 
 The current version represents roughly a year of development and hands-on
 testing with a Raspberry Pi 4 Model B. I decided to make it public so that
@@ -66,7 +66,7 @@ MQTT broker* -----------------------> iot_app C++ runtime
                                              LVGL -> /dev/fb0 -> HDMI
 ```
 
-`*` The MQTT broker can run on the Raspberry Pi, the Ubuntu computer, or
+Note: the MQTT broker can run on the Raspberry Pi, the Ubuntu computer, or
 another machine that both sides can reach.
 
 The C++ runtime owns hardware access, application lifetime, error handling, and
@@ -95,12 +95,22 @@ work. Run `make help` to see the available targets.
 | Command | What it does |
 |---|---|
 | `make submodules` | Initialize the Buildroot, MicroPython, and LVGL submodules at the revisions pinned by this repository |
+| `make format` | Format the project C and C++ source files with `clang-format` |
+| `make format-check` | Check C and C++ formatting without changing any files |
 | `make iot-app` | Configure and build IoT App for the current Linux computer |
 | `make test` | Configure, build, and run all unit tests |
 | `make coverage` | Run the tests and create terminal, HTML, and XML coverage reports |
 | `make buildroot-prepare` | Create the persistent Buildroot output directory and load the Raspberry Pi 4 configuration when needed |
 | `make buildroot-app` | Cross-compile and install only IoT App into the Buildroot target directory |
 | `make buildroot-image` | Rebuild the latest IoT App and generate the complete Raspberry Pi SD-card image |
+
+The formatting commands cover the application headers, native MicroPython
+modules, runtime sources, and unit tests. They use [`iot_app/.clang-format`](iot_app/.clang-format).
+If the executable has a versioned name on your system, pass it explicitly:
+
+```bash
+make format-check CLANG_FORMAT=clang-format-18
+```
 
 Buildroot output is kept outside `/tmp` by default:
 
@@ -170,7 +180,8 @@ restarting the C++ runtime. The
 explains how.
 
 Received Python source is currently treated as trusted code. Authentication,
-TLS, MQTT access control.
+TLS, MQTT access control, and package signatures must be added before accepting
+applications from an untrusted network or sender.
 
 ## Tests and coverage
 
