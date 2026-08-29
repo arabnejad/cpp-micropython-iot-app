@@ -220,7 +220,14 @@ sudo ss -lntp | grep ':1883'
 
 If `ss` shows `127.0.0.1:1883` and `[::1]:1883`, Mosquitto accepts only local
 connections. Create `/etc/mosquitto/conf.d/iot-app.conf` with the development
-listener shown above, then restart it:
+listener shown above. Confirm that Mosquitto loads this configuration
+directory:
+
+```bash
+grep -n 'include_dir' /etc/mosquitto/mosquitto.conf
+```
+
+The output should include `/etc/mosquitto/conf.d`. Then restart Mosquitto:
 
 ```bash
 sudo systemctl restart mosquitto
@@ -266,23 +273,46 @@ Then send it:
 python send_app.py
 ```
 
-The sender should report `received`, `validating`, and finally `accepted`.
-The Pi should log the external application's name without restarting
-the C++ process. With the default sender configuration, the screen should show
-the Ubuntu clock app and its time should change once per second. Its
-reconstructed files exist only while needed under:
+An accepted application produces output similar to this:
+
+```text
+Application: .../sample_applications/moving_text_in_frame
+Python source: .../sample_applications/moving_text_in_frame/main.py
+MQTT broker: rspi-iot-app.local:1883
+Install topic: iot/devices/raspberrypi-01/applications/install
+Transfer ID: 71b84271630a467aa16ee7b4a0c39632
+Message size: 6657 bytes
+The MQTT broker acknowledged the deployment message.
+Device status: received: Message received by IoT App
+Device status: validating: Source size and SHA-256 are valid
+Device status: accepted: Application received and ready to execute
+```
+
+The first lines describe the request prepared by the sender. The broker
+acknowledgement confirms only that Mosquitto received the message. The
+`Device status` lines are separate replies from IoT App, and `accepted` is the
+final successful delivery result.
+
+The Pi should log the external application's name without restarting the C++
+process. With the default sender configuration, the screen shows the Ubuntu
+clock and updates its time once per second. The reconstructed files exist only
+while needed under:
 
 ```text
 /tmp/iot-app-<uid>/applications/<transfer-id>/
 ```
 
-To test a startup failure, select the `traceback_failure` sample. The sender
-still reports `accepted` and exits successfully because the package was
-installed. The Pi then shows the native red emergency screen with the
-application name, failure phase, time, and Python traceback. The Pi log prints
-the same traceback. A syntax error is handled in the same way.
+The next section explains every status and what happens when Python fails after
+the package has been accepted.
 
-## MQTT message used by this phase
+To test that path, select the
+[`traceback_failure`](sample_applications/traceback_failure/README.md) sample.
+The sender still reports `accepted` because the package was installed. The Pi
+then shows the application name, failure phase, time, and Python traceback on
+the native red emergency screen, and writes the same traceback to its log. A
+syntax error is handled in the same way.
+
+## Deployment message and status replies
 
 The install topic is specific to a device:
 
@@ -327,18 +357,64 @@ transfer ID. It is not repeated in the JSON message:
 iot/devices/raspberrypi-01/applications/status/<transfer-id>
 ```
 
-Expected intermediate statuses are `received` and `validating`.
-Final statuses are:
+Every `Device status` line comes from an MQTT status message published by IoT
+App:
 
-- `accepted`: the package passed validation and its temporary files are
-  installed. This reply is sent before compiling or executing Python;
-- `rejected`: the message or application metadata did not pass validation;
-- `failed`: the temporary application could not be installed.
+| Status | Meaning |
+|---|---|
+| `received` | IoT App received the message and started processing its transfer ID. |
+| `validating` | The JSON fields, device ID, metadata, source size, Base64 data, and SHA-256 passed validation. |
+| `accepted` | The temporary files are installed. IoT App is about to stop the current app and compile and run the new source. This is the final successful delivery reply. |
+| `rejected` | Message validation failed. The current app or emergency screen is left unchanged. |
+| `failed` | Temporary installation failed. The current app or emergency screen is left unchanged. |
+
+For example, a file-writing error ends with `failed` and includes the reason:
+
+```text
+Device status: received: Message received by IoT App
+Device status: validating: Source size and SHA-256 are valid
+Device status: failed: Could not create temporary application file: /tmp/iot-app-<uid>/applications/.staging-<transfer-id>/main.py
+```
+
+The final MQTT reply for an accepted application has this form:
+
+```json
+{
+  "transfer_id": "71b84271630a467aa16ee7b4a0c39632",
+  "status": "accepted",
+  "application_id": "moving-text-in-frame",
+  "message": "Application received and ready to execute"
+}
+```
+
+The sender ignores replies with a different `transfer_id` and prints the
+matching reply as the shorter `Device status` line.
 
 For `rejected` or `failed`, the current app or emergency screen stays unchanged
 and the sender exits with code `2`. For `accepted`, it exits with code `0`.
 Python errors after acceptance appear on the device, not as another sender
 result. Connection errors and reply timeouts use exit code `1`.
+
+### Python errors after acceptance
+
+Delivery and Python execution are separate steps, so every Python failure has
+the same successful sender result:
+
+| When Python fails | What the sender reports | What the Raspberry Pi shows |
+|---|---|---|
+| While compiling the source, such as a syntax error | `accepted: Application received and ready to execute` | The native emergency screen shows the compilation error. No Python app remains running. |
+| While running the entry point, such as `import os1` or a download timeout | `accepted: Application received and ready to execute` | The native emergency screen shows the startup traceback. No Python app remains running. |
+| Later, inside a scheduled callback | `accepted: Application received and ready to execute` | IoT App stops Python and the native emergency screen shows the callback traceback. |
+
+The protocol does not send a second status for compilation, startup, or
+callback errors. The sender can therefore report success while the device
+shows an error: success means delivery, not successful execution. Check the
+screen or device log to see whether Python is running correctly.
+
+IoT App writes the complete traceback to the device log; it is not included in
+the MQTT reply. The emergency screen stays visible until another external
+application starts or `iot_app` restarts. The default app is not restored after
+a Python failure.
 
 Base64 is only a JSON representation for binary bytes; it provides no security.
 This single-message protocol is limited to small, single-file applications. A

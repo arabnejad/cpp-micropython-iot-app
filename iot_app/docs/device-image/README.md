@@ -20,7 +20,8 @@ MQTT port: 1883
 
 The simple password and anonymous MQTT listener are intended for testing on a
 trusted local network. Before using the image elsewhere, disable password login
-and configure SSH keys, MQTT TLS, separate credentials, topic permissions, and
+and configure SSH keys, use a non-root administration account instead of direct
+root access, and add MQTT TLS, separate credentials, topic permissions, and
 signed application packages.
 
 ### Change the development password

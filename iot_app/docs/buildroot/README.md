@@ -9,17 +9,10 @@ target uses a microSD card. Run all build commands from the repository root.
 
 ## Image storage
 
-The image contains a Raspberry Pi boot partition, a fixed-size Linux root
-partition, and an ext4 data partition mounted at `/data`. The data partition
-expands to use the rest of the card on first boot. The root partition size
-comes from the root-level `storage_layout.conf` file.
-
-The supplied image includes `/data`, but IoT App does not depend on it. A
-custom image without the data partition can still run the installed
-application.
-
-The complete layout, size overrides, first-boot process, verification commands,
-and upstream references are in the [shared storage guide](../storage/README.md).
+Buildroot reads the root-partition size from `storage_layout.conf` and uses it
+when generating the SD-card image. The
+[shared storage guide](../storage/README.md) owns the partition map, size
+overrides, `/data` expansion, verification commands, and upstream references.
 Files that must behave the same in Buildroot and Yocto are described in the
 [shared image-support guide](../../image_support/README.md).
 
@@ -41,16 +34,9 @@ The `iot_rpi4_defconfig` configuration prepares the Pi to:
 - provide `/etc/init.d/iot-app` for manually starting, stopping, or restarting
   the service.
 
-The development SSH login is:
-
-```text
-Username: root
-Password: root
-```
-
-The root password is deliberately simple because this image is for initial
-testing. Do not use this setup on a production device. Use an SSH key, disable
-password login, and avoid direct root access there.
+The [shared device-image guide](../device-image/README.md#1-development-image-defaults)
+lists the development login, SSH-key setup, recovery console, and security
+changes needed outside a trusted test network.
 
 ### Change the root password
 
@@ -79,15 +65,6 @@ variable reference. Buildroot recognizes hashes beginning with `$1$`, `$5$`,
 or `$6$` and writes them to the target password file without hashing them a
 second time. The same rules are documented in Buildroot's
 [`BR2_TARGET_GENERIC_ROOT_PASSWD` configuration help](https://gitlab.com/buildroot.org/buildroot/-/blob/2026.05.1/system/Config.in).
-
-The development MQTT listener also accepts anonymous, unencrypted connections
-from the local network. Use this only on a trusted test network. Before using
-the image in production, add TLS, per-device credentials, topic ACLs, and
-application-package signature verification.
-
-The normal local login is on `tty2`, not on the IoT App screen. If networking
-is unavailable, connect a keyboard and press `Alt+F2` or `Ctrl+Alt+F2`, then
-log in with the development password above.
 
 ## 2. Install the Ubuntu build tools
 
@@ -499,65 +476,19 @@ result says `x86-64`.
 
 ### 10.2 Copy the executable to a running Raspberry Pi
 
-The image keeps development executables under `/data`. Copy the rebuilt file
-there instead of replacing `/usr/bin/iot_app`:
+The image keeps development executables under `/data` instead of replacing the
+copy installed at `/usr/bin/iot_app`. Follow the
+[shared development-executable guide](../development-executable/README.md) for
+the safe upload, activation, service restart, log check, and recovery steps.
+
+For a Buildroot build, use this path as the guide's `iot_app_path`:
 
 ```bash
-scp -O /opt/iot-app-builds/buildroot-raspberry-pi-4/target/usr/bin/iot_app \
-  root@rspi-iot-app.local:/data/iot-app/development/iot_app.new
+iot_app_path=/opt/iot-app-builds/buildroot-raspberry-pi-4/target/usr/bin/iot_app
 ```
 
-The `-O` option asks `scp` to use its original SCP protocol. This works with
-the Dropbear SSH server in the Buildroot image even when the Ubuntu `scp`
-command normally prefers SFTP.
-
-Activate the completely uploaded file and restart the service:
-
-```bash
-ssh root@rspi-iot-app.local '
-  chmod 0755 /data/iot-app/development/iot_app.new &&
-  mv /data/iot-app/development/iot_app.new \
-     /data/iot-app/development/iot_app &&
-  /etc/init.d/iot-app restart
-'
-```
-
-Check that the application is running:
-
-```bash
-ssh root@rspi-iot-app.local "ps | grep '[i]ot_app'"
-```
-
-To see startup logs directly, stop the service and run the executable in the
-SSH terminal:
-
-```bash
-ssh root@rspi-iot-app.local
-/etc/init.d/iot-app stop
-/data/iot-app/development/iot_app
-```
-
-Press `Ctrl+C` when the test is complete, then restore normal service
-operation:
-
-```sh
-/etc/init.d/iot-app start
-```
-
-If the development executable does not work, remove it and restart the
-service. The launcher then returns to the copy installed in the image:
-
-```bash
-ssh root@rspi-iot-app.local '
-  rm -f /data/iot-app/development/iot_app &&
-  /etc/init.d/iot-app restart
-'
-```
-
-The development file remains under `/data` after reboot. The complete
-[development executable guide](../development-executable/README.md) explains
-launcher selection, logging, recovery, and which changes still require a new
-image.
+Use the guide's `scp -O` command for this image. Buildroot uses Dropbear, which
+does not provide the SFTP server that newer `scp` clients try by default.
 
 ### 10.3 Deploy only a changed default Python application
 
@@ -888,3 +819,10 @@ The package links IoT App with the selected cJSON, DRM, Mosquitto, OpenSSL,
 LVGL, and MicroPython dependencies. Its runtime account belongs to the
 `video`, `render`, `i2c`, and `input` groups so it can use the required device
 files.
+
+The supplied Raspberry Pi 4 configuration uses BusyBox init. It installs
+`/etc/init.d/S90iot-app` for automatic startup and provides
+`/etc/init.d/iot-app` as an alias for manual service commands. The package also
+contains a systemd installation branch for custom Buildroot configurations
+that select systemd; that branch installs `iot-app.service` and the matching
+udev device-access rules.

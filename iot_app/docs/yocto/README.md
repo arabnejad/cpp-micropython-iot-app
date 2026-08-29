@@ -13,18 +13,10 @@ otherwise.
 
 ## Image storage
 
-The image contains a Raspberry Pi boot partition, a fixed-size Linux root
-partition, and an ext4 data partition mounted at `/data`. The data partition
-expands to use the rest of the card on first boot. `make yocto-prepare` reads
-the root size from `storage_layout.conf` and
-creates the Wic layout in the Yocto build directory.
-
-The supplied image includes `/data`, but IoT App does not depend on it. A
-custom image without the data partition can still run the installed
-application.
-
-The complete layout, size overrides, first-boot process, verification commands,
-and upstream references are in the [shared storage guide](../storage/README.md).
+`make yocto-prepare` reads the root-partition size from `storage_layout.conf`
+and creates the Wic layout in the Yocto build directory. The
+[shared storage guide](../storage/README.md) owns the partition map, size
+overrides, `/data` expansion, verification commands, and upstream references.
 Files that must behave the same in Yocto and Buildroot are described in the
 [shared image-support guide](../../image_support/README.md).
 
@@ -46,21 +38,9 @@ The Yocto image is configured to:
 - keep running offline if the network is unavailable; and
 - reconnect to Mosquitto when the broker becomes available.
 
-The development SSH login is:
-
-```text
-Username: root
-Password: root
-```
-
-The normal local login is on `tty2`, not on the IoT App screen. If networking
-is unavailable, connect a keyboard and press `Alt+F2` or `Ctrl+Alt+F2`, then
-log in with the development password above.
-
-The password and anonymous MQTT listener are deliberately simple for testing
-on a trusted network. Before using an image outside that environment, disable
-password-based root login and add SSH keys, MQTT TLS, per-device credentials,
-topic ACLs, and signed application packages.
+The [shared device-image guide](../device-image/README.md#1-development-image-defaults)
+lists the development login, SSH-key setup, recovery console, and security
+changes needed outside a trusted test network.
 
 ### Change the root password
 
@@ -523,46 +503,15 @@ iot_app_install_directory="$(
 test -x "$iot_app_install_directory/usr/bin/iot_app"
 ```
 
-Copy the new executable to a temporary name under `/data`:
+Use the executable from that directory with the
+[shared development-executable guide](../development-executable/README.md):
 
 ```bash
-scp "$iot_app_install_directory/usr/bin/iot_app" \
-  root@rspi-iot-app.local:/data/iot-app/development/iot_app.new
+iot_app_path="$iot_app_install_directory/usr/bin/iot_app"
 ```
 
-Activate the completely uploaded file and restart the service:
-
-```bash
-ssh root@rspi-iot-app.local '
-  set -eu
-  chmod 0755 /data/iot-app/development/iot_app.new
-  mv /data/iot-app/development/iot_app.new \
-     /data/iot-app/development/iot_app
-  systemctl restart iot-app
-'
-```
-
-Check that the new process is running:
-
-```sh
-ssh root@rspi-iot-app.local \
-  'systemctl status iot-app --no-pager'
-```
-
-To return to the executable installed in the image, remove the development
-copy and restart the service:
-
-```bash
-ssh root@rspi-iot-app.local '
-  rm -f /data/iot-app/development/iot_app &&
-  systemctl restart iot-app
-'
-```
-
-The development copy remains under `/data` after reboot. The complete
-[development executable guide](../development-executable/README.md) explains
-launcher selection, logging, recovery, and which changes still require a new
-image.
+That guide owns the upload, atomic replacement, service restart, log check,
+and recovery instructions used by both image systems.
 
 ### Why the current recipe does not use `devtool deploy-target`
 

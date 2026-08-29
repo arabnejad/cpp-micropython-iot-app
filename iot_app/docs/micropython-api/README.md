@@ -722,6 +722,25 @@ clock_task = scheduler.every(
 # scheduler.cancel(clock_task)
 ```
 
+Each timer keeps its own interval. An application can update a clock every
+second and refresh another panel every five seconds, for example:
+
+```python
+from iot import scheduler
+
+def update_clock():
+    print("Update the clock")
+
+def update_network():
+    print("Refresh the network panel")
+
+clock_task = scheduler.every(milliseconds=1000, callback=update_clock)
+network_task = scheduler.every(milliseconds=5000, callback=update_network)
+```
+
+The runtime waits for whichever timer is due next. An MQTT deployment can wake
+that wait early when another application arrives.
+
 If a scheduled callback raises an unhandled exception, IoT App stops that
 application and shows the traceback on the native emergency screen. The
 shipped default application is not started again until `iot_app` restarts.
@@ -915,6 +934,23 @@ and current Python application:
 is the version of the C++ IoT App executable; it is not read from `app.json`.
 
 ### System example
+
+An application can read all startup information groups like this:
+
+```python
+from iot import display, system
+
+system_information = system.information()
+resource_information = system.resources()
+network_interfaces = system.network_interfaces()
+system_interface_counts = system.interfaces()
+connected_device_counts = system.devices()
+application_information = system.app_information()
+connected_monitors = display.monitors()
+active_monitor = display.active_monitor()
+```
+
+The following example uses part of that information to draw a summary:
 
 ```python
 from iot import display, system

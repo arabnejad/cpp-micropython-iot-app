@@ -1,5 +1,11 @@
 # Hardware Notes
 
+On Raspberry Pi OS, the user running IoT App normally needs membership in the
+`i2c` group to open `/dev/i2c-1`. The
+[Raspberry Pi OS guide](../raspberry-pi-os/README.md#display-device-access)
+shows the command that grants all display, I2C, and input groups used by the
+application.
+
 ## Troubleshooting
 
 ### `/dev/i2c-1` does not exist on Raspberry Pi OS
@@ -147,6 +153,12 @@ Application code can use either an `AdafruitMiniI2cGamepad` object or a
 hardware details:
 
 ```cpp
+iot::input::AdafruitMiniI2cGamepad gamepad{1, 0x50};
+gamepad.connect();
+gamepad.calibrateJoystick();
+gamepad.refreshInputState();
+
+const auto direction = gamepad.joystick().direction();
 const bool aIsPressed =
     gamepad.buttons().isPressed(iot::input::GamepadButton::A);
 ```

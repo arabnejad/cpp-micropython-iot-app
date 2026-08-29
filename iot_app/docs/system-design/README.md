@@ -291,7 +291,9 @@ MicroPython and LVGL are pinned repository submodules. Project code does not
 modify those source trees. CMake generates the MicroPython embed sources into
 the build directory and compiles them into `iot_runtime`. LVGL is also compiled
 into the application. The target device does not need CPython or a separately
-installed MicroPython runtime.
+installed MicroPython runtime. Python application packages remain outside the
+executable, so IoT App can replace an application without relinking the C++
+runtime.
 
 ## 6. Runtime ownership
 
@@ -543,7 +545,8 @@ Linux chooses the display resolution before IoT App starts. IoT App does not
 request a mode and does not restore one on exit. At initialization it checks
 that the framebuffer width and height match the active DRM mode. A mismatch is
 reported as a startup error because drawing with two different sizes gives
-unreliable output.
+unreliable output. Rendering uses `/dev/fb0`; it does not request DRM master
+ownership or use libdrm to draw.
 
 The framebuffer path keeps the target small. It does not require a desktop,
 window manager, Mesa, EGL, or OpenGL.
@@ -850,7 +853,18 @@ build/iot_app/
     └── main.py
 ```
 
+The shipped package uses this metadata:
+
+```json
+{
+  "id": "default",
+  "name": "Default app",
+  "entry_point": "main.py"
+}
+```
+
 An installed build normally uses
+`${CMAKE_INSTALL_DATADIR}/iot-app/default_python_application`, which is usually
 `/usr/share/iot-app/default_python_application`. Startup first checks beside
 the executable, then the matching install prefix, and then the compiled
 installation path.
@@ -1097,9 +1111,10 @@ A small C helper compiles and runs the source. MicroPython reports some errors
 with a non-local jump, so the helper catches them before returning to C++. That
 prevents the jump from skipping live C++ objects and their destructors.
 
-The runtime keeps up to 8 KiB of traceback text. It uses that text for logs and
-the error screen. If the entry point finishes without an error, the interpreter
-stays alive so its global objects and scheduled callbacks can continue working.
+The runtime keeps up to 8 KiB from the end of the traceback, where the final
+exception message normally appears. It uses that text for logs and the error
+screen. If the entry point finishes without an error, the interpreter stays
+alive so its global objects and scheduled callbacks can continue working.
 
 ### 13.4 Giving Python access to C++ services
 
@@ -1330,30 +1345,19 @@ Linux device path for diagnostics without contacting the hardware again.
 
 ## 15. Python scheduler and application updates
 
-A Python application performs setup and registers callbacks:
-
-```python
-from iot import display, scheduler, system
-
-clock = display.draw_text_box(
-    x=40,
-    y=40,
-    width=500,
-    height=80,
-    text=system.current_time(),
-)
-
-def update_clock():
-    display.update_text_box(clock, system.current_time())
-
-scheduler.every(milliseconds=1000, callback=update_clock)
-```
-
-The callback runs on the main thread. Its display request is copied into the
-render queue and handled on the render thread.
+A Python application creates its initial screen, registers any repeating
+callbacks, and returns from `main.py`. The interpreter remains alive. When a
+timer becomes due, its callback runs on the main thread. Any display request
+from that callback enters the render queue and is handled by the render thread.
 
 A callback should do one short piece of work and return. A permanent loop or a
-long sleep delays other timers and deployment processing.
+long sleep delays other timers and deployment processing. The runtime cannot
+safely force-stop Python code inside the same process, so an infinite loop can
+also prevent a newly received application from being activated.
+
+The [scheduler API guide](../micropython-api/README.md#iotscheduler) contains
+the function arguments, cancellation rules, timing examples, and runnable
+Python code.
 
 ## 16. Application state and failure handling
 
@@ -1477,32 +1481,14 @@ installs an application on the main thread.
 JSON configuration identifies the target device, MQTT broker, and application
 directory. The sender reads `app.json` and finds the Python entry point itself.
 
-The sender:
+It validates the local files, assigns a transfer ID, adds the source size and
+SHA-256, Base64-encodes the source, and publishes the request with MQTT 5 and
+QoS 1. It subscribes to the transfer's status topic before publishing so a fast
+device reply cannot be missed.
 
-1. Reads and validates the local application metadata and Python source.
-2. Creates a unique transfer ID.
-3. Calculates source size and SHA-256, then Base64-encodes the source.
-4. Builds the install and transfer-specific status topics.
-5. Connects to the broker with MQTT 5.
-6. Subscribes to the status topic before publishing the install request. This
-   prevents a fast device reply from being missed.
-7. Publishes the request at QoS 1 without retaining it.
-8. Prints each device status and returns success only for final status
-   `accepted`.
-
-`--dry-run` builds and validates the message without connecting. `--no-wait`
-returns after broker acknowledgement instead of waiting for the device's final
-result.
-
-The sender waits up to 30 seconds for acceptance or a validation/installation
-error. IoT App replies before compiling or executing the new Python app, so
-the sender does not wait for its image downloads. Each device HTTP transfer
-still has its own 30-second limit.
-
-The previous app can still delay processing if it is busy on the main thread.
-A reply timeout does not cancel the request or prove it failed; check the
-device log before sending it again. Both IoT App and the sender must use this
-acceptance-only protocol; older versions wait for a startup result instead.
+The [sender guide](../../../iot_app_sender/README.md) owns the command-line
+options, configuration, broker setup, output examples, status meanings, timeouts,
+and exit codes.
 
 A **transfer ID** identifies one attempt to send an application. The sender
 creates a new value for every send operation, even when it sends the same
@@ -1526,11 +1512,16 @@ The Ubuntu sender publishes the application to this device-specific install
 topic:
 
 ```text
+iot/devices/<device-id>/applications/install
+```
+
+For the default device ID, the topic is:
+
+```text
 iot/devices/raspberrypi-01/applications/install
 ```
 
-Here, `raspberrypi-01` is the device ID. Only the IoT App process using that
-device ID subscribes to this topic.
+Only the IoT App process using that device ID subscribes to this topic.
 
 IoT App includes the transfer ID in the status topic:
 
@@ -1680,86 +1671,12 @@ app has since failed. This saved answer describes the original delivery, not
 the app's current state. Sending again from the command line creates a new
 transfer ID and starts a new attempt.
 
-### 17.8 Reading the sender output
+### 17.8 Sender output and exit codes
 
-An accepted deployment produces output similar to this:
-
-```text
-Application: .../sample_applications/moving_text_in_frame
-Python source: .../sample_applications/moving_text_in_frame/main.py
-MQTT broker: rspi-iot-app.local:1883
-Install topic: iot/devices/raspberrypi-01/applications/install
-Transfer ID: 71b84271630a467aa16ee7b4a0c39632
-Message size: 6657 bytes
-The MQTT broker acknowledged the deployment message.
-Device status: received: Message received by IoT App
-Device status: validating: Source size and SHA-256 are valid
-Device status: accepted: Application received and ready to execute
-```
-
-The lines before the broker acknowledgement describe the request prepared by
-the Ubuntu sender. The acknowledgement means only that the MQTT broker
-received the install message. It does not mean that the Raspberry Pi accepted
-or started the application.
-
-Every `Device status` line comes from a separate MQTT status message published
-by IoT App on the Raspberry Pi:
-
-| Status | Meaning |
-|---|---|
-| `received` | IoT App received the message and started processing its transfer ID. |
-| `validating` | The JSON fields, device ID, application metadata, source size, Base64 data, and SHA-256 passed validation. |
-| `accepted` | The temporary files are installed. IoT App is about to stop the current app and compile and run the new source. This is the final successful delivery reply. |
-| `rejected` | Message validation failed. The currently displayed app or emergency screen is left unchanged. |
-| `failed` | Temporary installation failed. The currently displayed app or emergency screen is left unchanged. |
-
-For example, if the device cannot write the temporary files, the reply ends
-with `failed`. Its message describes the installation error:
-
-```text
-Device status: received: Message received by IoT App
-Device status: validating: Source size and SHA-256 are valid
-Device status: failed: Could not create temporary application file: /tmp/iot-app-<uid>/applications/.staging-<transfer-id>/main.py
-```
-
-The final MQTT reply for an accepted application is:
-
-```json
-{
-  "transfer_id": "71b84271630a467aa16ee7b4a0c39632",
-  "status": "accepted",
-  "application_id": "moving-text-in-frame",
-  "message": "Application received and ready to execute"
-}
-```
-
-The sender reads this JSON and prints the shorter `Device status` line. It
-exits with code `0` for `accepted` and code `2` for `rejected` or `failed`.
-Connection errors and reply timeouts use exit code `1`.
-
-The sender ignores a status message whose `transfer_id` does not match the
-request it is waiting for.
-
-#### Python errors after acceptance
-
-The sender result is the same for all Python errors. Delivery has already
-been accepted; Python execution is a separate step:
-
-| When Python fails | What the Ubuntu sender reports | What the Raspberry Pi shows |
-|---|---|---|
-| While compiling the source, such as a syntax error | `accepted: Application received and ready to execute` | The native emergency screen shows the compilation error. No Python app remains running. |
-| While running the entry point, such as `import os1` or a download timeout | `accepted: Application received and ready to execute` | The native emergency screen shows the startup traceback. No Python app remains running. |
-| Later, inside a scheduled callback | `accepted: Application received and ready to execute` | IoT App stops Python and the native emergency screen shows the callback traceback. |
-
-The current protocol does not send a second status for compilation, startup,
-or callback errors. The sender can report success while the device shows an
-error: success means delivery, not successful execution. Check the screen or
-device log to see whether Python is running correctly.
-
-IoT App writes the full traceback to the Raspberry Pi log; it is not included
-in the MQTT reply. The emergency screen stays visible until another external
-application starts or `iot_app` restarts. The default app is not restored after
-a Python failure.
+The device-side meaning of each deployment state is described above. The
+[sender guide](../../../iot_app_sender/README.md#end-to-end-test) shows the
+actual terminal output, the MQTT reply JSON, failure examples, Python errors
+after acceptance, and the sender's exit codes.
 
 ## 18. System information subsystem
 
@@ -1800,7 +1717,8 @@ the system summary avoids it.
 
 `I2cDevice` owns one `/dev/i2c-N` file descriptor and one selected seven-bit
 address. It validates bus and address ranges, reads adapter capabilities, and
-closes the descriptor through RAII.
+closes the descriptor through RAII. It uses the Linux device interface
+directly, so the runtime does not need the separate libi2c library.
 
 `I2cDevice` owns the Linux operations needed to open the bus, select an address,
 and transfer bytes. Hardware drivers use `II2cDevice` and do not call Linux
@@ -1832,6 +1750,9 @@ vendor driver can implement the same controller contract without changing
 application concepts such as direction and pressed buttons.
 
 ### 19.3 Adafruit gamepad flow
+
+The input calls are synchronous. A refresh completes its I2C transfers before
+returning the updated state to the application.
 
 Connecting the gamepad performs these steps:
 
@@ -1876,7 +1797,11 @@ Startup also creates one `RuntimePaths` value for temporary files:
 RuntimePaths
 └── /tmp/iot-app-<user-id>/
     ├── downloads/
+    │   └── <calculated-sha256>.download
     └── applications/
+        └── <transfer-id>/
+            ├── app.json
+            └── <entry-point>.py
 ```
 
 `runtime_config.cpp` calculates these paths once. `main.cpp` gives the

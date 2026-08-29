@@ -617,41 +617,15 @@ several large pictures at once.
 
 ## 11. Using the display from MicroPython
 
-The normal application author uses the project-owned `iot.display` module:
+Applications use the project-owned `iot.display` module. Its calls become
+`ScreenManager` commands and then follow the render-thread path described in
+[section 5](#5-how-a-python-drawing-request-reaches-lvgl). Python code does not
+call LVGL directly.
 
-```python
-from iot import display
-
-screen_width, screen_height = display.size()
-
-display.clear(color=(8, 13, 22))
-
-message_box = display.draw_text_box(
-    x=40,
-    y=40,
-    width=screen_width - 80,
-    height=120,
-    text="Hello from MicroPython",
-    text_color=(255, 255, 255),
-    background_color=(24, 34, 51),
-    border_color=(64, 220, 255),
-    background_opacity=255,
-    border_width=2,
-    font_size=24,
-)
-
-display.update_text_box(message_box, "The existing label changed")
-display.move_text_box(message_box, 80, 180)
-display.delete_text_box(message_box)
-```
-
-Python should keep the returned widget ID for as long as it needs to change or
-delete that text box. Using an ID after its box was deleted or after the screen
-was cleared raises an error when the render thread processes the command.
-
-For the exact required arguments, optional arguments, return values, and more
-examples, including JPEG downloads and display calls, use the
-[MicroPython API guide](../micropython-api/README.md).
+The [MicroPython API guide](../micropython-api/README.md#iotdisplay) owns the
+function signatures, arguments, return values, limits, and runnable examples.
+Keeping those details in one guide avoids having two versions of the API to
+update.
 
 ### Current input limitation
 

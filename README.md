@@ -204,8 +204,10 @@ Run the application from a Linux console where `/dev/fb0` is available:
 ```
 
 IoT App uses the active Linux framebuffer resolution; it does not change the
-monitor mode. See the [IoT App guide](iot_app/README.md) for permissions,
-logging, MQTT defaults, console-mode setup, and deployment instructions.
+monitor mode. See the [IoT App guide](iot_app/README.md) for logging and runtime
+settings, and the
+[Raspberry Pi OS guide](iot_app/docs/raspberry-pi-os/README.md) for console mode
+and display-device permissions.
 
 ## Python applications
 

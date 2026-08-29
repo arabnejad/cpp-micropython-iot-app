@@ -92,34 +92,58 @@ The examples below use `iot_app_path` for the cross-compiled executable:
 iot_app_path=/path/to/the/aarch64/iot_app
 ```
 
-Copy it under a temporary name:
+Use the commands for the image running on the Raspberry Pi.
 
-```bash
-scp "$iot_app_path" \
-  root@rspi-iot-app.local:/data/iot-app/development/iot_app.new
-```
+### Buildroot
 
-The Buildroot image uses Dropbear. If the local `scp` command tries SFTP and
-the upload fails, select the original SCP protocol:
+Buildroot uses Dropbear. The `-O` option makes newer `scp` clients use the
+original SCP protocol instead of looking for an SFTP server that is not in the
+image:
 
 ```bash
 scp -O "$iot_app_path" \
   root@rspi-iot-app.local:/data/iot-app/development/iot_app.new
 ```
 
-After a complete upload, make the file executable and rename it:
+Activate the completed upload and restart IoT App:
 
 ```bash
 ssh root@rspi-iot-app.local '
-  chmod 0755 /data/iot-app/development/iot_app.new &&
+  set -eu
+  chmod 0755 /data/iot-app/development/iot_app.new
   mv /data/iot-app/development/iot_app.new \
      /data/iot-app/development/iot_app
+  /etc/init.d/iot-app restart
+'
+```
+
+### Yocto
+
+Copy the Yocto executable under the same temporary name:
+
+```bash
+scp "$iot_app_path" \
+  root@rspi-iot-app.local:/data/iot-app/development/iot_app.new
+```
+
+Activate the completed upload and restart IoT App:
+
+```bash
+ssh root@rspi-iot-app.local '
+  set -eu
+  chmod 0755 /data/iot-app/development/iot_app.new
+  mv /data/iot-app/development/iot_app.new \
+     /data/iot-app/development/iot_app
+  systemctl restart iot-app
 '
 ```
 
 Both names are on the same filesystem. If the upload is interrupted, the old
 development executable remains unchanged. The final rename replaces it only
-after the new file has arrived completely.
+after the new file has arrived completely. `set -e` stops the remote script if
+`chmod` or `mv` fails, so the service is not restarted with a partial update.
+`set -u` also reports any unset shell variable used by a future edit to the
+script.
 
 ## 3. Start the development executable
 
@@ -129,19 +153,22 @@ A reboot will select the development executable automatically:
 ssh root@rspi-iot-app.local reboot
 ```
 
-A full reboot is not required when only the executable changed. Restart the
-service instead.
+A full reboot is not required when only the executable changed. The activation
+commands in the previous section restart the correct service immediately.
+
+Confirm that the service is running.
 
 Buildroot:
 
 ```bash
-ssh root@rspi-iot-app.local '/etc/init.d/iot-app restart'
+ssh root@rspi-iot-app.local "ps | grep '[i]ot_app'"
 ```
 
 Yocto:
 
 ```bash
-ssh root@rspi-iot-app.local 'systemctl restart iot-app'
+ssh root@rspi-iot-app.local \
+  'systemctl status iot-app --no-pager'
 ```
 
 The launcher writes the selected path to the normal service log.
@@ -165,6 +192,28 @@ When the override is active, the log contains:
 [IOT_APP][WARNING]   [iot-app-launcher] Running development executable: /data/iot-app/development/iot_app
 ```
 
+To watch startup directly in an SSH terminal, stop the service and run the
+development executable yourself.
+
+Buildroot:
+
+```bash
+ssh root@rspi-iot-app.local
+/etc/init.d/iot-app stop
+/data/iot-app/development/iot_app
+```
+
+Yocto:
+
+```bash
+ssh root@rspi-iot-app.local
+systemctl stop iot-app
+/data/iot-app/development/iot_app
+```
+
+Press `Ctrl+C` when the test is complete. Start the service again with
+`/etc/init.d/iot-app start` on Buildroot or `systemctl start iot-app` on Yocto.
+
 ## 4. Return to the installed executable
 
 Remove the development file and restart or reboot:
@@ -179,6 +228,27 @@ ssh root@rspi-iot-app.local '
 The next start uses `/usr/bin/iot_app`. A failing development executable is
 not removed automatically because its failure may be the reason for the test.
 Use SSH or the recovery login on `tty2` to remove it.
+
+For a faster recovery without rebooting, remove the file and restart the
+service.
+
+Buildroot:
+
+```bash
+ssh root@rspi-iot-app.local '
+  rm -f /data/iot-app/development/iot_app &&
+  /etc/init.d/iot-app restart
+'
+```
+
+Yocto:
+
+```bash
+ssh root@rspi-iot-app.local '
+  rm -f /data/iot-app/development/iot_app &&
+  systemctl restart iot-app
+'
+```
 
 ## 5. What this workflow updates
 
