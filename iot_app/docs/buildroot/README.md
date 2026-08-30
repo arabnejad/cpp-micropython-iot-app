@@ -822,7 +822,6 @@ files.
 
 The supplied Raspberry Pi 4 configuration uses BusyBox init. It installs
 `/etc/init.d/S90iot-app` for automatic startup and provides
-`/etc/init.d/iot-app` as an alias for manual service commands. The package also
-contains a systemd installation branch for custom Buildroot configurations
-that select systemd; that branch installs `iot-app.service` and the matching
-udev device-access rules.
+`/etc/init.d/iot-app` as an alias for manual service commands. This is the only
+init system supported by the project's Buildroot package. The separate Yocto
+image uses its own systemd service from `meta-iot-app`.

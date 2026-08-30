@@ -15,13 +15,6 @@
 #        v
 # iot-app accesses the device through its group membership
 #
-# Buildroot creates the user and adds it to the required groups through
-# IOT_APP_USERS in buildroot_external/package/iot_app/iot_app.mk:
-#
-# define IOT_APP_USERS
-#     iot-app -1 iot-app -1 * - - video,render,i2c,input IoT App runtime user
-# endef
-#
 # Yocto creates the project-owned groups through GROUPADD_PARAM in
 # meta-iot-app/recipes-iot/iot-app/iot-app_0.1.0.bb. The base system already
 # provides the video group:
@@ -35,6 +28,8 @@
 #                        --groups video,render,i2c,input iot-app"
 #
 # The group names in the rules below must match these recipe declarations.
+# Buildroot does not install this file because it uses BusyBox mdev instead of
+# udev. Its board-specific mdev.conf assigns the same groups and permissions.
 
 # Framebuffer devices appear as /dev/fb0, /dev/fb1, and so on. IoT App writes
 # the LVGL screen to /dev/fb0 through its video-group membership. The systemd

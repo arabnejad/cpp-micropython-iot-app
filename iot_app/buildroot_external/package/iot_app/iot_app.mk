@@ -52,11 +52,4 @@ define IOT_APP_INSTALL_INIT_SYSV
 	ln -s S90iot-app $(TARGET_DIR)/etc/init.d/iot-app
 endef
 
-define IOT_APP_INSTALL_INIT_SYSTEMD
-	$(INSTALL) -D -m 0644 $(IOT_APP_PKGDIR)/iot-app.service \
-		$(TARGET_DIR)/usr/lib/systemd/system/iot-app.service
-	$(INSTALL) -D -m 0644 $(IOT_APP_IMAGE_SUPPORT_DIR)/70-iot-app-access.rules \
-		$(TARGET_DIR)/usr/lib/udev/rules.d/70-iot-app-access.rules
-endef
-
 $(eval $(cmake-package))

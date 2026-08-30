@@ -13,5 +13,5 @@ partition and expandable `/data` partition are described in
 
 Common files used by both Yocto and Buildroot live in
 [`iot_app/image_support`](../iot_app/image_support/README.md). The Yocto recipes
-install those files but keep their systemd units and BitBake rules in this
-layer.
+install those files but keep their systemd units, udev rules, and BitBake rules
+in this layer.

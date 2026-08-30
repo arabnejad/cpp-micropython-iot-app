@@ -10,15 +10,15 @@ those files.
 | `iot-app-prepare-data-storage` | `/usr/libexec/iot-app-prepare-data-storage` | Prepares the optional persistent `/data` partition when it exists |
 | `iot-app-hide-tty1-cursor` | `/usr/libexec/iot-app-hide-tty1-cursor` | Hides the terminal cursor before the framebuffer dashboard starts |
 | `mosquitto.conf` | `/etc/mosquitto/mosquitto.conf` | Opens the development MQTT listener used by the sender |
-| `70-iot-app-access.rules` | `/usr/lib/udev/rules.d/70-iot-app-access.rules` | Gives the `iot-app` user group access to framebuffer, DRM, I2C, and input devices |
 
-The Buildroot package recipe and Yocto recipes install these files into their
-images. Change a shared file here so the next Buildroot and Yocto images both
-receive the same behavior.
+The Buildroot package and Yocto recipes install these files into their images.
+Change a file here so the next Buildroot and Yocto images both receive the same
+behavior.
 
-The startup service still belongs to each build system. Buildroot may use a
-SysV script, while Yocto uses systemd. Partition descriptions also remain
-separate because Buildroot uses genimage and Yocto uses Wic.
+Startup and device-permission files belong to each build system. This project's
+Buildroot image uses a SysV script and BusyBox `mdev`; Yocto uses systemd and
+udev. Partition descriptions also remain separate because Buildroot uses
+genimage and Yocto uses Wic.
 
 The private Wi-Fi configuration remains at the repository root. Preparation
 commands copy it into the appropriate Buildroot or Yocto build input without
