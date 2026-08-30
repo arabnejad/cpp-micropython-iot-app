@@ -560,9 +560,9 @@ Start IoT App as the S90iot-app service
 After networking starts, `S45time-sync` starts BusyBox `ntpd` and waits up to
 30 seconds for the clock to become valid. The NTP client remains in the
 background to keep the clock synchronized. Near the end of boot,
-`S90iot-app` waits for the network and Mosquitto for up to 30 seconds and then
-starts IoT App. It still starts in offline mode when those services are not
-ready before the timeout.
+`S90iot-app` checks that `/dev/fb0` is available and then starts IoT App. It
+does not wait for Wi-Fi, Ethernet, or Mosquitto. The dashboard can start
+offline, and its MQTT client reconnects when the broker becomes available.
 
 IoT App hides the cursor on `tty1` before it starts. Because no login process
 runs on that terminal, keyboard input is not printed over the dashboard.
