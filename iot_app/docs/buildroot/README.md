@@ -7,18 +7,30 @@ support, the Mosquitto broker, and the Dropbear SSH server.
 The instructions assume the repository is on an Ubuntu computer and that the
 target uses a microSD card. Run all build commands from the repository root.
 
+## Image storage
+
+The image contains a Raspberry Pi boot partition, a fixed-size Linux root
+partition, and an ext4 data partition mounted at `/data`. The data partition
+expands to use the rest of the card on first boot. The root partition size
+comes from the root-level `storage_layout.conf` file.
+
+The complete layout, size overrides, first-boot process, verification commands,
+and upstream references are in the [shared storage guide](../storage/README.md).
+
 ## 1. What the development image does
 
 The `iot_rpi4_defconfig` configuration prepares the Pi to:
 
 - boot without a desktop environment;
-- log in as `root` automatically on the local HDMI console;
+- reserve `tty1` for the IoT App display;
+- provide a password-protected emergency root login on `tty2`;
 - connect to the configured Wi-Fi network when it is available;
 - request IPv4 addresses for `wlan0` and `eth0` using DHCP;
 - synchronize the system clock from internet NTP servers;
 - accept SSH connections as `root`;
 - start Mosquitto on IPv4 port 1883 for development deployments from the
   local network;
+- expand and mount the persistent data partition at `/data`;
 - start IoT App automatically near the end of boot; and
 - provide `/etc/init.d/iot-app` for manually starting, stopping, or restarting
   the service.
@@ -34,14 +46,70 @@ The root password is deliberately simple because this image is for initial
 testing. Do not use this setup on a production device. Use an SSH key, disable
 password login, and avoid direct root access there.
 
+### Change the root password
+
+The current Buildroot configuration contains the development password as
+plain text:
+
+```makefile
+BR2_TARGET_GENERIC_ROOT_PASSWD="root"
+```
+
+Buildroot converts a plain value to a Linux password hash while it creates the
+root filesystem. To avoid keeping a new password as plain text in the
+configuration, generate the hash yourself:
+
+```bash
+openssl passwd -6
+```
+
+The command asks for the password without putting it in the shell history. Its
+output has this form:
+
+```text
+$6$random-salt$password-hash
+```
+
+The `$6$` prefix selects the SHA-512 `crypt` password format. The middle part
+is a random salt, and the final part is the calculated password hash. The salt
+means that generating the same password twice can produce different text;
+both results still accept the same password.
+
+Open
+`iot_app/buildroot_external/configs/iot_rpi4_defconfig` and replace the
+existing password value with the generated hash. Double every `$` character:
+
+```makefile
+BR2_TARGET_GENERIC_ROOT_PASSWD="$$6$$random-salt$$password-hash"
+```
+
+Buildroot needs `$$` here because Make treats a single `$` as the start of a
+variable reference. Buildroot recognizes hashes beginning with `$1$`, `$5$`,
+or `$6$` and writes them to the target password file without hashing them a
+second time. The same rules are documented in Buildroot's
+[`BR2_TARGET_GENERIC_ROOT_PASSWD` configuration help](https://gitlab.com/buildroot.org/buildroot/-/blob/2026.05.1/system/Config.in).
+
+For reference, this command reproduces the development hash used for the
+password `root` in the Yocto image:
+
+```bash
+openssl passwd -6 -salt iot-app root
+```
+
+Use the interactive command for a real password. Supplying a password on the
+command line can leave it in the shell history and briefly expose it through
+the process list. A password hash also does not make a weak password safe in a
+public repository. Production images should normally use SSH keys and disable
+password-based root login.
+
 The development MQTT listener also accepts anonymous, unencrypted connections
 from the local network. Use this only on a trusted test network. Before using
 the image in production, add TLS, per-device credentials, topic ACLs, and
 application-package signature verification.
 
-The local HDMI console logs in as `root` automatically and does not ask for
-this password. Automatic login applies only to `tty1`; SSH still requires the
-password above.
+The normal local login is on `tty2`, not on the IoT App screen. If networking
+is unavailable, connect a keyboard and press `Alt+F2` or `Ctrl+Alt+F2`, then
+log in with the development password above.
 
 ## 2. Install the Ubuntu build tools
 
@@ -58,6 +126,7 @@ sudo apt install \
   git \
   gzip \
   libncurses-dev \
+  openssl \
   patch \
   perl \
   rsync \
@@ -78,8 +147,9 @@ Run:
 git submodule update --init --recursive
 ```
 
-This checks out the pinned Buildroot, LVGL, and MicroPython revisions. These
-submodules are upstream source dependencies and should not be modified.
+This checks out every pinned submodule, including Buildroot, LVGL,
+MicroPython, and the Yocto layers. They are upstream source dependencies and
+should not be modified.
 
 You can confirm their revisions with:
 
@@ -89,18 +159,16 @@ git submodule status
 
 ## 4. Add the private Wi-Fi configuration
 
-Copy the provided example:
+From the repository root, create the shared private configuration:
 
 ```bash
-cp \
-  iot_app/buildroot_external/board/raspberrypi4/wpa_supplicant.conf.example \
-  iot_app/buildroot_external/board/raspberrypi4/wpa_supplicant.conf
+make wifi-prepare
 ```
 
 Open the new file in an editor:
 
 ```bash
-nano iot_app/buildroot_external/board/raspberrypi4/wpa_supplicant.conf
+nano wpa_supplicant.conf
 ```
 
 Replace the sample network name and password:
@@ -124,15 +192,64 @@ Do not add a `ctrl_interface` line. This image does not enable
 `wpa_cli`. If that line is present, `wpa_supplicant` reports it as an unknown
 configuration field and does not connect.
 
-The real `wpa_supplicant.conf` is ignored by Git. Check that it is not tracked:
+This one private file is used by both Buildroot and Yocto. It is ignored by
+Git. Check that it is not tracked:
 
 ```bash
-git check-ignore \
-  iot_app/buildroot_external/board/raspberrypi4/wpa_supplicant.conf
+git check-ignore wpa_supplicant.conf
 ```
 
-The command should print the file path. The Buildroot build stops with a clear
-error if this private file is missing.
+The command should print the file path. `make buildroot-image` stops with a
+clear error if the file is missing or still contains the example values.
+
+### Optional passwordless SSH access
+
+To include your SSH public key in the image, copy it to the optional
+root-level file. If you already have a key that you want to use, run:
+
+```bash
+cp ~/.ssh/id_ed25519.pub ssh_authorized_keys
+```
+
+Replace the source path if your public key has a different name. If you have
+several keys and prefer a separate one for IoT App, create it and copy its
+public half:
+
+```bash
+ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_iot_app
+cp ~/.ssh/id_ed25519_iot_app.pub ssh_authorized_keys
+```
+
+Never copy a private key into the repository. The `ssh_authorized_keys` file
+may contain several public keys, with one key on each line.
+
+When several private keys exist on the Ubuntu computer, tell SSH exactly which
+one belongs to this device. Add this entry to `~/.ssh/config`:
+
+```sshconfig
+Host rspi-iot-app.local
+    User root
+    IdentityFile ~/.ssh/id_ed25519_iot_app
+    IdentitiesOnly yes
+```
+
+Change `IdentityFile` if you selected a different existing key. You can then
+connect without specifying the user or key on every command:
+
+```bash
+ssh rspi-iot-app.local
+```
+
+`make buildroot-prepare` checks whether `ssh_authorized_keys` exists and is not
+empty. When it contains a key, the image installs it as root's
+`.ssh/authorized_keys` file with restricted permissions. When it is missing or
+empty, the image is built without an authorized key and the `root` password
+remains available.
+
+The personal `ssh_authorized_keys` file is ignored by Git. It is not the same
+as `known_hosts`: `authorized_keys` controls who may log in to the Pi, while
+`known_hosts` belongs to the SSH client and records which server it connected
+to.
 
 ## 5. Choose the Buildroot output directory
 
@@ -150,7 +267,7 @@ The root Makefile creates this persistent directory, asking for `sudo` only
 when it needs permission to create it:
 
 ```text
-/opt/iot-app-builds/raspberry-pi-4
+/opt/iot-app-builds/buildroot-raspberry-pi-4
 ```
 
 It stores the Buildroot configuration, cross-toolchain, compiled packages,
@@ -160,10 +277,15 @@ Set `BUILDROOT_OUTPUT` when another persistent location is preferred:
 
 ```bash
 make buildroot-prepare \
-  BUILDROOT_OUTPUT=/mnt/builds/raspberry-pi-4
+  BUILDROOT_OUTPUT=/opt/iot-app-builds-custom/buildroot-raspberry-pi-4
 ```
 
 The remaining commands use this persistent output directory.
+
+Each `make buildroot-prepare` call reloads `iot_rpi4_defconfig`. This makes
+changes to the tracked configuration available when an existing output
+directory is reused. The preparation script then applies the root-partition
+size from `storage_layout.conf`.
 
 ## 6. Load the Raspberry Pi 4 configuration
 
@@ -172,11 +294,11 @@ Run:
 ```bash
 make -C buildroot \
   BR2_EXTERNAL="$PWD/iot_app/buildroot_external" \
-  O=/opt/iot-app-builds/raspberry-pi-4 \
+  O=/opt/iot-app-builds/buildroot-raspberry-pi-4 \
   iot_rpi4_defconfig
 ```
 
-This creates `/opt/iot-app-builds/raspberry-pi-4/.config` from the
+This creates `/opt/iot-app-builds/buildroot-raspberry-pi-4/.config` from the
 project-owned Raspberry Pi 4 configuration.
 
 The important selections include:
@@ -189,6 +311,7 @@ The important selections include:
 - `wpa_supplicant`;
 - Dropbear SSH;
 - Mosquitto; and
+- the tools that expand and mount `/data`; and
 - the project-owned `iot_app` Buildroot package.
 
 ### Set the startup display resolution
@@ -210,6 +333,20 @@ Linux applies this mode while it creates the display and framebuffer. IoT App
 then uses the existing `/dev/fb0` resolution; it does not change the display
 mode itself.
 
+The same command line contains `quiet loglevel=4`. These options keep normal
+kernel status messages off the LVGL dashboard. Serious kernel messages may
+still be printed. Nothing is removed from the kernel log; read it over SSH
+with:
+
+```sh
+dmesg
+```
+
+See the [Raspberry Pi KMS display documentation](https://www.raspberrypi.com/documentation/computers/configuration.html#set-the-kms-display-mode)
+for the `video=` setting. The separate
+[Linux kernel parameter reference](https://docs.kernel.org/admin-guide/kernel-parameters.html)
+documents `quiet` and `loglevel=`.
+
 To use another resolution, replace only the value after `video=` with a mode
 supported by the monitor. Keep the complete command line on one line. For
 example:
@@ -226,15 +363,37 @@ cat /proc/cmdline
 cat /sys/class/graphics/fb0/virtual_size
 ```
 
+If an older image prints kernel messages over the dashboard, this command
+applies the same console filter until the next reboot:
+
+```sh
+dmesg -n 4
+```
+
 ## 7. Build the complete image
 
-Run:
+The short project command rebuilds IoT App, creates the image, and copies it to
+a stable path for Raspberry Pi Imager:
+
+```bash
+make buildroot-image
+```
+
+The Makefile runs the following Buildroot command once for
+`iot_app-dirclean`, then again for the full parallel build:
 
 ```bash
 env -u LD_LIBRARY_PATH \
   make -C buildroot \
   BR2_EXTERNAL="$PWD/iot_app/buildroot_external" \
-  O=/opt/iot-app-builds/raspberry-pi-4
+  O=/opt/iot-app-builds/buildroot-raspberry-pi-4 \
+  iot_app-dirclean
+
+env -u LD_LIBRARY_PATH \
+  make -C buildroot \
+  BR2_EXTERNAL="$PWD/iot_app/buildroot_external" \
+  O=/opt/iot-app-builds/buildroot-raspberry-pi-4 \
+  all -j"$(getconf _NPROCESSORS_ONLN)"
 ```
 
 The first build takes a while because Buildroot must download and compile the
@@ -266,7 +425,7 @@ enabled later, request one top-level job per available CPU thread with:
 env -u LD_LIBRARY_PATH \
   make -C buildroot \
   BR2_EXTERNAL="$PWD/iot_app/buildroot_external" \
-  O=/opt/iot-app-builds/raspberry-pi-4 \
+  O=/opt/iot-app-builds/buildroot-raspberry-pi-4 \
   -j"$(nproc)"
 ```
 
@@ -280,17 +439,24 @@ command needs administrator access.
 When the build finishes, check the bootable image:
 
 ```bash
-ls -lh /opt/iot-app-builds/raspberry-pi-4/images/sdcard.img
+ls -lh /opt/iot-app-builds/buildroot-raspberry-pi-4/images/sdcard.img
 ```
 
 You can also record its checksum:
 
 ```bash
-sha256sum /opt/iot-app-builds/raspberry-pi-4/images/sdcard.img
+sha256sum /opt/iot-app-builds/buildroot-raspberry-pi-4/images/sdcard.img
 ```
 
-The file `sdcard.img` contains both the Raspberry Pi boot partition and the
-Linux root filesystem. Do not copy `rootfs.ext4` by itself to the microSD card.
+The file `sdcard.img` contains the Raspberry Pi boot partition, the Linux root
+filesystem, and the expandable data filesystem. Do not copy `rootfs.ext4` by
+itself to the microSD card.
+
+When `make buildroot-image` is used, the same image is also available as:
+
+```text
+/opt/iot-app-builds/images/iot-app-buildroot-rpi4.img
+```
 
 ## 8. Flash the microSD card
 
@@ -304,7 +470,10 @@ This is the safer method:
 1. Open Raspberry Pi Imager on Ubuntu.
 2. Choose the Raspberry Pi 4 as the device.
 3. Choose **Use custom** as the operating system.
-4. Select `/opt/iot-app-builds/raspberry-pi-4/images/sdcard.img`.
+4. Select `/opt/iot-app-builds/images/iot-app-buildroot-rpi4.img`. If the
+   image was built with the full Buildroot command instead of the root
+   Makefile, select
+   `/opt/iot-app-builds/buildroot-raspberry-pi-4/images/sdcard.img`.
 5. Select the microSD card.
 6. Confirm the write.
 
@@ -342,7 +511,7 @@ Replace `/dev/sdX` below with the verified whole microSD device:
 
 ```bash
 sudo dd \
-  if=/opt/iot-app-builds/raspberry-pi-4/images/sdcard.img \
+  if=/opt/iot-app-builds/buildroot-raspberry-pi-4/images/sdcard.img \
   of=/dev/sdX \
   bs=4M \
   status=progress \
@@ -382,7 +551,7 @@ Synchronize the system clock with NTP
 Start Dropbear and Mosquitto
         |
         v
-Open the automatic root login on the HDMI console
+Reserve tty1 for IoT App and start the emergency login on tty2
         |
         v
 Start IoT App as the S90iot-app service
@@ -395,73 +564,91 @@ background to keep the clock synchronized. Near the end of boot,
 starts IoT App. It still starts in offline mode when those services are not
 ready before the timeout.
 
+IoT App hides the cursor on `tty1` before it starts. Because no login process
+runs on that terminal, keyboard input is not printed over the dashboard.
+
 ## 10. Find the Raspberry Pi address
 
-The Buildroot configuration sets the Raspberry Pi hostname to `iot-app`. When
-Wi-Fi or Ethernet requests an address through DHCP, the network configuration
-sends this hostname to the router:
+The Buildroot image sets the Raspberry Pi hostname to `rspi-iot-app` and runs
+Avahi. Avahi advertises the device through multicast DNS, or mDNS, under this
+address:
+
+```text
+rspi-iot-app.local
+```
+
+This name does not change when DHCP gives the Raspberry Pi a different IP
+address. From another computer on the same local network, check the name with:
+
+```bash
+getent hosts rspi-iot-app.local
+ping rspi-iot-app.local
+```
+
+The `.local` suffix tells Ubuntu to use mDNS. It does not depend on the router
+registering DHCP hostnames in its own DNS service.
+
+The DHCP request also sends the hostname to the router:
 
 ```text
 hostname $(hostname)
 ```
 
-Many home routers register DHCP hostnames in their local DNS service. On those
-networks, `ping iot-app` works as follows:
-
-1. Ubuntu asks its configured DNS server for the address of `iot-app`.
-2. The router finds the hostname from the Raspberry Pi's DHCP request.
-3. The router returns the assigned address, such as `192.168.0.67`.
-4. `ping` sends its packets to that address.
-
-Check the name without sending ping packets:
+Some routers therefore also resolve the shorter name:
 
 ```bash
-getent hosts iot-app
+ping rspi-iot-app
 ```
 
-A successful result may include the router's local search domain:
-
-```text
-192.168.0.67    iot-app.Home
-```
-
-You can then test connectivity:
-
-```bash
-ping iot-app
-```
-
-`ping` does not discover the Raspberry Pi by itself; hostname resolution must
-succeed first. The current image does not include Avahi or another mDNS
-service, so `iot-app.local` is not guaranteed to work. If `iot-app` does not
-resolve, open the router's connected-device or DHCP-client page and find the
-device named `iot-app`. A DHCP reservation or local DNS record can keep its
-address stable.
+The short form depends on the router and is not as reliable as
+`rspi-iot-app.local`. If mDNS does not work, open the router's DHCP-client page
+and look for a device named `rspi-iot-app`, or run `hostname -I` from the
+Raspberry Pi console.
 
 ## 11. Connect through SSH
 
-Use the address assigned by the router:
+The preferred SSH command uses the mDNS name:
 
 ```bash
-ssh root@192.168.0.67
+ssh root@rspi-iot-app.local
 ```
 
-Replace `192.168.0.67` with the actual address. Enter this password when SSH
-asks for it:
+When the image contains your public key, SSH uses the matching private key
+from the Ubuntu computer and no password is requested. Otherwise, enter this
+development password:
 
 ```text
 root
 ```
 
 After reflashing, SSH may report that the host key changed. This is expected
-because the new image generates a new Dropbear host key. Remove only the old
-entry for that Raspberry Pi address:
+because the new image generates a new Dropbear host key. Remove the old mDNS
+entry for this Raspberry Pi:
 
 ```bash
-ssh-keygen -R 192.168.0.67
+ssh-keygen -R rspi-iot-app.local
 ```
 
 Then connect again.
+
+### Use the emergency console without a network
+
+The image keeps a normal login on `tty2`. Connect a keyboard and press
+`Alt+F2`. Some keyboards require `Ctrl+Alt+F2` instead. Log in as `root` with
+the development password.
+
+If IoT App makes the emergency terminal difficult to read, stop it first:
+
+```sh
+/etc/init.d/iot-app stop
+```
+
+After finishing the repair, restart IoT App and switch back to its terminal:
+
+```sh
+/etc/init.d/iot-app start
+chvt 1
+```
 
 ## 12. Check the system and IoT App
 
@@ -562,8 +749,8 @@ connection.
 
 ## 14. Useful troubleshooting commands
 
-If Wi-Fi does not connect, use the root shell that opens automatically on the
-HDMI console. Then run:
+If Wi-Fi does not connect, press `Alt+F2` or `Ctrl+Alt+F2` and log in through
+the emergency `tty2` console. Then run:
 
 ```sh
 dmesg | grep -i brcm
@@ -665,7 +852,7 @@ source:
 env -u LD_LIBRARY_PATH \
   make -C buildroot \
   BR2_EXTERNAL="$PWD/iot_app/buildroot_external" \
-  O=/opt/iot-app-builds/raspberry-pi-4 \
+  O=/opt/iot-app-builds/buildroot-raspberry-pi-4 \
   iot_app-dirclean
 ```
 
@@ -676,7 +863,7 @@ directory:
 env -u LD_LIBRARY_PATH \
   make -C buildroot \
   BR2_EXTERNAL="$PWD/iot_app/buildroot_external" \
-  O=/opt/iot-app-builds/raspberry-pi-4 \
+  O=/opt/iot-app-builds/buildroot-raspberry-pi-4 \
   iot_app
 ```
 
@@ -687,7 +874,7 @@ this step.
 Confirm that the new executable is for the Raspberry Pi:
 
 ```bash
-file /opt/iot-app-builds/raspberry-pi-4/target/usr/bin/iot_app
+file /opt/iot-app-builds/buildroot-raspberry-pi-4/target/usr/bin/iot_app
 ```
 
 The result should identify an ARM AArch64 executable. Do not deploy it if the
@@ -695,48 +882,42 @@ result says `x86-64`.
 
 ### 15.2 Copy the executable to a running Raspberry Pi
 
-Use the Pi's address in place of `RASPBERRY_PI_IP` in these commands.
-Upload the executable under a temporary name so a running executable is not
-overwritten:
+The image keeps development executables under `/data`. Copy the rebuilt file
+there instead of replacing `/usr/bin/iot_app`:
 
 ```bash
-scp -O /opt/iot-app-builds/raspberry-pi-4/target/usr/bin/iot_app \
-  root@RASPBERRY_PI_IP:/tmp/iot_app.new
+scp -O /opt/iot-app-builds/buildroot-raspberry-pi-4/target/usr/bin/iot_app \
+  root@rspi-iot-app.local:/data/iot-app/development/iot_app.new
 ```
 
 The `-O` option asks `scp` to use its original SCP protocol. This works with
 the Dropbear SSH server in the Buildroot image even when the Ubuntu `scp`
 command normally prefers SFTP.
 
-Stop the service and keep a temporary copy of the current executable:
+Activate the completely uploaded file and restart the service:
 
 ```bash
-ssh root@RASPBERRY_PI_IP \
-  '/etc/init.d/iot-app stop &&
-   cp -p /usr/bin/iot_app /tmp/iot_app.previous'
-```
-
-Install the new executable and start the service:
-
-```bash
-ssh root@RASPBERRY_PI_IP \
-  'install -m 0755 /tmp/iot_app.new /usr/bin/iot_app &&
-   /etc/init.d/iot-app start'
+ssh root@rspi-iot-app.local '
+  chmod 0755 /data/iot-app/development/iot_app.new &&
+  mv /data/iot-app/development/iot_app.new \
+     /data/iot-app/development/iot_app &&
+  /etc/init.d/iot-app restart
+'
 ```
 
 Check that the application is running:
 
 ```bash
-ssh root@RASPBERRY_PI_IP "ps | grep '[i]ot_app'"
+ssh root@rspi-iot-app.local "ps | grep '[i]ot_app'"
 ```
 
 To see startup logs directly, stop the service and run the executable in the
 SSH terminal:
 
 ```bash
-ssh root@RASPBERRY_PI_IP
+ssh root@rspi-iot-app.local
 /etc/init.d/iot-app stop
-/usr/bin/iot_app
+/data/iot-app/development/iot_app
 ```
 
 Press `Ctrl+C` when the test is complete, then restore normal service
@@ -746,17 +927,20 @@ operation:
 /etc/init.d/iot-app start
 ```
 
-If the new executable does not work, restore the temporary backup:
+If the development executable does not work, remove it and restart the
+service. The launcher then returns to the copy installed in the image:
 
 ```bash
-ssh root@RASPBERRY_PI_IP \
-  '/etc/init.d/iot-app stop &&
-   install -m 0755 /tmp/iot_app.previous /usr/bin/iot_app &&
-   /etc/init.d/iot-app start'
+ssh root@rspi-iot-app.local '
+  rm -f /data/iot-app/development/iot_app &&
+  /etc/init.d/iot-app restart
+'
 ```
 
-Files under `/tmp` disappear after a reboot, so this backup is only intended
-for the current development session.
+The development file remains under `/data` after reboot. The complete
+[development executable guide](../development-executable/README.md) explains
+launcher selection, logging, recovery, and which changes still require a new
+image.
 
 ### 15.3 Deploy only a changed default Python application
 
@@ -767,13 +951,13 @@ compilation. Copy its two files to the Pi:
 scp -O \
   iot_app/default_python_application/app.json \
   iot_app/default_python_application/main.py \
-  root@RASPBERRY_PI_IP:/tmp/
+  root@rspi-iot-app.local:/tmp/
 ```
 
 Stop IoT App, install the files, and start it again:
 
 ```bash
-ssh root@RASPBERRY_PI_IP \
+ssh root@rspi-iot-app.local \
   '/etc/init.d/iot-app stop &&
    install -m 0644 /tmp/app.json \
      /usr/share/iot-app/default_python_application/app.json &&
@@ -786,7 +970,7 @@ ssh root@RASPBERRY_PI_IP \
 
 The SCP workflow changes the writable filesystem on the running Raspberry Pi.
 It does not update
-`/opt/iot-app-builds/raspberry-pi-4/images/sdcard.img`, so those changes will
+`/opt/iot-app-builds/buildroot-raspberry-pi-4/images/sdcard.img`, so those changes will
 be lost the next time the old image is flashed.
 
 Before producing or flashing a release image, rebuild the package and
@@ -796,7 +980,7 @@ regenerate the image:
 env -u LD_LIBRARY_PATH \
   make -C buildroot \
   BR2_EXTERNAL="$PWD/iot_app/buildroot_external" \
-  O=/opt/iot-app-builds/raspberry-pi-4 \
+  O=/opt/iot-app-builds/buildroot-raspberry-pi-4 \
   iot_app-dirclean all
 ```
 
@@ -818,26 +1002,27 @@ Use these commands for that clean rebuild:
 env -u LD_LIBRARY_PATH \
   make -C buildroot \
   BR2_EXTERNAL="$PWD/iot_app/buildroot_external" \
-  O=/opt/iot-app-builds/raspberry-pi-4 \
+  O=/opt/iot-app-builds/buildroot-raspberry-pi-4 \
   clean
 
 env -u LD_LIBRARY_PATH \
   make -C buildroot \
   BR2_EXTERNAL="$PWD/iot_app/buildroot_external" \
-  O=/opt/iot-app-builds/raspberry-pi-4 \
+  O=/opt/iot-app-builds/buildroot-raspberry-pi-4 \
   iot_rpi4_defconfig
 
 env -u LD_LIBRARY_PATH \
   make -C buildroot \
   BR2_EXTERNAL="$PWD/iot_app/buildroot_external" \
-  O=/opt/iot-app-builds/raspberry-pi-4
+  O=/opt/iot-app-builds/buildroot-raspberry-pi-4
 ```
 
 ## 16. Update the pinned submodules
 
 Buildroot, LVGL, and MicroPython are separate Git repositories stored as
 submodules. This repository records one exact commit for each dependency, so
-another checkout uses the same source versions.
+another checkout uses the same source versions. The Yocto submodules are
+covered separately in the [Yocto guide](../yocto/README.md).
 
 This command does not look for newer versions:
 
@@ -862,7 +1047,7 @@ git -C micropython status --short
 ```
 
 Do not update a submodule while it contains local source changes. The project
-treats all three submodules as read-only upstream dependencies.
+treats Buildroot, LVGL, and MicroPython as read-only upstream dependencies.
 
 Update one dependency at a time. If the build then fails, it is much easier to
 tell which update caused it.
@@ -972,7 +1157,7 @@ Load the project configuration through the new Buildroot version:
 ```bash
 make -C buildroot \
   BR2_EXTERNAL="$PWD/iot_app/buildroot_external" \
-  O=/opt/iot-app-builds/raspberry-pi-4 \
+  O=/opt/iot-app-builds/buildroot-raspberry-pi-4 \
   iot_rpi4_defconfig
 ```
 
@@ -982,7 +1167,7 @@ Create a normalized copy and compare it with the project defconfig:
 ```bash
 make -C buildroot \
   BR2_EXTERNAL="$PWD/iot_app/buildroot_external" \
-  O=/opt/iot-app-builds/raspberry-pi-4 \
+  O=/opt/iot-app-builds/buildroot-raspberry-pi-4 \
   BR2_DEFCONFIG=/tmp/iot_rpi4_saved_defconfig \
   savedefconfig
 

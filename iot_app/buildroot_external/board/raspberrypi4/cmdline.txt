@@ -1,1 +1,1 @@
-root=/dev/mmcblk0p2 rootwait console=tty1 console=ttyAMA0,115200 video=HDMI-A-1:1920x1080@60
+root=/dev/mmcblk0p2 rootwait console=tty1 console=ttyAMA0,115200 quiet loglevel=4 video=HDMI-A-1:1920x1080@60

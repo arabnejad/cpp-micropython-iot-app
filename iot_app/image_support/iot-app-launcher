@@ -1,0 +1,43 @@
+#!/bin/sh
+
+# Use a development executable from persistent storage when one has been
+# installed. Removing that file returns the next start to the image's normal
+# executable.
+#
+# The development path is accepted only when it passes three checks:
+#
+#   -f  confirms that the path points to a regular file, not a directory or
+#       device.
+#   -x  confirms that the file has executable permission.
+#   ! -L rejects a symbolic link, so the launcher cannot be redirected to an
+#       unexpected file somewhere else.
+#
+# These checks do not verify the file's processor architecture, checksum,
+# owner, or contents. Upload the executable under the temporary .new name and
+# rename it only after the complete file has arrived. If the resulting file is
+# executable but invalid, starting it will fail and the service will report
+# that failure.
+
+installed_executable="/usr/bin/iot_app"
+development_executable="/data/iot-app/development/iot_app"
+
+if [ -f "$development_executable" ] &&
+	[ -x "$development_executable" ] &&
+	[ ! -L "$development_executable" ]; then
+	echo "[IOT_APP][WARNING]   [iot-app-launcher] Running development executable: $development_executable"
+	# exec replaces this launcher process with IoT App. "$@" passes through any
+	# command-line arguments originally supplied by the startup service.
+	exec "$development_executable" "$@"
+fi
+
+# A file at the development path failed at least one check. Report that the
+# override was ignored, then continue with the executable installed in the
+# image.
+if [ -e "$development_executable" ]; then
+	echo "[IOT_APP][WARNING]   [iot-app-launcher] Ignoring path because it is not a regular, non-symlink executable file: $development_executable"
+fi
+
+echo "[IOT_APP][INFO]      [iot-app-launcher] Running installed executable: $installed_executable"
+# exec also makes the installed IoT App process become the process monitored
+# by the startup service.
+exec "$installed_executable" "$@"

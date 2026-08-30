@@ -495,7 +495,7 @@ containing interfaces that can connect to another device, such as `eth0` and
     {
         "name": "eth0",
         "connected": True,
-        "ipv4_address": "192.168.0.67",
+        "ipv4_address": "192.0.2.10",
         "speed_megabits_per_second": 1000,
     },
 )

@@ -5,8 +5,8 @@ through MQTT. The current format is deliberately small. A later version may
 grow into an `.iotapp` package sender with support for several files and assets.
 
 The sender publishes to an MQTT broker. With the example configuration,
-Mosquitto runs on the Raspberry Pi at `192.168.0.67`; the C++ receiver inside
-`iot_app` subscribes to that same broker.
+Mosquitto runs on the Raspberry Pi at `rspi-iot-app.local`; the C++ receiver
+inside `iot_app` subscribes to that same broker.
 
 ```text
 Ubuntu                                      Raspberry Pi
@@ -55,7 +55,7 @@ Connection settings and the local application directory belong in a separate
 {
   "device_id": "raspberrypi-01",
   "mqtt": {
-    "broker_host": "192.168.0.67",
+    "broker_host": "rspi-iot-app.local",
     "broker_port": 1883
   },
   "application": {
@@ -100,15 +100,16 @@ To resend the same default dashboard that is installed with IoT App, use:
 ```
 
 The authoritative default application remains under `iot_app`, so CMake,
-Buildroot, and manual MQTT dashboard restoration all use the same Python
-source.
+Buildroot, Yocto, and manual MQTT dashboard restoration all use the same
+Python source.
 
 See [`sample_applications/README.md`](sample_applications/README.md) for the
 complete catalog, timer intervals, and hardware requirements.
 
-`broker_host` means the machine running Mosquitto. It is the Raspberry Pi IP
-only when Mosquitto runs on the Pi. If the broker runs on Ubuntu, use Ubuntu's
-IP in both the sender and the Pi MQTT-client configuration.
+`broker_host` means the machine running Mosquitto. The example uses the
+Raspberry Pi's `rspi-iot-app.local` name because Mosquitto runs on the Pi. If
+the broker runs on Ubuntu, use a hostname or address that the sender and the Pi
+can both reach.
 
 ## Ubuntu setup
 
@@ -212,11 +213,11 @@ The result should contain `0.0.0.0:1883`. From Ubuntu, test the connection
 before running the sender:
 
 ```bash
-nc -vz 192.168.0.67 1883
+nc -vz rspi-iot-app.local 1883
 ```
 
-Use the Pi address reported by `hostname -I`. If the service does not restart,
-read the broker log:
+If the mDNS name does not resolve, use the Pi address reported by `hostname -I`
+as a temporary fallback. If the service does not restart, read the broker log:
 
 ```bash
 sudo journalctl -u mosquitto -n 50 --no-pager

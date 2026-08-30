@@ -1,0 +1,14 @@
+[Unit]
+Description=IoT App Wi-Fi connection
+Before=network.target
+Wants=network.target
+ConditionPathExists=/etc/wpa_supplicant.conf
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/wpa_supplicant -D nl80211 -i wlan0 -c /etc/wpa_supplicant.conf
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

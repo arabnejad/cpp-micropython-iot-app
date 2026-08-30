@@ -1,10 +1,11 @@
 # IoT Application
 
 This directory holds the code and configuration maintained as part of IoT App,
-including its Buildroot integration.
+including the files used by its Buildroot and Yocto images.
 
-The repository-root `lvgl/`, `micropython/`, and `buildroot/` directories are
-pinned upstream submodules and must remain unmodified.
+The repository-root `lvgl/`, `micropython/`, `buildroot/`, `poky/`,
+`meta-openembedded/`, and `meta-raspberrypi/` directories are pinned upstream
+submodules and must remain unmodified.
 
 ## Language policy
 
@@ -159,8 +160,9 @@ build/iot_app/
     └── main.py
 ```
 
-`cmake --install` and the Buildroot package install the same default package
-under `${CMAKE_INSTALL_DATADIR}/iot-app/default_python_application`, normally
+`cmake --install`, the Buildroot package, and the Yocto recipe install the same
+default package under
+`${CMAKE_INSTALL_DATADIR}/iot-app/default_python_application`, normally
 `/usr/share/iot-app/default_python_application`. Applications received through
 MQTT are reconstructed only under `/tmp`, as described below, and are not
 persistent.
@@ -221,7 +223,7 @@ values, lifecycle rules, and a working example for each module.
 
 The [system design document](docs/system-design/README.md) explains how the
 runtime, rendering, MicroPython, MQTT deployment, hardware support, recovery,
-and Buildroot integration work together.
+Buildroot, and Yocto integration work together.
 
 The [LVGL guide](docs/lvgl/README.md) introduces LVGL and explains
 the project's framebuffer backend, render thread, widgets, styles,
@@ -338,7 +340,7 @@ sudo systemctl restart mosquitto
 # These exports are optional. Uncomment and change them only when your device
 # ID or broker address is different from the defaults listed above.
 # export IOT_DEVICE_ID=my-raspberry-pi
-# export IOT_MQTT_HOST=192.168.0.10
+# export IOT_MQTT_HOST=rspi-iot-app.local
 
 ./build/iot_app/iot_app
 ```
@@ -388,11 +390,12 @@ The listener should now be `0.0.0.0:1883`, which accepts connections through
 the Pi's network interfaces. Test it from Ubuntu before running the sender:
 
 ```bash
-nc -vz 192.168.0.67 1883
+nc -vz rspi-iot-app.local 1883
 ```
 
-Replace the example address with the current address reported by `hostname -I`.
-If Mosquitto fails to restart, read its error log:
+If the mDNS name does not resolve, use the current address reported by
+`hostname -I` as a temporary fallback. If Mosquitto fails to restart, read its
+error log:
 
 ```bash
 sudo journalctl -u mosquitto -n 50 --no-pager
@@ -535,8 +538,8 @@ make buildroot-prepare
 This command selects the Raspberry Pi 4 Model B development image. The
 separate `iot_cm4_defconfig` remains available for a Compute Module 4 target.
 The root Makefile keeps the output in
-`/opt/iot-app-builds/raspberry-pi-4`. This directory survives a reboot and
-avoids the `@` character found in some home-directory paths.
+`/opt/iot-app-builds/buildroot-raspberry-pi-4`. This directory survives a
+reboot and avoids the `@` character found in some home-directory paths.
 
 The external defconfig enables `iot_app`, `libdrm`, Mosquitto, cJSON, OpenSSL,
 Raspberry Pi VC4 DRM, and DRM framebuffer emulation for `/dev/fb0`. LVGL and
@@ -556,3 +559,25 @@ listener on IPv4 port 1883 so the Ubuntu sender can deploy applications over a
 trusted local network. This is only a development setup. A production image
 must replace it with TLS, separate device and sender credentials, topic ACLs,
 and signed application packages.
+
+## Configure Yocto
+
+The repository also contains the project-owned `meta-iot-app` layer. It builds
+the same CMake application and default Python package into a systemd-based
+Raspberry Pi 4 image.
+
+Prepare and check the Yocto configuration with:
+
+```bash
+make yocto-prepare
+make yocto-check
+```
+
+Buildroot and Yocto use the same private `wpa_supplicant.conf` file in the
+repository root. Run `make wifi-prepare`, then add the network name and
+password to that file before building either image. Git ignores the private
+file.
+
+See the [Yocto image guide](docs/yocto/README.md) for host dependencies,
+building, Raspberry Pi Imager, SSH, services, incremental updates, and
+troubleshooting.

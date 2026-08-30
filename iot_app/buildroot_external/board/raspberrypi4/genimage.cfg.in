@@ -1,0 +1,66 @@
+# This is a template for the genimage configuration used by Buildroot.
+# genimage combines the boot and filesystem images into sdcard.img, which is
+# the file written to the microSD card.
+#
+# post-image.sh creates genimage-iot-app.cfg in the Buildroot images directory.
+# Before calling genimage, it replaces these template values:
+#
+#   The BOOT_FILES placeholder below
+#     The Raspberry Pi firmware, device-tree, configuration, and kernel files
+#     that must be copied into the FAT boot filesystem.
+#
+#   @ROOT_PARTITION_SIZE_MIB@
+#     The Linux root partition size selected through storage_layout.conf or
+#     the ROOT_PARTITION_SIZE_MIB make variable.
+#
+#   @DATA_PARTITION_BOOTSTRAP_SIZE_MIB@
+#     The initial size of the ext4 data filesystem included in the image. On
+#     first boot, iot-app-prepare-data-storage expands this partition and its
+#     filesystem to use the remaining space on the card.
+#
+# genimage configuration reference:
+# https://github.com/pengutronix/genimage#the-image-config-file
+
+# Create the FAT filesystem used by the Raspberry Pi firmware during boot.
+image boot.vfat {
+	vfat {
+		files = {
+#BOOT_FILES#
+		}
+	}
+
+	# The boot files are small, so a fixed 32 MiB filesystem is enough.
+	size = 32M
+}
+
+# Assemble the complete disk image from the filesystems defined above and
+# produced by Buildroot or post-image.sh.
+image sdcard.img {
+	hdimage {
+	}
+
+	# Partition 1 contains boot.vfat. MBR type 0x0C identifies a FAT32 LBA
+	# partition. The bootable setting adds the MBR boot flag.
+	partition boot {
+		partition-type = 0xC
+		bootable = "true"
+		image = "boot.vfat"
+	}
+
+	# Partition 2 contains Buildroot's Linux root filesystem. MBR type 0x83 is
+	# used for a Linux filesystem partition.
+	partition rootfs {
+		partition-type = 0x83
+		image = "rootfs.ext4"
+		size = @ROOT_PARTITION_SIZE_MIB@M
+	}
+
+	# Partition 3 starts as the small data.ext4 image created by post-image.sh.
+	# Its label is iot-data. The first-boot storage script checks that label
+	# before expanding the partition and mounting it at /data.
+	partition data {
+		partition-type = 0x83
+		image = "data.ext4"
+		size = @DATA_PARTITION_BOOTSTRAP_SIZE_MIB@M
+	}
+}

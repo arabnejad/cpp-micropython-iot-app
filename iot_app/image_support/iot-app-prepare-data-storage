@@ -1,0 +1,130 @@
+#!/bin/sh
+
+# Prepare the persistent data partition used by both the Buildroot and Yocto
+# images. Buildroot calls this program from S25data-storage. Yocto calls it
+# from iot-app-storage.service before starting IoT App.
+#
+# The generated SD-card image contains these partitions:
+#
+#   Partition 1: Raspberry Pi boot files
+#   Partition 2: Linux root filesystem
+#   Partition 3: small ext4 filesystem labelled iot-data
+#
+# The third partition is kept small in the generated image so the image is
+# quick to build, copy, and flash. On the first boot, this program extends that
+# partition to the end of the SD card, grows its ext4 filesystem, and mounts it
+# at /data. Files stored there remain available after a reboot.
+#
+# It also creates /data/iot-app/development. The IoT App launcher checks that
+# directory for a development executable before using /usr/bin/iot_app.
+#
+# The program is safe to run on later boots. If /data is already mounted, it
+# only checks the application directories and their ownership.
+#
+# Command references:
+# https://man7.org/linux/man-pages/man5/proc_cmdline.5.html
+# https://www.gnu.org/software/parted/manual/html_node/resizepart.html
+# https://man7.org/linux/man-pages/man8/partx.8.html
+# https://man7.org/linux/man-pages/man8/resize2fs.8.html
+
+# Report an unset shell variable as an error instead of treating it as empty.
+set -u
+
+data_mount_point="/data"
+development_directory="/data/iot-app/development"
+expected_data_label="iot-data"
+
+# Read root= from the kernel command line to find the storage device that
+# contains the running image. This project always puts Linux in partition 2
+# and persistent data in partition 3.
+#
+# Device names use different partition formats. An SD card or NVMe device has
+# names such as /dev/mmcblk0p2 or /dev/nvme0n1p2. USB and virtual disks use
+# names such as /dev/sda2 or /dev/vda2.
+find_image_devices() {
+	root_device=""
+	for kernel_argument in $(cat /proc/cmdline); do
+		case "$kernel_argument" in
+			root=*)
+				root_device="${kernel_argument#root=}"
+				;;
+		esac
+	done
+
+	case "$root_device" in
+		/dev/mmcblk*p2|/dev/nvme*n*p2)
+			image_device="${root_device%p2}"
+			data_partition="${image_device}p3"
+			;;
+		/dev/sd*2|/dev/vd*2)
+			image_device="${root_device%2}"
+			data_partition="${image_device}3"
+			;;
+		*)
+			echo "Cannot find the image device from root=$root_device" >&2
+			return 1
+			;;
+	esac
+}
+
+# Return success only when the expected device is already mounted at /data.
+# Checking /proc/mounts avoids trying to resize a filesystem while it is in
+# use. It also makes repeated calls finish quickly after the first boot.
+data_partition_is_mounted() {
+	awk -v device="$data_partition" -v directory="$data_mount_point" \
+		'$1 == device && $2 == directory { found = 1 } END { exit !found }' \
+		/proc/mounts
+}
+
+# Create the directory used for development executables. The iot-app account
+# owns /data and this directory because IoT App may store persistent files
+# there. The id check keeps this shared helper safe if it is run on a system
+# where that account has not been installed.
+prepare_iot_app_directories() {
+	mkdir -p "$development_directory"
+	chmod 0755 "$development_directory"
+
+	if id iot-app >/dev/null 2>&1; then
+		chown iot-app:iot-app "$data_mount_point"
+		chown iot-app:iot-app "$development_directory"
+	fi
+}
+
+# Stop if root= does not use one of the supported device-name formats.
+find_image_devices || exit 1
+
+# A missing third partition means this is not an image with the expected
+# storage layout. Do not create or resize anything in that case.
+if [ ! -b "$data_partition" ]; then
+	echo "Data partition does not exist: $data_partition" >&2
+	exit 1
+fi
+
+# Verify the ext4 label before changing a partition boundary. This check keeps
+# the script from resizing an unrelated third partition if it is run on a
+# different disk layout.
+actual_data_label="$(e2label "$data_partition" 2>/dev/null || true)"
+if [ "$actual_data_label" != "$expected_data_label" ]; then
+	echo "Refusing to resize $data_partition because its label is '$actual_data_label', not '$expected_data_label'" >&2
+	exit 1
+fi
+
+if data_partition_is_mounted; then
+	prepare_iot_app_directories
+	exit 0
+fi
+
+# First extend partition 3 to the end of the device. Then tell the kernel about
+# its new boundary and grow the ext4 filesystem inside it. Resizing the
+# partition alone would not make the extra space available to files.
+echo "Expanding $data_partition to use the remaining space on $image_device"
+parted --script "$image_device" resizepart 3 100%
+partx --update --nr 3 "$image_device"
+resize2fs "$data_partition"
+
+# Mount the expanded filesystem and finish preparing its application
+# directories. The startup script or service that called this program manages
+# the mount during the current boot.
+mkdir -p "$data_mount_point"
+mount -t ext4 "$data_partition" "$data_mount_point"
+prepare_iot_app_directories

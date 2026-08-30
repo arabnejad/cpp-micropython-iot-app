@@ -22,7 +22,7 @@ I started this project about a year before its first public release, alongside
 several other personal C++ projects. It became a much longer project than I
 first expected because it required me to learn and combine several unfamiliar
 areas, including LVGL, Linux system interfaces, Raspberry Pi hardware, and
-Buildroot customization.
+custom Linux images built with Buildroot and Yocto.
 
 The first version was a small prototype. Over the following year, I extended
 and refactored it several times as I learned more and tested different designs.
@@ -77,15 +77,20 @@ native `iot` modules supplied by the runtime.
 
 | Path | Purpose |
 |---|---|
-| [`iot_app/`](iot_app/) | C++ runtime, embedded MicroPython modules, default dashboard, tests, and Buildroot integration |
+| [`iot_app/`](iot_app/) | C++ runtime, embedded MicroPython modules, default dashboard, tests, and image integration |
 | [`iot_app_sender/`](iot_app_sender/) | Ubuntu command-line tool that sends Python applications over MQTT |
 | [`iot_app_sender/sample_applications/`](iot_app_sender/sample_applications/) | Runnable examples for displays, timers, system information, and the I2C gamepad |
+| [`meta-iot-app/`](meta-iot-app/) | Project-owned Yocto layer, image recipe, services, and Raspberry Pi configuration |
+| [`scripts/build/`](scripts/build/) | Small scripts used by the root Makefile to prepare Buildroot and Yocto builds |
 | `micropython/` | Pinned upstream MicroPython submodule |
 | `lvgl/` | Pinned upstream LVGL submodule |
 | `buildroot/` | Pinned upstream Buildroot submodule |
+| `poky/` | Pinned Yocto/Poky reference distribution submodule |
+| `meta-openembedded/` | Pinned OpenEmbedded package layer submodule |
+| `meta-raspberrypi/` | Pinned Raspberry Pi Yocto BSP layer submodule |
 
-The upstream submodules are build dependencies. Project-specific changes live
-under `iot_app/` and `iot_app_sender/`.
+The upstream submodules are build dependencies. Project-specific files live
+under `iot_app/`, `iot_app_sender/`, `meta-iot-app/`, and `scripts/`.
 
 ## Project commands
 
@@ -94,15 +99,28 @@ work. Run `make help` to see the available targets.
 
 | Command | What it does |
 |---|---|
-| `make submodules` | Initialize the Buildroot, MicroPython, and LVGL submodules at the revisions pinned by this repository |
+| `make submodules` | Initialize all upstream submodules at the revisions pinned by this repository |
 | `make format` | Format the project C and C++ source files with `clang-format` |
 | `make format-check` | Check C and C++ formatting without changing any files |
 | `make iot-app` | Configure and build IoT App for the current Linux computer |
 | `make test` | Configure, build, and run all unit tests |
 | `make coverage` | Run the tests and create terminal, HTML, and XML coverage reports |
-| `make buildroot-prepare` | Create the persistent Buildroot output directory and load the Raspberry Pi 4 configuration when needed |
+| `make wifi-prepare` | Create the shared private Wi-Fi configuration when it is missing |
+| `make storage-check` | Check the shared root and data partition sizes |
+| `make buildroot-prepare` | Create the persistent Buildroot directories and load the current Raspberry Pi 4 configuration |
 | `make buildroot-app` | Cross-compile and install only IoT App into the Buildroot target directory |
 | `make buildroot-image` | Rebuild the latest IoT App and generate the complete Raspberry Pi SD-card image |
+| `make yocto-prepare` | Create the persistent Yocto directories, refresh its configuration, and copy private Wi-Fi and SSH files |
+| `make yocto-check` | Parse the Yocto layers and image configuration without compiling an image |
+| `make yocto-app` | Cross-compile only the IoT App Yocto package |
+| `make yocto-image` | Build a complete Yocto image and prepare it for Raspberry Pi Imager |
+| `make images` | Build both the Buildroot and Yocto Raspberry Pi images |
+
+Both image builders also look for an optional root-level
+`ssh_authorized_keys` file. When that file exists and is not empty, its public
+keys are installed for passwordless root SSH access. The personal file is
+ignored by Git; [`ssh_authorized_keys.example`](ssh_authorized_keys.example)
+shows the expected format.
 
 The formatting commands cover the application headers, native MicroPython
 modules, runtime sources, and unit tests. They use [`iot_app/.clang-format`](iot_app/.clang-format).
@@ -112,26 +130,43 @@ If the executable has a versioned name on your system, pass it explicitly:
 make format-check CLANG_FORMAT=clang-format-18
 ```
 
-Buildroot output is kept outside `/tmp` by default:
+Buildroot and Yocto keep their output outside `/tmp` by default:
 
 ```text
-/opt/iot-app-builds/raspberry-pi-4
+/opt/iot-app-builds/
+├── buildroot-raspberry-pi-4/
+├── yocto-raspberry-pi-4/
+├── yocto-downloads/
+├── yocto-sstate-cache/
+├── yocto-sources/
+└── images/
 ```
 
-The first Buildroot command may ask for the user's `sudo` password so the
-Makefile can create this directory and give it to the current user. Later
-builds reuse its toolchain, compiled packages, configuration, and images.
+The first image command may ask for the user's `sudo` password so the
+preparation scripts can create these directories and give them to the current
+user. Later builds reuse downloaded source, toolchains, compiled packages, and
+cached results.
+
+Buildroot and Yocto read [`storage_layout.conf`](storage_layout.conf). Each
+image has the fixed root-partition size selected in that file. The data
+partition expands to the end of the SD card on first boot and is mounted at
+`/data`.
+See the [storage layout guide](iot_app/docs/storage/README.md)
+for the partition map, size overrides, first-boot steps, and upstream
+references.
 
 The output location can be changed without editing the Makefile:
 
 ```bash
 make buildroot-image \
-  BUILDROOT_OUTPUT=/mnt/builds/raspberry-pi-4
+  BUILDROOT_OUTPUT=/opt/iot-app-builds-custom/buildroot-raspberry-pi-4
 ```
 
-The selected path must not contain an `@` character. `buildroot-image` is used
-for both the first complete build and later image refreshes. It does not flash
-the image to an SD card.
+The selected Buildroot path must not contain an `@` character.
+`buildroot-image` is used for both the first complete build and later image
+refreshes. It does not flash the image to an SD card. The
+[Yocto image guide](iot_app/docs/yocto/README.md) explains the corresponding
+Yocto paths and commands.
 
 ## Quick start on Raspberry Pi OS
 
@@ -166,7 +201,7 @@ logging, MQTT defaults, console-mode setup, and deployment instructions.
 
 The shipped dashboard is kept in
 [`iot_app/default_python_application/`](iot_app/default_python_application/).
-CMake and Buildroot install this same copy on the Raspberry Pi.
+CMake, Buildroot, and Yocto install this same copy on the Raspberry Pi.
 
 Developers can send another application from Ubuntu with
 [`iot_app_sender/send_app.py`](iot_app_sender/send_app.py). The
@@ -203,7 +238,7 @@ sudo apt install gcovr
 
 Each guide has one main purpose. Start here for the project overview, use the
 IoT App README for normal runtime work, and use the more focused guides for the
-API, deployment, hardware, or Buildroot.
+API, deployment, hardware, Buildroot, or Yocto.
 
 | Document | What it covers |
 |---|---|
@@ -212,7 +247,10 @@ API, deployment, hardware, or Buildroot.
 | [LVGL guide](iot_app/docs/lvgl/README.md) | Introduction to LVGL and the project's framebuffer, widget, and render-thread design |
 | [MicroPython API](iot_app/docs/micropython-api/README.md) | Native `iot` modules, required and optional arguments, return values, and examples |
 | [Hardware](iot_app/docs/hardware/README.md) | Adafruit gamepad button wiring and mask conversion |
-| [Buildroot](iot_app/docs/buildroot/README.md) | Custom Raspberry Pi image, Wi-Fi, SSH, services, flashing, and incremental updates |
+| [Buildroot](iot_app/docs/buildroot/README.md) | Buildroot Raspberry Pi image, Wi-Fi, SSH, services, flashing, and incremental updates |
+| [Yocto](iot_app/docs/yocto/README.md) | Yocto layers, Raspberry Pi image, persistent build directories, flashing, and updates |
+| [Image storage](iot_app/docs/storage/README.md) | Shared root and `/data` partition sizes, first-boot expansion, and verification |
+| [Development executable](iot_app/docs/development-executable/README.md) | Test a rebuilt executable from `/data` without replacing the installed copy |
 | [IoT App Sender](iot_app_sender/README.md) | Ubuntu sender installation, configuration, MQTT topics, and status replies |
 | [Sample applications](iot_app_sender/sample_applications/README.md) | Available Python examples and their hardware requirements |
 | [Raspberry Pi OS](iot_app/docs/raspberry-pi-os/README.md) | Raspberry Pi OS configuration notes used during development |
@@ -224,7 +262,7 @@ API, deployment, hardware, or Buildroot.
 - DRM/KMS for display discovery
 - Linux I2C for hardware access
 - MQTT 5 with Mosquitto for application deployment
-- Buildroot for the final Raspberry Pi image
+- Buildroot or Yocto for a complete Raspberry Pi image
 - GoogleTest and Google Mock for automated tests
 
 ## License

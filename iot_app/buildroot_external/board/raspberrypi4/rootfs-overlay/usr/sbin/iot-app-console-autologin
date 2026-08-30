@@ -1,6 +1,0 @@
-#!/bin/sh
-
-# BusyBox getty starts this helper for the local HDMI console. The -f option
-# tells login that root was already selected, so it does not ask for a name or
-# password. This helper is not used by SSH.
-exec /bin/login -f root

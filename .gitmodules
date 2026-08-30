@@ -7,3 +7,15 @@
 [submodule "micropython"]
 	path = micropython
 	url = https://github.com/micropython/micropython.git
+[submodule "poky"]
+	path = poky
+	url = https://git.yoctoproject.org/poky
+	branch = scarthgap
+[submodule "meta-openembedded"]
+	path = meta-openembedded
+	url = https://git.openembedded.org/meta-openembedded
+	branch = scarthgap
+[submodule "meta-raspberrypi"]
+	path = meta-raspberrypi
+	url = https://github.com/agherzan/meta-raspberrypi.git
+	branch = scarthgap

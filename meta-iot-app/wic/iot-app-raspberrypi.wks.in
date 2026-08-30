@@ -1,0 +1,54 @@
+# This is the Wic partition-layout template for the Yocto SD-card image. The
+# Yocto preparation script replaces the two size placeholders during
+# make yocto-prepare and writes the completed file to the build configuration
+# directory.
+# BitBake then asks Wic to create one disk image containing the three
+# partitions below.
+#
+# part is the short form of the Wic partition command. --ondisk mmcblk0 names
+# the disk as it will appear on the Raspberry Pi. It does not read or modify
+# /dev/mmcblk0 on the computer running the build.
+#
+# Sizes without a unit are in MiB. One MiB is 1,048,576 bytes. --fixed-size
+# requests an exact partition size. Wic stops the build if the files assigned
+# to a partition do not fit in that size.
+#
+# Wic part command reference:
+# https://docs.yoctoproject.org/scarthgap/ref-manual/kickstart.html#command-part-or-partition
+
+# Partition 1: Raspberry Pi boot files
+#
+# /boot makes this partition available at /boot and lets Wic add the matching
+# mount information to the generated system.
+# --source bootimg-partition copies the firmware, configuration, device trees,
+# and kernel selected by the Yocto image configuration.
+# --fstype=vfat creates a FAT filesystem that Raspberry Pi firmware can read.
+# --label boot gives the filesystem a readable name.
+# --active sets the partition-table boot flag.
+# --align 4096 starts the partition on a 4096 KiB, or 4 MiB, boundary.
+# --fixed-size 100 makes the boot partition exactly 100 MiB.
+part /boot --source bootimg-partition --ondisk mmcblk0 --fstype=vfat --label boot --active --align 4096 --fixed-size 100
+
+# Partition 2: Linux root filesystem
+#
+# / makes this the filesystem mounted as the Linux root directory.
+# --source rootfs fills it with the complete root filesystem built by Yocto.
+# --fstype=ext4 creates an ext4 filesystem.
+# --label root gives the filesystem the label root.
+# --align 4096 uses the same 4 MiB alignment as the boot partition.
+# The preparation script replaces ROOT_PARTITION_SIZE_MIB below with the root
+# size from storage_layout.conf.
+part / --source rootfs --ondisk mmcblk0 --fstype=ext4 --label root --align 4096 --fixed-size @ROOT_PARTITION_SIZE_MIB@
+
+# Partition 3: persistent IoT App data
+#
+# There is no mount point after part and no --source option. Wic therefore
+# creates an empty ext4 partition without adding it to /etc/fstab.
+# --label iot-data lets the first-boot storage program verify that it found the
+# correct partition before changing its size.
+# The preparation script replaces DATA_PARTITION_BOOTSTRAP_SIZE_MIB with the
+# small initial size, currently 64 MiB. iot-app-storage.service runs before IoT
+# App, expands this partition to the remaining SD-card space, and mounts it at
+# /data. Leaving out the mount point here prevents the partition from being
+# mounted before that expansion is complete.
+part --ondisk mmcblk0 --fstype=ext4 --label iot-data --align 4096 --fixed-size @DATA_PARTITION_BOOTSTRAP_SIZE_MIB@

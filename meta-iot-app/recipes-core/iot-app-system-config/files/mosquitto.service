@@ -1,0 +1,20 @@
+[Unit]
+Description=Mosquitto MQTT Broker for IoT App
+Documentation=man:mosquitto.conf(5) man:mosquitto(8)
+
+# The broker listens on the IPv4 wildcard address, which can be opened before
+# Wi-Fi or Ethernet receives an address. It does not need to wait for
+# network-online.target.
+[Service]
+Type=notify
+NotifyAccess=main
+ExecStartPre=/bin/mkdir -m 740 -p /var/log/mosquitto
+ExecStartPre=/bin/chown mosquitto:mosquitto /var/log/mosquitto
+ExecStartPre=/bin/mkdir -m 740 -p /run/mosquitto
+ExecStartPre=/bin/chown mosquitto:mosquitto /run/mosquitto
+ExecStart=/usr/sbin/mosquitto -c /etc/mosquitto/mosquitto.conf
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
