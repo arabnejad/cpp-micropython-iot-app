@@ -91,8 +91,9 @@ int main(int argc, char **argv) {
                                          iot::runtime::maximumPendingRenderCommands};
     screenManager.start();
 
-    iot::python::PythonApplicationManager pythonApplicationManager{
-        screenManager, activeDisplay, displayManager, systemInformationProvider, iot::runtime::pythonHeapSizeInBytes};
+    iot::python::PythonApplicationManager pythonApplicationManager{screenManager, activeDisplay,
+                                                                   connectedDisplays.size(), systemInformationProvider,
+                                                                   iot::runtime::pythonHeapSizeInBytes};
     pythonApplicationManager.startDefaultApplication(defaultPythonApplication);
 
     IOT_LOG_INFO(applicationLogger, "Running Python app '", pythonApplicationManager.activeScreenName(),

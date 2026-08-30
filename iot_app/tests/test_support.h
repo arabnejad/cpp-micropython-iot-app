@@ -1,6 +1,6 @@
 #pragma once
 
-#include "iot/display/display_manager.h"
+#include "iot/display/display_types.h"
 #include "iot/system/system_information.h"
 #include "iot/ui/render_backend.h"
 
@@ -150,18 +150,6 @@ inline display::ActiveDisplay testActiveDisplay() {
   testDisplayMode.refreshRateHz = 60U;
   return display::ActiveDisplay{testDisplayInformation, testDisplayMode};
 }
-
-/* Display data with no DRM calls, used by embedded-Python tests. */
-class TestDisplayManager final : public display::IDisplayManager {
-public:
-  std::vector<display::DisplayInfo> connectedDisplays() const override {
-    return {testActiveDisplay().display()};
-  }
-
-  display::ActiveDisplay readActiveDisplay(const display::DisplayId &) const override {
-    return testActiveDisplay();
-  }
-};
 
 /* Fixed Linux values used by tests that call the native system module. */
 class TestSystemInformationProvider final : public system::ISystemInformationProvider {

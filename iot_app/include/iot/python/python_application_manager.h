@@ -1,6 +1,6 @@
 #pragma once
 
-#include "iot/display/display_manager.h"
+#include "iot/display/display_types.h"
 #include "iot/logging/logger.h"
 #include "iot/python/micropython_runtime.h"
 #include "iot/python/python_application.h"
@@ -42,12 +42,14 @@ struct ExternalApplicationActivationResult {
  *
  * Each application gets a fresh MicroPython interpreter and context. The
  * manager also advances timers, stops the old interpreter during a switch, and
- * shows the emergency screen after an unhandled Python exception.
+ * shows the emergency screen after an unhandled Python exception. It receives
+ * the selected display and connected-display count found during startup, so
+ * switching applications does not scan DRM again.
  */
 class PythonApplicationManager {
 public:
   PythonApplicationManager(ui::ScreenManager &screenManager, display::ActiveDisplay activeDisplay,
-                           const display::IDisplayManager           &displayManager,
+                           std::size_t                               connectedDisplayCount,
                            const system::ISystemInformationProvider &systemInformationProvider,
                            std::size_t                               pythonHeapSizeInBytes);
   ~PythonApplicationManager();
@@ -90,7 +92,7 @@ private:
   logging::Logger                                      m_logger{"PythonApplicationManager"};
   ui::ScreenManager                                   &m_screenManager;
   display::ActiveDisplay                               m_activeDisplay;
-  const display::IDisplayManager                      &m_displayManager;
+  std::size_t                                          m_connectedDisplayCount{0};
   const system::ISystemInformationProvider            &m_systemInformationProvider;
   std::size_t                                          m_pythonHeapSizeInBytes{0};
   std::unique_ptr<MicroPythonApplicationContext>       m_microPythonApplicationContext;

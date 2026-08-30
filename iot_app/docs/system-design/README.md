@@ -433,6 +433,12 @@ The current policy is intentionally simple:
 The selected monitor is read again before use so a cable change between the
 first scan and selection is detected.
 
+`main()` keeps the number of displays found by this startup scan and passes it
+to `PythonApplicationManager`. Starting or switching a Python application does
+not scan DRM again. The current runtime does not support display hot-plug; that
+would require a separate display-change feature rather than an occasional
+scan during application startup.
+
 ## 11. Rendering subsystem
 
 The renderer uses LVGL's Linux framebuffer backend with `/dev/fb0`.
@@ -827,7 +833,7 @@ The native `iot` Python modules need services owned by C++. For example,
 currently running application access to:
 
 - Screen drawing
-- Active and connected-display information
+- The active display and the connected-display count captured at startup
 - System information and live uptime
 - The current application name
 
