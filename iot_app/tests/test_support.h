@@ -141,14 +141,25 @@ public:
 
 inline display::ActiveDisplay testActiveDisplay() {
   display::DisplayInfo testDisplayInformation;
-  testDisplayInformation.displayId = {"/dev/dri/card0", "HDMI-A-1", 1U};
-  testDisplayInformation.model     = "Test monitor";
+  testDisplayInformation.displayId        = {"/dev/dri/card0", "HDMI-A-1", 1U};
+  testDisplayInformation.manufacturer     = "TST";
+  testDisplayInformation.model            = "Test monitor";
+  testDisplayInformation.serialNumber     = "MONITOR-1";
+  testDisplayInformation.physicalWidthMm  = 600U;
+  testDisplayInformation.physicalHeightMm = 340U;
   display::DisplayMode testDisplayMode;
-  testDisplayMode.name          = "1920x1080";
-  testDisplayMode.width         = 1920U;
-  testDisplayMode.height        = 1080U;
-  testDisplayMode.refreshRateHz = 60U;
+  testDisplayMode.name               = "1920x1080";
+  testDisplayMode.width              = 1920U;
+  testDisplayMode.height             = 1080U;
+  testDisplayMode.refreshRateHz      = 60U;
+  testDisplayMode.preferred          = true;
+  testDisplayInformation.currentMode = testDisplayMode;
+  testDisplayInformation.supportedModes.push_back(testDisplayMode);
   return display::ActiveDisplay{testDisplayInformation, testDisplayMode};
+}
+
+inline std::vector<display::DisplayInfo> testConnectedDisplays() {
+  return {testActiveDisplay().display()};
 }
 
 /* Fixed Linux values used by tests that call the native system module. */

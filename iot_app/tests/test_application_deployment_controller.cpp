@@ -43,8 +43,8 @@ protected:
       : m_temporaryApplicationInstaller(m_temporaryDirectory.path()),
         m_recordingRenderBackend(std::make_unique<tests::RecordingRenderBackend>()),
         m_screenManager(tests::testActiveDisplay(), std::move(m_recordingRenderBackend), 16U),
-        m_pythonApplicationManager(m_screenManager, tests::testActiveDisplay(), 1U, m_systemInformationProvider,
-                                   256U * 1024U) {}
+        m_pythonApplicationManager(m_screenManager, tests::testActiveDisplay(), tests::testConnectedDisplays(),
+                                   m_systemInformationProvider, 256U * 1024U) {}
 
   void SetUp() override {
     m_screenManager.start();

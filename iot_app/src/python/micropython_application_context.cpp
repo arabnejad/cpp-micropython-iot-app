@@ -14,11 +14,12 @@ MicroPythonApplicationContext *activeContext = nullptr;
 } // namespace
 
 MicroPythonApplicationContext::MicroPythonApplicationContext(
-    ui::ScreenManager &screenManager, display::ActiveDisplay activeDisplay, std::size_t connectedDisplayCount,
+    ui::ScreenManager &screenManager, display::ActiveDisplay activeDisplay,
+    const std::vector<display::DisplayInfo>  &connectedDisplays,
     const system::ISystemInformationProvider &systemInformationProvider, system::SystemInformation systemInformation,
     std::string applicationName)
     : m_screenManager(&screenManager), m_activeDisplay(std::move(activeDisplay)),
-      m_connectedDisplayCount(connectedDisplayCount), m_systemInformationProvider(&systemInformationProvider),
+      m_connectedDisplays(&connectedDisplays), m_systemInformationProvider(&systemInformationProvider),
       m_systemInformation(std::move(systemInformation)), m_applicationName(std::move(applicationName)) {
   if (activeContext != nullptr) {
     throw std::logic_error("Only one MicroPython application context can be active");
@@ -48,8 +49,8 @@ const display::ActiveDisplay &MicroPythonApplicationContext::activeDisplay() con
   return m_activeDisplay;
 }
 
-std::size_t MicroPythonApplicationContext::connectedDisplayCount() const noexcept {
-  return m_connectedDisplayCount;
+const std::vector<display::DisplayInfo> &MicroPythonApplicationContext::connectedDisplays() const noexcept {
+  return *m_connectedDisplays;
 }
 
 const system::SystemInformation &MicroPythonApplicationContext::systemInformation() const noexcept {

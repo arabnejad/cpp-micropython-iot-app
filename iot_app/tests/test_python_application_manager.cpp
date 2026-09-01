@@ -54,8 +54,9 @@ protected:
     m_screenManager.stop();
   }
 
-  PythonApplicationManager createApplicationManager(std::size_t connectedDisplayCount = 1U) {
-    return PythonApplicationManager(m_screenManager, tests::testActiveDisplay(), connectedDisplayCount,
+  PythonApplicationManager
+  createApplicationManager(std::vector<display::DisplayInfo> connectedDisplays = tests::testConnectedDisplays()) {
+    return PythonApplicationManager(m_screenManager, tests::testActiveDisplay(), std::move(connectedDisplays),
                                     m_systemInformationProvider, 256U * 1024U);
   }
 
@@ -114,12 +115,12 @@ TEST_F(PythonApplicationManagerTest, ReplacesTheRunningApplicationWithANewInterp
 TEST_F(PythonApplicationManagerTest, LetsPythonUseDisplayAndSystemModulesThroughTheApplicationContext) {
   auto pythonApplicationManager = createApplicationManager();
 
-  const auto activationResult = pythonApplicationManager.activateExternalApplication(createPythonApplication(
-      "Native module test", "import iot\n"
-                            "width, height = iot.display.size()\n"
-                            "assert (width, height) == (1920, 1080)\n"
-                            "assert iot.system.uptime_seconds() == 99\n"
-                            "iot.display.draw_text_box(10, 20, 200, 40, 'Created by Python')\n"));
+  const auto activationResult = pythonApplicationManager.activateExternalApplication(
+      createPythonApplication("Native module test", "from iot import display, system\n"
+                                                    "width, height = display.size()\n"
+                                                    "assert (width, height) == (1920, 1080)\n"
+                                                    "assert system.uptime_seconds() == 99\n"
+                                                    "display.draw_text_box(10, 20, 200, 40, 'Created by Python')\n"));
 
   ASSERT_TRUE(activationResult.externalApplicationIsRunning) << activationResult.failureReason;
   ASSERT_TRUE(tests::waitUntil([this] {
@@ -132,41 +133,69 @@ TEST_F(PythonApplicationManagerTest, LetsPythonUseDisplayAndSystemModulesThrough
 }
 
 TEST_F(PythonApplicationManagerTest, LetsPythonUseEveryDisplayAndSystemFunction) {
-  auto pythonApplicationManager = createApplicationManager(2U);
+  auto connectedDisplays                = tests::testConnectedDisplays();
+  auto secondDisplay                    = connectedDisplays.front();
+  secondDisplay.displayId.connectorName = "HDMI-A-2";
+  secondDisplay.displayId.connectorId   = 2U;
+  secondDisplay.manufacturer            = "ALT";
+  secondDisplay.model                   = "Second monitor";
+  secondDisplay.serialNumber            = "MONITOR-2";
+  secondDisplay.physicalWidthMm         = 520U;
+  secondDisplay.physicalHeightMm        = 290U;
+  secondDisplay.currentMode.reset();
+  secondDisplay.supportedModes.front().preferred  = false;
+  secondDisplay.supportedModes.front().interlaced = true;
+  connectedDisplays.push_back(std::move(secondDisplay));
+  auto pythonApplicationManager = createApplicationManager(std::move(connectedDisplays));
 
   const auto activationResult = pythonApplicationManager.activateExternalApplication(createPythonApplication(
-      "Native module test", "import iot\n"
-                            "display_information = iot.display.information()\n"
-                            "assert display_information['connected_display_count'] == 2\n"
-                            "assert display_information['connector_name'] == 'HDMI-A-1'\n"
-                            "assert display_information['width'] == 1920\n"
-                            "assert display_information['height'] == 1080\n"
-                            "assert display_information['refresh_rate_hz'] == 60\n"
-                            "text_box = iot.display.draw_text_box(10, 20, 300, 80, 'Initial text', "
+      "Native module test", "from iot import display, system\n"
+                            "monitors = display.monitors()\n"
+                            "assert len(monitors) == 2\n"
+                            "assert monitors[0]['connector_name'] == 'HDMI-A-1'\n"
+                            "assert monitors[0]['manufacturer'] == 'TST'\n"
+                            "assert monitors[0]['model'] == 'Test monitor'\n"
+                            "assert monitors[0]['serial_number'] == 'MONITOR-1'\n"
+                            "assert monitors[0]['physical_width_mm'] == 600\n"
+                            "assert monitors[0]['physical_height_mm'] == 340\n"
+                            "assert monitors[0]['active'] is True\n"
+                            "assert monitors[0]['current_mode']['width'] == 1920\n"
+                            "assert monitors[0]['current_mode']['height'] == 1080\n"
+                            "assert monitors[0]['current_mode']['refresh_rate_hz'] == 60\n"
+                            "assert monitors[0]['supported_modes'][0]['name'] == '1920x1080'\n"
+                            "assert monitors[0]['supported_modes'][0]['preferred'] is True\n"
+                            "assert monitors[0]['supported_modes'][0]['interlaced'] is False\n"
+                            "assert monitors[1]['connector_name'] == 'HDMI-A-2'\n"
+                            "assert monitors[1]['active'] is False\n"
+                            "assert monitors[1]['current_mode'] is None\n"
+                            "assert monitors[1]['supported_modes'][0]['interlaced'] is True\n"
+                            "active_monitor = display.active_monitor()\n"
+                            "assert active_monitor['connector_name'] == 'HDMI-A-1'\n"
+                            "text_box = display.draw_text_box(10, 20, 300, 80, 'Initial text', "
                             "text_color=(10, 255, 255), background_opacity=255, border_width=2, font_size=24)\n"
-                            "iot.display.update_text_box(text_box, 'Updated text')\n"
-                            "iot.display.move_text_box(text_box, 30, 40)\n"
-                            "iot.display.fill_area(0, 0, 20, 20, color=(1, 2, 3))\n"
-                            "iot.display.delete_text_box(text_box)\n"
-                            "iot.display.clear(color=(8, 13, 22))\n"
-                            "system_information = iot.system.information()\n"
+                            "display.update_text_box(text_box, 'Updated text')\n"
+                            "display.move_text_box(text_box, 30, 40)\n"
+                            "display.fill_area(0, 0, 20, 20, color=(1, 2, 3))\n"
+                            "display.delete_text_box(text_box)\n"
+                            "display.clear(color=(8, 13, 22))\n"
+                            "system_information = system.information()\n"
                             "assert system_information['hostname'] == 'test-device'\n"
                             "assert system_information['uptime_seconds'] == 42\n"
-                            "resources = iot.system.resources()\n"
+                            "resources = system.resources()\n"
                             "assert resources['logical_cpu_count'] == 4\n"
-                            "interfaces = iot.system.interfaces()\n"
+                            "interfaces = system.interfaces()\n"
                             "assert interfaces['i2c'] == 0\n"
-                            "devices = iot.system.devices()\n"
+                            "devices = system.devices()\n"
                             "assert devices['usb'] == 0\n"
-                            "application_information = iot.system.app_information()\n"
+                            "application_information = system.app_information()\n"
                             "assert application_information['application_name'] == 'Native module test'\n"
-                            "network_interfaces = iot.system.network_interfaces()\n"
+                            "network_interfaces = system.network_interfaces()\n"
                             "assert network_interfaces[0]['name'] == 'eth0'\n"
                             "assert network_interfaces[0]['connected'] is True\n"
                             "assert network_interfaces[0]['ipv4_address'] == '192.0.2.10'\n"
                             "assert network_interfaces[0]['speed_megabits_per_second'] == 1000\n"
-                            "assert iot.system.uptime_seconds() == 99\n"
-                            "assert len(iot.system.current_time()) == 19\n"));
+                            "assert system.uptime_seconds() == 99\n"
+                            "assert len(system.current_time()) == 19\n"));
 
   EXPECT_TRUE(activationResult.externalApplicationIsRunning) << activationResult.failureReason;
 }
@@ -250,8 +279,9 @@ TEST_F(PythonApplicationManagerTest, ReportsAndRunsTheNextScheduledCallback) {
 
 TEST_F(PythonApplicationManagerTest, ShowsTheEmergencyScreenWhenReadingSystemInformationFails) {
   ThrowingSystemInformationProvider throwingSystemInformationProvider;
-  PythonApplicationManager          pythonApplicationManager(m_screenManager, tests::testActiveDisplay(), 1U,
-                                                             throwingSystemInformationProvider, 256U * 1024U);
+  PythonApplicationManager          pythonApplicationManager(m_screenManager, tests::testActiveDisplay(),
+                                                             tests::testConnectedDisplays(), throwingSystemInformationProvider,
+                                                             256U * 1024U);
 
   const auto activationResult =
       pythonApplicationManager.activateExternalApplication(createPythonApplication("External", "value = 2\n"));
@@ -270,9 +300,10 @@ TEST_F(PythonApplicationManagerTest, RejectsAnEmptyDefaultApplication) {
 }
 
 TEST_F(PythonApplicationManagerTest, RejectsAZeroByteMicroPythonHeap) {
-  EXPECT_THROW(static_cast<void>(PythonApplicationManager(m_screenManager, tests::testActiveDisplay(), 1U,
-                                                          m_systemInformationProvider, 0U)),
-               std::invalid_argument);
+  EXPECT_THROW(
+      static_cast<void>(PythonApplicationManager(m_screenManager, tests::testActiveDisplay(),
+                                                 tests::testConnectedDisplays(), m_systemInformationProvider, 0U)),
+      std::invalid_argument);
 }
 
 } // namespace

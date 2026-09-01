@@ -72,13 +72,19 @@ int main(int argc, char **argv) {
 
     iot::display::DisplayManager                displayManager;
     iot::system::LinuxSystemInformationProvider systemInformationProvider;
-    const auto                                  connectedDisplays = displayManager.connectedDisplays();
+    auto                                        connectedDisplays = displayManager.connectedDisplays();
     const auto                                 *selectedDisplay   = choosePreferredDisplay(connectedDisplays);
     if (selectedDisplay == nullptr) {
       throw std::runtime_error("No connected DRM display was found");
     }
 
     const auto activeDisplay = displayManager.readActiveDisplay(selectedDisplay->displayId);
+    for (auto &displayInformation : connectedDisplays) {
+      if (displayInformation.displayId == activeDisplay.display().displayId) {
+        displayInformation = activeDisplay.display();
+        break;
+      }
+    }
     printDisplaySummary(activeDisplay);
     std::signal(SIGINT, stopApplication);
     std::signal(SIGTERM, stopApplication);
@@ -91,9 +97,9 @@ int main(int argc, char **argv) {
                                          iot::runtime::maximumPendingRenderCommands};
     screenManager.start();
 
-    iot::python::PythonApplicationManager pythonApplicationManager{screenManager, activeDisplay,
-                                                                   connectedDisplays.size(), systemInformationProvider,
-                                                                   iot::runtime::pythonHeapSizeInBytes};
+    iot::python::PythonApplicationManager pythonApplicationManager{
+        screenManager, activeDisplay, std::move(connectedDisplays), systemInformationProvider,
+        iot::runtime::pythonHeapSizeInBytes};
     pythonApplicationManager.startDefaultApplication(defaultPythonApplication);
 
     IOT_LOG_INFO(applicationLogger, "Running Python app '", pythonApplicationManager.activeScreenName(),

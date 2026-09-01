@@ -1,0 +1,5 @@
+{
+  "id": "connected-monitors",
+  "name": "Connected monitors",
+  "entry_point": "main.py"
+}

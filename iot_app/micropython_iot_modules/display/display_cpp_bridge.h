@@ -2,22 +2,36 @@
 
 #include "iot_native_result.h"
 
+#include <stddef.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* Display values copied from C++ into plain C fields. */
+/* One display mode copied from C++ into plain C fields. */
 typedef struct {
-  size_t      connected_display_count;
-  const char *connector_name;
-  const char *manufacturer;
-  const char *model;
+  const char *name;
   uint32_t    width;
   uint32_t    height;
   uint32_t    refresh_rate_hz;
-} iot_display_information_t;
+  int         preferred;
+  int         interlaced;
+} iot_display_mode_information_t;
+
+/* Details for one monitor found during IoT App startup. */
+typedef struct {
+  const char                    *connector_name;
+  const char                    *manufacturer;
+  const char                    *model;
+  const char                    *serial_number;
+  uint32_t                       physical_width_mm;
+  uint32_t                       physical_height_mm;
+  int                            active;
+  int                            has_current_mode;
+  iot_display_mode_information_t current_mode;
+  size_t                         supported_mode_count;
+} iot_monitor_information_t;
 
 /*
  * Optional text-box values supplied by Python.
@@ -59,7 +73,11 @@ iot_native_result_t iot_display_fill_area(int32_t x, int32_t y, int32_t width, i
                                           uint8_t green, uint8_t blue);
 
 iot_native_result_t iot_display_size(uint32_t *width, uint32_t *height);
-iot_native_result_t iot_display_information(iot_display_information_t *display_information);
+iot_native_result_t iot_display_monitor_count(size_t *monitor_count);
+iot_native_result_t iot_display_monitor_information(size_t                     monitor_index,
+                                                    iot_monitor_information_t *monitor_information);
+iot_native_result_t iot_display_supported_mode_information(size_t monitor_index, size_t mode_index,
+                                                           iot_display_mode_information_t *mode_information);
 
 #ifdef __cplusplus
 }

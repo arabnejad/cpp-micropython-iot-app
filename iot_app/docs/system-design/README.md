@@ -433,11 +433,15 @@ The current policy is intentionally simple:
 The selected monitor is read again before use so a cable change between the
 first scan and selection is detected.
 
-`main()` keeps the number of displays found by this startup scan and passes it
-to `PythonApplicationManager`. Starting or switching a Python application does
-not scan DRM again. The current runtime does not support display hot-plug; that
-would require a separate display-change feature rather than an occasional
-scan during application startup.
+`main()` moves the monitor list from this startup scan into
+`PythonApplicationManager`. The manager keeps that one snapshot and each
+MicroPython application context reads it without copying the list. Starting or
+switching a Python application does not scan DRM again.
+
+After importing it with `from iot import display`, Python can read the snapshot
+with `display.monitors()` and identify the selected monitor with
+`display.active_monitor()`. The current runtime does not support display
+hot-plug. Restarting IoT App performs a new scan.
 
 ## 11. Rendering subsystem
 
@@ -531,7 +535,8 @@ LVGL -> /dev/fb0 -> HDMI monitor
 
 The complete flow is:
 
-1. The Python application calls `iot.display.draw_text_box(...)`.
+1. The Python application calls `display.draw_text_box(...)` after importing
+   `display` from `iot`.
 2. `display_draw_text_box()` in `mod_iot_display.c` reads the Python arguments.
    It checks the required values and reads any optional colours, opacity,
    border width, and font size.
@@ -833,7 +838,7 @@ The native `iot` Python modules need services owned by C++. For example,
 currently running application access to:
 
 - Screen drawing
-- The active display and the connected-display count captured at startup
+- The active display and monitor details captured at startup
 - System information and live uptime
 - The current application name
 
@@ -916,7 +921,7 @@ classes, lambdas, and exception handling.
 A display call follows this path:
 
 ```text
-Python: iot.display.clear(...)
+Python: display.clear(...)
   |
   v
 mod_iot_display.c

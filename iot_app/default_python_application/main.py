@@ -45,7 +45,9 @@ def main():
     system_interface_counts = system.interfaces()
     connected_device_counts = system.devices()
     application_information = system.app_information()
-    active_display = display.information()
+    connected_monitors = display.monitors()
+    active_monitor = display.active_monitor()
+    active_mode = active_monitor["current_mode"]
 
     screen_width, screen_height = display.size()
 
@@ -212,16 +214,16 @@ def main():
                 break
         return network_lines
 
-    monitor_name = (active_display["manufacturer"] + " " + active_display["model"]).strip()
+    monitor_name = (active_monitor["manufacturer"] + " " + active_monitor["model"]).strip()
     display_lines = [
-        "Connected displays: %d" % active_display["connected_display_count"],
-        text_or_fallback(active_display["connector_name"]),
+        "Connected displays: %d" % len(connected_monitors),
+        text_or_fallback(active_monitor["connector_name"]),
         text_or_fallback(monitor_name, "Unknown monitor"),
         "%dx%d @ %d Hz"
         % (
-            active_display["width"],
-            active_display["height"],
-            active_display["refresh_rate_hz"],
+            active_mode["width"],
+            active_mode["height"],
+            active_mode["refresh_rate_hz"],
         ),
     ]
 
