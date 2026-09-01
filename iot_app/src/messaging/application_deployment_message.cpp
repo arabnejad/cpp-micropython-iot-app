@@ -183,12 +183,12 @@ ApplicationDeploymentRequest ApplicationDeploymentMessageParser::parse(const std
   }
 
   ApplicationDeploymentRequest deploymentRequest;
-  deploymentRequest.transferId = requireStringField(jsonObject.get(), "transfer_id");
-  deploymentRequest.deviceId   = requireStringField(jsonObject.get(), "device_id");
+  deploymentRequest.transferId       = requireStringField(jsonObject.get(), "transfer_id");
+  const std::string receivedDeviceId = requireStringField(jsonObject.get(), "device_id");
   if (!isSafeIdentifier(deploymentRequest.transferId)) {
     throw std::runtime_error("Deployment transfer_id contains unsupported characters");
   }
-  if (deploymentRequest.deviceId != expectedDeviceId) {
+  if (receivedDeviceId != expectedDeviceId) {
     throw std::runtime_error("Deployment message is intended for a different device");
   }
 

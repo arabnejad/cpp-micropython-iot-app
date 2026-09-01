@@ -108,6 +108,37 @@ deployments, and runs scheduled callbacks. The MQTT thread never starts an
 application, and the render thread never runs Python. Each thread therefore
 uses only the library and state it owns.
 
+### 3.1 Application deployment pipeline
+
+The deployment code is split into small classes, but they form one pipeline:
+
+```text
+MqttApplicationReceiver
+    |  receives the MQTT message
+    v
+ApplicationMessageQueue
+    |  passes the message to the main thread
+    v
+ApplicationDeploymentController
+    |
+    +--> ApplicationDeploymentMessageParser
+    |      validates the message and reads the application
+    |
+    +--> TemporaryPythonApplicationInstaller
+    |      writes the application under /tmp
+    |
+    +--> PythonApplicationManager
+    |      stops the current app and starts the received app
+    |
+    +--> MqttApplicationReceiver
+           publishes progress and the final result
+```
+
+`ApplicationDeploymentController` coordinates the work. The other classes
+continue to handle MQTT, thread communication, validation, temporary files,
+and Python execution separately. Keeping those jobs separate makes each part
+easier to follow and test without creating one large MQTT manager.
+
 ## 4. Main design choices
 
 ### 4.1 C++ owns the device; Python owns application behavior
