@@ -825,3 +825,10 @@ The supplied Raspberry Pi 4 configuration uses BusyBox init. It installs
 `/etc/init.d/iot-app` as an alias for manual service commands. This is the only
 init system supported by the project's Buildroot package. The separate Yocto
 image uses its own systemd service from `meta-iot-app`.
+
+The Wi-Fi script starts `wpa_supplicant` without waiting for association, and
+the time-sync script starts `ntpd` without waiting for the clock to change.
+This lets the dashboard start while the device is offline. Its first time value
+may be wrong, but the default dashboard refreshes the value after NTP corrects
+the Linux clock. IoT App remains `S90` so messages from later startup scripts do
+not appear over the framebuffer display.

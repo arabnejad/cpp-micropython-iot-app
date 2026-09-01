@@ -144,8 +144,10 @@ the same main jobs:
 Linux starts
     |
     +--> Prepare and mount optional /data storage
-    +--> Start Wi-Fi and Ethernet
-    +--> Start SSH, time synchronization, and Mosquitto
+    +--> Start Wi-Fi, Ethernet, and time synchronization
+    |       |
+    |       +--> Connection and clock updates continue in the background
+    +--> Start SSH and Mosquitto
     +--> Create /dev/fb0
              |
              v
@@ -160,9 +162,13 @@ one after another. The relevant scripts try to prepare `/data`, start Wi-Fi and
 DHCP, start time synchronization, start Dropbear and Mosquitto, and finally
 start IoT App. Their names show that order: `S25data-storage`, `S30wifi`,
 `S40network`, `S45time-sync`, the two `S50` services, and `S90iot-app`.
-`S45time-sync` starts `ntpd`, waits up to 30 seconds for the first valid time,
-and leaves it running in the background. `S90iot-app` waits up to 10 seconds
-for `/dev/fb0` before starting IoT App.
+`S30wifi` does not wait for Wi-Fi association, and `S45time-sync` does not wait
+for the first clock update. Their background processes continue connecting and
+synchronizing while the remaining startup scripts run. Buildroot runs its DHCP
+client with the `-b` option, so it also keeps trying in the background when
+Wi-Fi is not ready. Keeping `S90iot-app` near the end of startup prevents later
+script messages from being printed over the dashboard. It waits up to 10
+seconds for `/dev/fb0` before starting IoT App.
 
 Yocto starts independent systemd services in parallel. `iot-app.service` is
 ordered after the storage and Mosquitto services and requires
@@ -170,9 +176,11 @@ ordered after the storage and Mosquitto services and requires
 failure does not stop the dashboard. It does not wait for
 `network-online.target`.
 
-Neither image waits for an IP address before starting IoT App. The dashboard
-can start offline, and its MQTT client reconnects when the local broker becomes
-available.
+Neither image waits for an IP address or a correct clock before starting IoT
+App. The dashboard can start offline, and its MQTT client reconnects when the
+local broker becomes available. On Buildroot, the first displayed time may be
+wrong if NTP has not finished yet. The dashboard refreshes it after the Linux
+clock is corrected.
 
 The first Yocto boot can take longer while systemd initializes the device and
 SSH creates its host keys.

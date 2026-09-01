@@ -4,12 +4,6 @@ DAEMON="/usr/sbin/wpa_supplicant"
 CONFIGURATION="/etc/wpa_supplicant.conf"
 INTERFACE="wlan0"
 PIDFILE="/var/run/wpa_supplicant.${INTERFACE}.pid"
-ASSOCIATION_WAIT_SECONDS=15
-
-wifi_is_associated() {
-	[ -r "/sys/class/net/$INTERFACE/carrier" ] &&
-		[ "$(cat "/sys/class/net/$INTERFACE/carrier" 2>/dev/null)" = "1" ]
-}
 
 wifi_process_is_running() {
 	[ -r "$PIDFILE" ] || return 1
@@ -59,21 +53,11 @@ start() {
 		return "$status"
 	fi
 
-	# Give authentication time to finish before S40network asks for a DHCP
-	# address. A failed association is not fatal here; the network can still be
-	# provided by Ethernet and IoT App is allowed to start offline.
-	waited_seconds=0
-	while ! wifi_is_associated &&
-	      [ "$waited_seconds" -lt "$ASSOCIATION_WAIT_SECONDS" ]; do
-		sleep 1
-		waited_seconds=$((waited_seconds + 1))
-	done
-
-	if wifi_is_associated; then
-		echo "connected"
-	else
-		echo "started, but not associated"
-	fi
+	# wpa_supplicant keeps trying to connect to Wi-Fi. S40network may start DHCP
+	# before the connection is ready, but this Buildroot configuration gives
+	# udhcpc the -b option so it keeps trying in the background. Do not hold up
+	# the remaining startup scripts while the access point is unavailable.
+	echo "started; connecting to Wi-Fi in the background"
 }
 
 stop() {
