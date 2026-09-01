@@ -247,8 +247,9 @@ API, deployment, hardware, Buildroot, or Yocto.
 | [LVGL guide](iot_app/docs/lvgl/README.md) | Introduction to LVGL and the project's framebuffer, widget, and render-thread design |
 | [MicroPython API](iot_app/docs/micropython-api/README.md) | Native `iot` modules, required and optional arguments, return values, and examples |
 | [Hardware](iot_app/docs/hardware/README.md) | Adafruit gamepad button wiring and mask conversion |
-| [Buildroot](iot_app/docs/buildroot/README.md) | Buildroot Raspberry Pi image, Wi-Fi, SSH, services, flashing, and incremental updates |
-| [Yocto](iot_app/docs/yocto/README.md) | Yocto layers, Raspberry Pi image, persistent build directories, flashing, and updates |
+| [Device image](iot_app/docs/device-image/README.md) | Shared Wi-Fi, SSH, mDNS, services, device checks, and troubleshooting |
+| [Buildroot](iot_app/docs/buildroot/README.md) | Buildroot preparation, image build, flashing, package updates, and Buildroot-specific problems |
+| [Yocto](iot_app/docs/yocto/README.md) | Yocto layers, preparation, image build, flashing, updates, and BitBake-specific problems |
 | [Image storage](iot_app/docs/storage/README.md) | Shared root and `/data` partition sizes, first-boot expansion, and verification |
 | [Development executable](iot_app/docs/development-executable/README.md) | Test a rebuilt executable from `/data` without replacing the installed copy |
 | [IoT App Sender](iot_app_sender/README.md) | Ubuntu sender installation, configuration, MQTT topics, and status replies |

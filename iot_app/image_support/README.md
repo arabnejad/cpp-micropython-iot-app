@@ -24,6 +24,18 @@ The private Wi-Fi configuration remains at the repository root. Preparation
 commands copy it into the appropriate Buildroot or Yocto build input without
 adding it to this public directory.
 
+## Why the helpers use `/usr/libexec`
+
+The main program is installed as `/usr/bin/iot_app` because users may run it
+directly while diagnosing a problem. The files under `/usr/libexec` are small
+executable helpers called by startup scripts and systemd services. They are
+programs, not shared libraries, but users do not normally run them by hand.
+
+The services use each helper's complete path, so the helpers do not need to be
+placed in the normal command search path. The GNU directory conventions
+describe [`libexecdir`](https://www.gnu.org/prep/standards/html_node/Directory-Variables.html#index-libexecdir)
+as the location for executable programs intended to be run by other programs.
+
 ## Persistent data
 
 Both images contain a third partition labelled `iot-data`. On first boot,

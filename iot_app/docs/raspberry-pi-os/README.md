@@ -208,10 +208,10 @@ ls -l /dev/dri/
 kmsprint
 ```
 
-Your application user will normally need display and input permissions:
+Your application user will normally need display, I2C, and input permissions:
 
 ```bash
-sudo usermod -aG video,render,input "$USER"
+sudo usermod -aG video,render,i2c,input "$USER"
 ```
 
 Log out and back in after changing group membership.

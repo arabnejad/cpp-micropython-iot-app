@@ -1602,115 +1602,22 @@ robustness, but they do not create a security boundary.
 An invalid MQTT message without a safe transfer ID cannot be matched to a safe
 transfer-specific status topic. It is logged and dropped.
 
-## 23. Raspberry Pi OS deployment
+## 23. Linux image integration
 
-During development, the executable runs directly on Raspberry Pi OS. It should
-run from console mode because a desktop compositor may redraw over `/dev/fb0`.
+IoT App can run on Raspberry Pi OS or in the project's Buildroot and Yocto
+images. These systems use the same C++ runtime and default Python application,
+but install packages and services in different ways.
 
-The runtime user needs access to:
+Image creation and device administration are kept outside this architecture
+guide:
 
-- `/dev/fb0`
-- Primary DRM devices under `/dev/dri`
-- Any I2C buses used by Python applications
-- Input devices when later modules need them
+- [Raspberry Pi OS](../raspberry-pi-os/README.md)
+- [Buildroot image](../buildroot/README.md)
+- [Yocto image](../yocto/README.md)
+- [Shared device setup and troubleshooting](../device-image/README.md)
+- [Shared image-support files](../../image_support/README.md)
 
-Typical groups are `video`, `render`, `i2c`, and `input`.
-
-## 24. Buildroot integration
-
-`iot_app/buildroot_external` is a BR2_EXTERNAL tree. It keeps project-owned
-Buildroot configuration outside the Buildroot submodule.
-
-The package recipe:
-
-- Builds IoT App with the CMake package infrastructure.
-- Points CMake at the root LVGL and MicroPython submodules.
-- Selects cJSON, libdrm, Mosquitto, and OpenSSL dependencies.
-- Creates a dedicated `iot-app` runtime user.
-- Adds the user to `video`, `render`, `i2c`, and `input` groups.
-- Installs either a SysV startup script or systemd service.
-- Installs the shared launcher, storage helper, cursor helper, and Mosquitto
-  configuration from `iot_app/image_support`.
-- Installs the shared device-access rules for systemd/udev builds.
-
-### Why helper programs are installed under `/usr/libexec`
-
-`/usr/bin` is used for programs that a user may run directly. The main
-application is therefore installed as:
-
-```text
-/usr/bin/iot_app
-```
-
-`/usr/libexec` is commonly used for executable helper programs that belong to
-an application or service. These files are executable programs, not shared
-libraries. They are kept out of `/usr/bin` because users do not normally call
-them directly. The startup scripts and systemd services use their complete
-paths instead of looking for them through `PATH`.
-
-Buildroot and Yocto create `/usr/libexec` while installing their service
-helpers. Both install the same launcher, storage helper, and cursor helper:
-
-| Helper | Purpose |
-|---|---|
-| `/usr/libexec/iot-app-launcher` | Chooses the development executable from `/data`, or uses `/usr/bin/iot_app` |
-| `/usr/libexec/iot-app-prepare-data-storage` | Expands, mounts, and prepares the persistent `/data` partition |
-| `/usr/libexec/iot-app-hide-tty1-cursor` | Hides the tty1 console cursor before the framebuffer dashboard starts |
-
-The GNU build-system documentation describes
-[`libexecdir`](https://www.gnu.org/prep/standards/html_node/Directory-Variables.html#index-libexecdir)
-as the location for executable programs intended to be run by other programs
-rather than by users.
-
-The external tree contains `iot_rpi4_defconfig`, which builds the Raspberry Pi
-4 Model B development image described in this document.
-
-The framebuffer is the only service dependency required before IoT App can
-start. Systemd expresses that dependency through `dev-fb0.device`. The
-Buildroot SysV script starts near the end of boot and waits up to 10 seconds
-only if `/dev/fb0` has not appeared yet. Neither service waits for an IP
-address or a working MQTT connection. The default dashboard can run offline,
-and libmosquitto reconnects when the local broker becomes available. The SysV
-script uses `start-stop-daemon` with the same runtime account.
-
-The Raspberry Pi 4 image mounts persistent storage at `/data`. During normal
-startup, `/usr/libexec/iot-app-launcher` checks for
-`/data/iot-app/development/iot_app`. A regular executable at that path is used
-for development testing. Otherwise, the launcher runs `/usr/bin/iot_app` from
-the image. Removing the development file restores the installed executable on
-the next service start.
-
-## 25. Yocto integration
-
-`meta-iot-app` is the project-owned Yocto layer. The upstream Poky,
-OpenEmbedded, and Raspberry Pi layers remain unmodified submodules.
-
-The application recipe builds the same `iot_app` CMake target used by native
-and Buildroot builds. It points CMake at the pinned LVGL and MicroPython source
-trees, creates the `iot-app` account, installs the systemd service, and adds
-the shared launcher, cursor helper, and device-access rules.
-
-The system configuration package installs the Ethernet and Wi-Fi network
-units, enables network and time services, reserves `tty1` for the dashboard,
-and provides an emergency login on `tty2`.
-The root `wpa_supplicant.conf` is the private Wi-Fi configuration shared by
-Buildroot and Yocto. The preparation command copies it into the Yocto build
-directory, and an append file installs that copy in the image. A separate
-append file installs the shared development Mosquitto configuration without
-making two packages own the same file.
-
-`iot_app/image_support` is the common source for the launcher, `/data` helper,
-cursor helper, Mosquitto configuration, and device-access rules. Buildroot and
-Yocto install those same files through their own recipes. Their startup
-services and partition descriptions remain separate because the two build
-systems use different formats.
-
-`iot-app-image.bb` creates the complete Raspberry Pi image. It includes SSH,
-Mosquitto, Wi-Fi firmware, I2C tools, time-zone information, and the IoT App
-packages. The generated Wic image contains boot, root, and expandable data
-partitions and can be written to a microSD card with Raspberry Pi Imager.
-
-## 26. Source layout by responsibility
+## 24. Source layout by responsibility
 
 ```text
 src/runtime/
@@ -1742,7 +1649,7 @@ buildroot_external/
 ```
 
 
-## 26. Important system rules
+## 25. Important system rules
 
 These rules keep the current design predictable:
 
