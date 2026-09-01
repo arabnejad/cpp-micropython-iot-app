@@ -39,15 +39,16 @@ int FakeMqttClientApi::setCredentials(struct mosquitto *, const char *username, 
   return credentialsResult;
 }
 
-void FakeMqttClientApi::setConnectedCallback(struct mosquitto *, messaging::MqttConnectedCallback callback) {
+void FakeMqttClientApi::setConnectedCallback(struct mosquitto *, messaging::internal::MqttConnectedCallback callback) {
   m_connectedCallback = callback;
 }
 
-void FakeMqttClientApi::setDisconnectedCallback(struct mosquitto *, messaging::MqttDisconnectedCallback callback) {
+void FakeMqttClientApi::setDisconnectedCallback(struct mosquitto *,
+                                                messaging::internal::MqttDisconnectedCallback callback) {
   m_disconnectedCallback = callback;
 }
 
-void FakeMqttClientApi::setMessageCallback(struct mosquitto *, messaging::MqttMessageCallback callback) {
+void FakeMqttClientApi::setMessageCallback(struct mosquitto *, messaging::internal::MqttMessageCallback callback) {
   m_messageCallback = callback;
 }
 

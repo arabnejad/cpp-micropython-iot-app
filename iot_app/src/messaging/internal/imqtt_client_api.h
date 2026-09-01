@@ -9,6 +9,7 @@ typedef struct mqtt5__property mosquitto_property;
 
 namespace iot {
 namespace messaging {
+namespace internal {
 
 using MqttConnectedCallback    = void (*)(struct mosquitto *, void *, int, int, const mosquitto_property *);
 using MqttDisconnectedCallback = void (*)(struct mosquitto *, void *, int, const mosquitto_property *);
@@ -18,9 +19,10 @@ using MqttMessageCallback      = void (*)(struct mosquitto *, void *, const stru
 /*
  * Internal boundary around the libmosquitto calls used by the MQTT receiver.
  *
- * Application code should use MqttApplicationReceiver. This interface keeps
- * libmosquitto setup, callbacks, and message operations inside the messaging
- * implementation.
+ * The normal implementation forwards every operation to libmosquitto. Unit
+ * tests replace it with an in-memory implementation, so receiver behaviour can
+ * be checked without a broker or network connection. Application code should
+ * use MqttApplicationReceiver.
  */
 class IMqttClientApi {
 public:
@@ -52,9 +54,10 @@ public:
 /*
  * Returns the shared libmosquitto implementation used by main.cpp when it
  * creates MqttApplicationReceiver. The concrete implementation stays in the
- * MQTT source file, so main.cpp only needs to work with IMqttClientApi.
+ * MQTT source file.
  */
 IMqttClientApi &mqttClientApi();
 
+} // namespace internal
 } // namespace messaging
 } // namespace iot

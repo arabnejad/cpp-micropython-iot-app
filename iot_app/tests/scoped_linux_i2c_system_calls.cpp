@@ -6,7 +6,7 @@
 
 namespace {
 
-iot::hardware::ILinuxI2cSystemCalls *activeLinuxI2cSystemCalls = nullptr;
+iot::hardware::internal::ILinuxI2cSystemCalls *activeLinuxI2cSystemCalls = nullptr;
 
 } // namespace
 
@@ -19,7 +19,7 @@ extern "C" std::ptrdiff_t __real_read(int fileDescriptor, void *bytes, std::size
 namespace iot {
 namespace tests {
 
-ScopedLinuxI2cSystemCalls::ScopedLinuxI2cSystemCalls(hardware::ILinuxI2cSystemCalls &systemCalls) {
+ScopedLinuxI2cSystemCalls::ScopedLinuxI2cSystemCalls(hardware::internal::ILinuxI2cSystemCalls &systemCalls) {
   if (activeLinuxI2cSystemCalls != nullptr) {
     throw std::logic_error("Only one Linux I2C system-call replacement can be active");
   }

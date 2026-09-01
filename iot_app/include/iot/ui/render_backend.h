@@ -9,8 +9,6 @@
 namespace iot {
 namespace ui {
 
-class ILvglFramebufferDriver;
-
 /* Drawing operations executed by the ScreenManager render thread. */
 class IRenderBackend {
 public:
@@ -48,13 +46,6 @@ protected:
  * by ScreenManager.
  */
 std::unique_ptr<IRenderBackend> makeLvglFramebufferRenderBackend();
-
-/*
- * Creates the same backend with a caller-supplied framebuffer driver. This
- * allows the backend to be checked without opening the real Linux framebuffer.
- */
-std::unique_ptr<IRenderBackend>
-makeLvglFramebufferRenderBackend(std::unique_ptr<ILvglFramebufferDriver> framebufferDriver);
 
 } // namespace ui
 } // namespace iot

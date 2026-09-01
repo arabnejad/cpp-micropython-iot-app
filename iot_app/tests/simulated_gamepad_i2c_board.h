@@ -1,6 +1,6 @@
 #pragma once
 
-#include "iot/hardware/ilinux_i2c_system_calls.h"
+#include "platform/linux/internal/ilinux_i2c_system_calls.h"
 #include "scoped_linux_i2c_system_calls.h"
 
 #include <gtest/gtest.h>
@@ -16,7 +16,7 @@ namespace iot {
 namespace tests {
 
 /* In-memory I2C board used by C++ and MicroPython gamepad-binding tests. */
-class SimulatedGamepadI2cBoard final : public hardware::ILinuxI2cSystemCalls {
+class SimulatedGamepadI2cBoard final : public hardware::internal::ILinuxI2cSystemCalls {
 public:
   int openDevice(const char *, int) override {
     return 7;

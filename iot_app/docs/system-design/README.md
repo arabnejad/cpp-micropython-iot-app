@@ -406,9 +406,8 @@ Display discovery and rendering are separate.
 6. Read EDID when available.
 7. Return monitor details and supported modes as normal C++ values.
 
-The Linux DRM scan is behind `IDrmDisplayApi`. The normal implementation reads
-libdrm. Unit tests provide a short mock list of displays, so the selection
-logic can be checked without constructing fake DRM objects.
+`DisplayManager` owns the libdrm-specific work. The rest of IoT App receives
+normal C++ monitor and mode values and does not work with libdrm objects.
 
 Linux uses the word "card" for a graphics device. On a Raspberry Pi this is
 normally built-in VC4 display hardware, not a removable graphics card.
@@ -477,10 +476,9 @@ screen.
 
 ### 11.2 LVGL framebuffer backend
 
-The backend uses `ILvglFramebufferDriver` for the two Linux framebuffer calls:
-creating an LVGL display and opening `/dev/fb0`. The normal application uses
-the LVGL Linux implementation. Unit tests supply a mock driver and do not need
-access to the real framebuffer.
+During startup, the backend creates an LVGL display and opens `/dev/fb0` through
+LVGL's Linux framebuffer support. Other components send drawing requests
+through `ScreenManager` and do not call the framebuffer functions directly.
 
 The current backend supports:
 
@@ -1258,9 +1256,9 @@ message is available, the main thread removes it from the queue and passes it
 to `ApplicationDeploymentController::process()`. The controller can then parse
 the JSON, install the application, and start MicroPython.
 
-`MqttApplicationReceiver` calls libmosquitto through `IMqttClientApi`. The
-normal implementation forwards those calls to libmosquitto. Tests use an
-in-memory implementation, so they do not need a running broker.
+`MqttApplicationReceiver` owns the libmosquitto client, callbacks, connection,
+subscription, and publication work. Other components use the message queue or
+the status-publishing interface instead of calling libmosquitto directly.
 
 The MQTT callback can arrive at any time. It puts the message in the queue and
 returns without calling MicroPython. The main thread later removes the message
@@ -1462,10 +1460,9 @@ the system summary avoids it.
 address. It validates bus and address ranges, reads adapter capabilities, and
 closes the descriptor through RAII.
 
-Linux calls are kept behind `ILinuxI2cSystemCalls`. The normal implementation
-calls `open()`, `ioctl()`, `read()`, `write()`, and `close()`. Unit tests use a
-mock implementation, so they can check failures without linker tricks or an
-I2C adapter.
+`I2cDevice` owns the Linux operations needed to open the bus, select an address,
+and transfer bytes. Hardware drivers use `II2cDevice` and do not call Linux
+`open()`, `ioctl()`, `read()`, `write()`, or `close()` themselves.
 
 It supports:
 

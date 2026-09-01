@@ -1,5 +1,6 @@
 #include "iot/display/display_manager.h"
-#include "iot/display/idrm_display_api.h"
+
+#include "platform/linux/internal/idrm_display_api.h"
 
 #include "test_support.h"
 
@@ -13,7 +14,7 @@ namespace iot {
 namespace display {
 namespace {
 
-class MockDrmDisplayApi : public IDrmDisplayApi {
+class MockDrmDisplayApi : public internal::IDrmDisplayApi {
 public:
   MOCK_METHOD(std::vector<DisplayInfo>, connectedDisplays, (), (const, override));
 };

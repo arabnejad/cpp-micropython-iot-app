@@ -1,5 +1,7 @@
 #include "iot/messaging/mqtt_application_receiver.h"
 
+#include "internal/imqtt_client_api.h"
+
 #include <mosquitto.h>
 
 /*
@@ -26,7 +28,8 @@ namespace iot {
 namespace messaging {
 namespace {
 
-void throwForMosquittoError(const IMqttClientApi &mqttClientApi, int mosquittoResultCode, const char *operation) {
+void throwForMosquittoError(const internal::IMqttClientApi &mqttClientApi, int mosquittoResultCode,
+                            const char *operation) {
   if (mosquittoResultCode != MOSQ_ERR_SUCCESS) {
     throw std::runtime_error(std::string(operation) + ": " + mqttClientApi.errorText(mosquittoResultCode));
   }
@@ -36,7 +39,7 @@ void throwForMosquittoError(const IMqttClientApi &mqttClientApi, int mosquittoRe
 
 MqttApplicationReceiver::MqttApplicationReceiver(MqttApplicationReceiverSettings mqttReceiverSettings,
                                                  ApplicationMessageQueue        &applicationMessageQueue,
-                                                 IMqttClientApi                 &mqttClientApi)
+                                                 internal::IMqttClientApi       &mqttClientApi)
     : m_mqttReceiverSettings(std::move(mqttReceiverSettings)), m_applicationMessageQueue(applicationMessageQueue),
       m_mqttClientApi(mqttClientApi),
       m_installTopic("iot/devices/" + m_mqttReceiverSettings.deviceId + "/applications/install") {

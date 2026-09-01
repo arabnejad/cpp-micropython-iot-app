@@ -17,7 +17,8 @@
  */
 
 #include "iot/ui/render_backend.h"
-#include "iot/ui/ilvgl_framebuffer_driver.h"
+
+#include "internal/ilvgl_framebuffer_driver.h"
 
 #include <lvgl.h>
 #include <src/drivers/display/fb/lv_linux_fbdev.h>
@@ -73,7 +74,7 @@ struct TextBoxWidgets {
 /* Draws LVGL widgets into the framebuffer already set up by Linux. */
 class LvglFramebufferRenderBackend final : public IRenderBackend {
 public:
-  explicit LvglFramebufferRenderBackend(std::unique_ptr<ILvglFramebufferDriver> framebufferDriver)
+  explicit LvglFramebufferRenderBackend(std::unique_ptr<internal::ILvglFramebufferDriver> framebufferDriver)
       : m_framebufferDriver(std::move(framebufferDriver)) {
     if (!m_framebufferDriver) {
       throw std::invalid_argument("LVGL render backend requires a framebuffer driver");
@@ -265,18 +266,18 @@ private:
     }
   }
 
-  bool                                         m_isInitialized{false};
-  std::unique_ptr<ILvglFramebufferDriver>      m_framebufferDriver;
-  lv_display_t                                *m_lvglDisplay{nullptr};
-  lv_obj_t                                    *m_errorScreenLayer{nullptr};
-  std::unordered_map<WidgetId, TextBoxWidgets> m_textBoxes;
+  bool                                              m_isInitialized{false};
+  std::unique_ptr<internal::ILvglFramebufferDriver> m_framebufferDriver;
+  lv_display_t                                     *m_lvglDisplay{nullptr};
+  lv_obj_t                                         *m_errorScreenLayer{nullptr};
+  std::unordered_map<WidgetId, TextBoxWidgets>      m_textBoxes;
 };
 
 } // namespace
 
 namespace {
 
-class LvglLinuxFramebufferDriver final : public ILvglFramebufferDriver {
+class LvglLinuxFramebufferDriver final : public internal::ILvglFramebufferDriver {
 public:
   lv_display_t *createDisplay() override {
     return lv_linux_fbdev_create();
@@ -290,13 +291,16 @@ public:
 } // namespace
 
 std::unique_ptr<IRenderBackend> makeLvglFramebufferRenderBackend() {
-  return makeLvglFramebufferRenderBackend(std::make_unique<LvglLinuxFramebufferDriver>());
+  return internal::makeLvglFramebufferRenderBackend(std::make_unique<LvglLinuxFramebufferDriver>());
 }
+
+namespace internal {
 
 std::unique_ptr<IRenderBackend>
 makeLvglFramebufferRenderBackend(std::unique_ptr<ILvglFramebufferDriver> framebufferDriver) {
   return std::make_unique<LvglFramebufferRenderBackend>(std::move(framebufferDriver));
 }
 
+} // namespace internal
 } // namespace ui
 } // namespace iot

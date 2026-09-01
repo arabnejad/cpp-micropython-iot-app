@@ -5,12 +5,15 @@
 
 namespace iot {
 namespace hardware {
+namespace internal {
 
 /*
  * Internal Linux operations used by I2cDevice.
  *
- * Hardware drivers use II2cDevice. This lower-level wrapper only separates the
- * operating-system calls from the I2C transaction code.
+ * The normal implementation calls the Linux functions directly. Unit tests
+ * can replace those calls through this interface to check read, write, ioctl,
+ * and error paths without opening a real I2C bus. Hardware drivers should use
+ * II2cDevice instead.
  */
 class ILinuxI2cSystemCalls {
 public:
@@ -23,5 +26,6 @@ public:
   virtual std::ptrdiff_t readBytes(int fileDescriptor, std::uint8_t *bytes, std::size_t byteCount)        = 0;
 };
 
+} // namespace internal
 } // namespace hardware
 } // namespace iot

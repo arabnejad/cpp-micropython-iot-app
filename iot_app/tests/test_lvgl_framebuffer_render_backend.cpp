@@ -1,5 +1,6 @@
-#include "iot/ui/ilvgl_framebuffer_driver.h"
 #include "iot/ui/render_backend.h"
+
+#include "ui/internal/ilvgl_framebuffer_driver.h"
 
 #include "test_support.h"
 
@@ -22,7 +23,7 @@ using ::testing::NiceMock;
 using ::testing::Return;
 using ::testing::StrEq;
 
-class MockLvglFramebufferDriver : public ILvglFramebufferDriver {
+class MockLvglFramebufferDriver : public internal::ILvglFramebufferDriver {
 public:
   MOCK_METHOD(lv_display_t *, createDisplay, (), (override));
   MOCK_METHOD(bool, openFramebuffer, (lv_display_t * lvglDisplay, const char *framebufferDevicePath), (override));
@@ -48,8 +49,8 @@ class LvglFramebufferRenderBackendTest : public ::testing::Test {
 protected:
   LvglFramebufferRenderBackendTest()
       : m_framebufferDriver(new NiceMock<MockLvglFramebufferDriver>),
-        m_renderBackend(
-            makeLvglFramebufferRenderBackend(std::unique_ptr<ILvglFramebufferDriver>(m_framebufferDriver))) {}
+        m_renderBackend(internal::makeLvglFramebufferRenderBackend(
+            std::unique_ptr<internal::ILvglFramebufferDriver>(m_framebufferDriver))) {}
 
   void useFramebufferWithResolution(std::uint32_t width = 320U, std::uint32_t height = 240U,
                                     bool framebufferCanBeOpened = true) {
@@ -74,7 +75,7 @@ protected:
 };
 
 TEST(LvglFramebufferRenderBackendConstructionTest, RequiresAFramebufferDriver) {
-  EXPECT_THROW(makeLvglFramebufferRenderBackend(nullptr), std::invalid_argument);
+  EXPECT_THROW(internal::makeLvglFramebufferRenderBackend(nullptr), std::invalid_argument);
 }
 
 TEST_F(LvglFramebufferRenderBackendTest, RejectsDrawingBeforeItIsInitialized) {

@@ -1,8 +1,8 @@
 #include "iot/display/display_manager.h"
-#include "iot/display/idrm_display_api.h"
 
 #include "drm_object_ptr.h"
 #include "edid_parser.h"
+#include "internal/idrm_display_api.h"
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -198,7 +198,7 @@ std::vector<DisplayInfo> findConnectedDisplays(const std::filesystem::path &drmD
   return connectedDisplays;
 }
 
-class LinuxDrmDisplayApi final : public IDrmDisplayApi {
+class LinuxDrmDisplayApi final : public internal::IDrmDisplayApi {
 public:
   std::vector<DisplayInfo> connectedDisplays() const override {
     std::vector<DisplayInfo> allConnectedDisplays;
@@ -212,7 +212,7 @@ public:
   }
 };
 
-IDrmDisplayApi &linuxDrmDisplayApi() {
+internal::IDrmDisplayApi &linuxDrmDisplayApi() {
   static LinuxDrmDisplayApi api;
   return api;
 }
@@ -235,7 +235,7 @@ const DisplayMode &ActiveDisplay::mode() const noexcept {
 
 DisplayManager::DisplayManager() : DisplayManager(linuxDrmDisplayApi()) {}
 
-DisplayManager::DisplayManager(IDrmDisplayApi &drmDisplayApi) : m_drmDisplayApi(drmDisplayApi) {}
+DisplayManager::DisplayManager(internal::IDrmDisplayApi &drmDisplayApi) : m_drmDisplayApi(drmDisplayApi) {}
 
 std::vector<DisplayInfo> DisplayManager::connectedDisplays() const {
   return m_drmDisplayApi.connectedDisplays();
