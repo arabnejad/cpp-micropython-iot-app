@@ -1,7 +1,7 @@
 #!/bin/sh
 
-# tty1 is reserved for the framebuffer application. This escape sequence
-# hides the terminal cursor without changing the cursor used by tty2.
+# Buildroot and Yocto reserve tty1 for the framebuffer application. This
+# escape sequence hides its text cursor without changing the cursor on tty2.
 #
 #   \033  writes the ESC control character. 033 is its octal value; its
 #         decimal value is 27.
@@ -12,5 +12,5 @@
 #
 # /dev/tty1 is Linux's first virtual terminal, where the dashboard is drawn.
 if [ -w /dev/tty1 ]; then
-    printf '\033[?25l' > /dev/tty1
+	printf '\033[?25l' > /dev/tty1
 fi

@@ -11,6 +11,7 @@ Type=simple
 User=iot-app
 Group=iot-app
 SupplementaryGroups=video render i2c input
+ExecStartPre=+/usr/libexec/iot-app-hide-tty1-cursor
 ExecStart=/usr/libexec/iot-app-launcher
 Restart=on-failure
 RestartSec=2

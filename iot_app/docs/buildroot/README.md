@@ -16,6 +16,8 @@ comes from the root-level `storage_layout.conf` file.
 
 The complete layout, size overrides, first-boot process, verification commands,
 and upstream references are in the [shared storage guide](../storage/README.md).
+Files that must behave the same in Buildroot and Yocto are described in the
+[shared image-support guide](../../image_support/README.md).
 
 ## 1. What the development image does
 

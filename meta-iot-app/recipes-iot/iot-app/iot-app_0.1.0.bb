@@ -22,6 +22,9 @@ LIC_FILES_CHKSUM = "file://LICENSE;md5=b2a551156d047ff7f73d0c43858d552a"
 
 inherit cmake pkgconfig systemd useradd externalsrc
 
+# Let file:// entries use the launcher, cursor helper, and access rules shared
+# with Buildroot. Recipe-specific systemd files still come from this recipe's
+# files directory through BitBake's normal search path.
 FILESEXTRAPATHS:prepend := "${IOT_APP_PROJECT_ROOT}/iot_app/image_support:"
 
 # Build the source already checked out beside this layer. The root repository

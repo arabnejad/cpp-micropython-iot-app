@@ -5,6 +5,7 @@
 # start, stop, and restart commands.
 
 LAUNCHER="/usr/libexec/iot-app-launcher"
+CURSOR_HELPER="/usr/libexec/iot-app-hide-tty1-cursor"
 PROCESS_NAME="iot_app"
 PIDFILE="/var/run/iot_app.pid"
 LOGFILE="/var/log/iot_app.log"
@@ -38,20 +39,9 @@ start() {
 	fi
 	rm -f "$PIDFILE"
 
-	# tty1 is reserved for the framebuffer application. Hide its text cursor
-	# before waiting for network services so it cannot blink over the screen.
-	#
-	#   \033  writes the ESC control character. 033 is its octal value; its
-	#         decimal value is 27.
-	#   [     starts a terminal Control Sequence Introducer.
-	#   ?25   selects the terminal's cursor-visibility setting.
-	#   l     turns that setting off, which hides the cursor. Using h instead
-	#         would turn it on and show the cursor again.
-	#
-	# /dev/tty1 is Linux's first virtual terminal, where the dashboard is drawn.
-	if [ -w /dev/tty1 ]; then
-		printf '\033[?25l' > /dev/tty1
-	fi
+	# tty1 belongs to the framebuffer dashboard. Hide its terminal cursor before
+	# the first screen is drawn.
+	"$CURSOR_HELPER"
 
 	if ! wait_for_framebuffer; then
 		echo "Cannot start iot_app: $FRAMEBUFFER_DEVICE is not available"

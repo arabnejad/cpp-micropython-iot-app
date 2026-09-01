@@ -1629,8 +1629,9 @@ The package recipe:
 - Creates a dedicated `iot-app` runtime user.
 - Adds the user to `video`, `render`, `i2c`, and `input` groups.
 - Installs either a SysV startup script or systemd service.
-- Installs the launcher that selects the installed or development executable.
-- Installs device-access rules for systemd/udev builds.
+- Installs the shared launcher, storage helper, cursor helper, and Mosquitto
+  configuration from `iot_app/image_support`.
+- Installs the shared device-access rules for systemd/udev builds.
 
 ### Why helper programs are installed under `/usr/libexec`
 
@@ -1648,14 +1649,13 @@ them directly. The startup scripts and systemd services use their complete
 paths instead of looking for them through `PATH`.
 
 Buildroot and Yocto create `/usr/libexec` while installing their service
-helpers. Both install the launcher and storage helper. Yocto also installs the
-cursor helper used by its systemd service:
+helpers. Both install the same launcher, storage helper, and cursor helper:
 
 | Helper | Purpose |
 |---|---|
 | `/usr/libexec/iot-app-launcher` | Chooses the development executable from `/data`, or uses `/usr/bin/iot_app` |
 | `/usr/libexec/iot-app-prepare-data-storage` | Expands, mounts, and prepares the persistent `/data` partition |
-| `/usr/libexec/iot-app-hide-tty1-cursor` | Hides the Yocto console cursor before the framebuffer dashboard starts |
+| `/usr/libexec/iot-app-hide-tty1-cursor` | Hides the tty1 console cursor before the framebuffer dashboard starts |
 
 The GNU build-system documentation describes
 [`libexecdir`](https://www.gnu.org/prep/standards/html_node/Directory-Variables.html#index-libexecdir)
@@ -1691,7 +1691,7 @@ OpenEmbedded, and Raspberry Pi layers remain unmodified submodules.
 The application recipe builds the same `iot_app` CMake target used by native
 and Buildroot builds. It points CMake at the pinned LVGL and MicroPython source
 trees, creates the `iot-app` account, installs the systemd service, and adds
-the launcher and device-access rules.
+the shared launcher, cursor helper, and device-access rules.
 
 The system configuration package installs the Ethernet and Wi-Fi network
 units, enables network and time services, reserves `tty1` for the dashboard,
@@ -1699,8 +1699,14 @@ and provides an emergency login on `tty2`.
 The root `wpa_supplicant.conf` is the private Wi-Fi configuration shared by
 Buildroot and Yocto. The preparation command copies it into the Yocto build
 directory, and an append file installs that copy in the image. A separate
-append file applies the development Mosquitto listener without making two
-packages own the same file.
+append file installs the shared development Mosquitto configuration without
+making two packages own the same file.
+
+`iot_app/image_support` is the common source for the launcher, `/data` helper,
+cursor helper, Mosquitto configuration, and device-access rules. Buildroot and
+Yocto install those same files through their own recipes. Their startup
+services and partition descriptions remain separate because the two build
+systems use different formats.
 
 `iot-app-image.bb` creates the complete Raspberry Pi image. It includes SSH,
 Mosquitto, Wi-Fi firmware, I2C tools, time-zone information, and the IoT App

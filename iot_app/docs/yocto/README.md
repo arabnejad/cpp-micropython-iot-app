@@ -21,6 +21,8 @@ creates the Wic layout in the Yocto build directory.
 
 The complete layout, size overrides, first-boot process, verification commands,
 and upstream references are in the [shared storage guide](../storage/README.md).
+Files that must behave the same in Yocto and Buildroot are described in the
+[shared image-support guide](../../image_support/README.md).
 
 ## 1. What the development image does
 
