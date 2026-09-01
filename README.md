@@ -234,6 +234,17 @@ Install `gcovr` first if it is not already available:
 sudo apt install gcovr
 ```
 
+Unit tests cover code that can run without a real Raspberry Pi, including
+parsers, queues, state changes, deployment rules, and hardware-driver logic.
+Tests that use real DRM, `/dev/fb0`, I2C hardware, an MQTT broker, or a complete
+device workflow are integration tests and should run separately on a suitable
+Linux system or Raspberry Pi.
+
+The coverage command requires at least 90% line coverage across all included
+project files together. It does not require every individual source file to
+reach 90%. Low-level operating-system interfaces remain internal testing
+details rather than part of the main application architecture.
+
 ## Documentation
 
 Each guide has one main purpose. Start here for the project overview, use the
