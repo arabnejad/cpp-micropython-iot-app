@@ -27,6 +27,7 @@ public:
                                                   std::size_t                      numberOfBytesToRead,
                                                   std::chrono::microseconds        delayBeforeRead) = 0;
 
+  /* Connection details that a hardware driver can expose for diagnostics. */
   virtual int                busNumber() const noexcept  = 0;
   virtual std::uint8_t       address() const noexcept    = 0;
   virtual const std::string &devicePath() const noexcept = 0;

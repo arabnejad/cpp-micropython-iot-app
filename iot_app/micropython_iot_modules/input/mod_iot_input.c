@@ -245,6 +245,20 @@ static mp_obj_t gamepad_buttons(mp_obj_t self_in) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(gamepad_buttons_object, gamepad_buttons);
 
+static mp_obj_t gamepad_connection_information(mp_obj_t self_in) {
+  iot_gamepad_connection_information_t connection_information = {0};
+  raise_native_error(
+      iot_gamepad_read_connection_information(gamepad_object(self_in)->native_handle, &connection_information));
+
+  mp_obj_t result = mp_obj_new_dict(3);
+  mp_obj_dict_store(result, MP_OBJ_NEW_QSTR(MP_QSTR_bus_number), mp_obj_new_int(connection_information.bus_number));
+  mp_obj_dict_store(result, MP_OBJ_NEW_QSTR(MP_QSTR_address), mp_obj_new_int(connection_information.address));
+  mp_obj_dict_store(result, MP_OBJ_NEW_QSTR(MP_QSTR_device_path),
+                    mp_obj_new_str(connection_information.device_path, strlen(connection_information.device_path)));
+  return result;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(gamepad_connection_information_object, gamepad_connection_information);
+
 static iot_gamepad_device_information_t read_diagnostics(mp_obj_t self_in) {
   iot_gamepad_device_information_t diagnostics = {0};
   raise_native_error(iot_gamepad_read_diagnostics(gamepad_object(self_in)->native_handle, &diagnostics));
@@ -282,6 +296,7 @@ static const mp_rom_map_elem_t gamepad_locals_table[] = {
     {MP_ROM_QSTR(MP_QSTR_is_connected), MP_ROM_PTR(&gamepad_is_connected_object)},
     {MP_ROM_QSTR(MP_QSTR_joystick), MP_ROM_PTR(&gamepad_joystick_object)},
     {MP_ROM_QSTR(MP_QSTR_buttons), MP_ROM_PTR(&gamepad_buttons_object)},
+    {MP_ROM_QSTR(MP_QSTR_connection_information), MP_ROM_PTR(&gamepad_connection_information_object)},
     {MP_ROM_QSTR(MP_QSTR_processor_hardware_id), MP_ROM_PTR(&gamepad_processor_hardware_id_object)},
     {MP_ROM_QSTR(MP_QSTR_firmware_product_id), MP_ROM_PTR(&gamepad_firmware_product_id_object)},
     {MP_ROM_QSTR(MP_QSTR_firmware_date_code), MP_ROM_PTR(&gamepad_firmware_date_code_object)},

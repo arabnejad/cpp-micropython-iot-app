@@ -158,6 +158,21 @@ extern "C" iot_native_result_t iot_gamepad_joystick_direction(void *gamepad_hand
   });
 }
 
+extern "C" iot_native_result_t
+iot_gamepad_read_connection_information(void                                 *gamepad_handle,
+                                        iot_gamepad_connection_information_t *connection_information) {
+  return runSafely([=] {
+    if (connection_information == nullptr) {
+      throw std::invalid_argument("Gamepad connection-information output is missing");
+    }
+
+    const auto &controller              = gamepad(gamepad_handle);
+    connection_information->bus_number  = controller.i2cBusNumber();
+    connection_information->address     = controller.i2cAddress();
+    connection_information->device_path = controller.i2cDevicePath().c_str();
+  });
+}
+
 extern "C" iot_native_result_t iot_gamepad_read_diagnostics(void                             *gamepad_handle,
                                                             iot_gamepad_device_information_t *diagnostics) {
   return runSafely([=] {

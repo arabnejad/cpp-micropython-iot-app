@@ -15,6 +15,7 @@ namespace {
 using ::testing::_;
 using ::testing::NiceMock;
 using ::testing::Return;
+using ::testing::ReturnRef;
 
 class AdafruitMiniI2cGamepadDriverTest : public ::testing::Test {
 protected:
@@ -53,6 +54,17 @@ protected:
 
 TEST(AdafruitMiniI2cGamepadConstructionTest, RequiresAnI2cDevice) {
   EXPECT_THROW(AdafruitMiniI2cGamepad(nullptr), std::invalid_argument);
+}
+
+TEST_F(AdafruitMiniI2cGamepadDriverTest, ReportsTheSelectedI2cConnection) {
+  const std::string i2cDevicePath = "/dev/i2c-1";
+  EXPECT_CALL(*m_i2cDevice, busNumber()).WillOnce(Return(1));
+  EXPECT_CALL(*m_i2cDevice, address()).WillOnce(Return(0x50U));
+  EXPECT_CALL(*m_i2cDevice, devicePath()).WillOnce(ReturnRef(i2cDevicePath));
+
+  EXPECT_EQ(m_gamepad.i2cBusNumber(), 1);
+  EXPECT_EQ(m_gamepad.i2cAddress(), 0x50U);
+  EXPECT_EQ(m_gamepad.i2cDevicePath(), "/dev/i2c-1");
 }
 
 TEST_F(AdafruitMiniI2cGamepadDriverTest, ConnectsAndReadsItsIdentityAndInitialInputState) {

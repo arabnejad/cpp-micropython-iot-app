@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <vector>
 
 namespace iot {
@@ -46,6 +47,13 @@ public:
 
   /* True after connect() has completed successfully. */
   bool isConnected() const noexcept override;
+
+  /* Gets the Linux I2C bus number used by this gamepad. */
+  int i2cBusNumber() const noexcept;
+  /* Gets the seven-bit I2C address used by this gamepad. */
+  std::uint8_t i2cAddress() const noexcept;
+  /* Gets the Linux I2C device path, such as /dev/i2c-1. */
+  const std::string &i2cDevicePath() const noexcept;
 
   /* Gets the processor ID reported by the board. */
   std::uint8_t processorHardwareId() const noexcept;

@@ -208,6 +208,18 @@ bool AdafruitMiniI2cGamepad::isConnected() const noexcept {
   return m_isConnected;
 }
 
+int AdafruitMiniI2cGamepad::i2cBusNumber() const noexcept {
+  return m_gamepadI2cDevice->busNumber();
+}
+
+std::uint8_t AdafruitMiniI2cGamepad::i2cAddress() const noexcept {
+  return m_gamepadI2cDevice->address();
+}
+
+const std::string &AdafruitMiniI2cGamepad::i2cDevicePath() const noexcept {
+  return m_gamepadI2cDevice->devicePath();
+}
+
 std::uint8_t AdafruitMiniI2cGamepad::processorHardwareId() const noexcept {
   return m_processorHardwareId;
 }
