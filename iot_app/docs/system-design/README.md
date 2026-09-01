@@ -1662,11 +1662,8 @@ The GNU build-system documentation describes
 as the location for executable programs intended to be run by other programs
 rather than by users.
 
-The external tree contains two project configurations. `iot_rpi4_defconfig`
-targets a Raspberry Pi 4 Model B development system, while
-`iot_cm4_defconfig` targets a Compute Module 4. Both use the same application
-architecture and build an aarch64 Linux image with the required display and
-runtime support.
+The external tree contains `iot_rpi4_defconfig`, which builds the Raspberry Pi
+4 Model B development image described in this document.
 
 The framebuffer is the only service dependency required before IoT App can
 start. Systemd expresses that dependency through `dev-fb0.device`. The
