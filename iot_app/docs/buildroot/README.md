@@ -831,4 +831,6 @@ the time-sync script starts `ntpd` without waiting for the clock to change.
 This lets the dashboard start while the device is offline. Its first time value
 may be wrong, but the default dashboard refreshes the value after NTP corrects
 the Linux clock. IoT App remains `S90` so messages from later startup scripts do
-not appear over the framebuffer display.
+not appear over the framebuffer display. When DHCP assigns the first address,
+an udhcpc hook restarts Avahi once so the device advertises the intended
+`rspi-iot-app.local` name even when Avahi started before Wi-Fi was ready.

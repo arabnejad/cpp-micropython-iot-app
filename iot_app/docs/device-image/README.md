@@ -166,9 +166,11 @@ start IoT App. Their names show that order: `S25data-storage`, `S30wifi`,
 for the first clock update. Their background processes continue connecting and
 synchronizing while the remaining startup scripts run. Buildroot runs its DHCP
 client with the `-b` option, so it also keeps trying in the background when
-Wi-Fi is not ready. Keeping `S90iot-app` near the end of startup prevents later
-script messages from being printed over the dashboard. It waits up to 10
-seconds for `/dev/fb0` before starting IoT App.
+Wi-Fi is not ready. After DHCP assigns the first address, a small hook restarts
+Avahi once so it advertises the configured `rspi-iot-app.local` name. Keeping
+`S90iot-app` near the end of startup prevents later script messages from being
+printed over the dashboard. It waits up to 10 seconds for `/dev/fb0` before
+starting IoT App.
 
 Yocto starts independent systemd services in parallel. `iot-app.service` is
 ordered after the storage and Mosquitto services and requires
@@ -225,6 +227,28 @@ hostname -I
 ```
 
 Ignore `127.0.0.1`; it is the device's internal loopback address.
+
+On Buildroot, check the name Avahi is currently advertising:
+
+```sh
+ps | grep '[a]vahi-daemon'
+```
+
+If the output contains `rspi-iot-app-2.local`, Avahi detected the original name
+as already in use while the network was starting. Current images restart Avahi
+once after DHCP assigns the first address to prevent this startup race. For an
+older running image, restart it manually:
+
+```sh
+/etc/init.d/S50avahi-daemon stop
+/etc/init.d/S50avahi-daemon start
+```
+
+BusyBox `netstat` can confirm that mDNS is listening on UDP port 5353:
+
+```sh
+netstat -uln | grep ':5353'
+```
 
 ## 6. Connect through SSH
 

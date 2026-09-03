@@ -1,0 +1,22 @@
+#!/bin/sh
+
+# BusyBox udhcpc runs this hook after handling a DHCP event. Avahi can start
+# before Wi-Fi receives an address and temporarily choose a name such as
+# rspi-iot-app-2.local. Restarting it after the first address is assigned makes
+# it check the configured hostname again. This happens in the background DHCP
+# flow, so it does not delay the dashboard.
+
+AVAHI_DAEMON="/usr/sbin/avahi-daemon"
+AVAHI_INIT_SCRIPT="/etc/init.d/S50avahi-daemon"
+REFRESH_MARKER="/run/iot-app-avahi-hostname-refreshed"
+
+[ "$1" = "bound" ] || exit 0
+[ -e "$REFRESH_MARKER" ] && exit 0
+
+if "$AVAHI_DAEMON" -c >/dev/null 2>&1; then
+	"$AVAHI_INIT_SCRIPT" stop || exit 0
+	"$AVAHI_INIT_SCRIPT" start || exit 0
+fi
+
+touch "$REFRESH_MARKER"
+
