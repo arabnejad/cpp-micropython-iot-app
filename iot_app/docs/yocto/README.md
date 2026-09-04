@@ -665,6 +665,58 @@ sudo apt-get install -y chrpath gawk lz4
 make yocto-check
 ```
 
+### Packaging fails with `Operation not permitted`
+
+Yocto uses `pseudo` while creating packages. It lets an ordinary user record
+root ownership and permissions inside an image without running BitBake as
+root.
+
+If several unrelated recipes fail in `do_package` with an error like this,
+check the host Python executable:
+
+```text
+PermissionError: [Errno 1] Operation not permitted: '.../package/usr'
+```
+
+```bash
+python_path="$(readlink -f "$(command -v python3)")"
+getcap "$python_path"
+```
+
+Python normally has no file capabilities, so `getcap` should print nothing.
+If it reports `cap_net_bind_service=ep`, Linux prevents Yocto from finding
+`libpseudo.so` through `LD_LIBRARY_PATH`. Package ownership changes then run as
+real system calls and fail because the build is not running as root.
+
+Remove the capability and check again:
+
+```bash
+sudo setcap -r "$python_path"
+getcap "$python_path"
+```
+
+The second command must print nothing. Do not run BitBake with `sudo`.
+
+Clean the recipes that failed before trying the image build again. For example:
+
+```bash
+env -u LD_LIBRARY_PATH bash -c '
+  set -e
+  source poky/oe-init-build-env \
+    /opt/iot-app-builds/yocto-raspberry-pi-4/build >/dev/null
+
+  bitbake -c clean \
+    iot-app-system-config \
+    libjpeg-turbo \
+    mosquitto
+'
+
+make yocto-image
+```
+
+The clean operation keeps the shared-state cache, so BitBake can reuse valid
+work from the earlier build.
+
 ### Invalid `@` character in `COREBASE`
 
 Run:
