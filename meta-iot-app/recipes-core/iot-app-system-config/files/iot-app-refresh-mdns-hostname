@@ -1,0 +1,24 @@
+#!/bin/sh
+
+# Avahi can start before Wi-Fi or Ethernet has an address. In that case it can
+# temporarily advertise rspi-iot-app-2.local instead of the configured name.
+# Wait for the first IPv4 address, then restart Avahi so it checks the name
+# again. This service runs separately from IoT App, so the dashboard can still
+# start while the network is offline.
+
+maximum_wait_seconds=30
+seconds_waited=0
+
+while [ "$seconds_waited" -lt "$maximum_wait_seconds" ]; do
+	if ip -o -4 address show scope global | grep -q ' inet '; then
+		systemctl restart avahi-daemon.service
+		exit 0
+	fi
+
+	sleep 1
+	seconds_waited=$((seconds_waited + 1))
+done
+
+# systemd retries this helper later. Returning an error here does not stop the
+# dashboard or any other network service.
+exit 1

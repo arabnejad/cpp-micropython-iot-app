@@ -760,6 +760,11 @@ covers Wi-Fi, SSH, MQTT, IoT App startup, time synchronization, console
 messages, persistent storage, and differences in Buildroot and Yocto startup
 timing.
 
+If Avahi advertises `rspi-iot-app-2.local` during startup, see
+[Find the Raspberry Pi](../device-image/README.md#5-find-the-raspberry-pi). The
+Yocto image runs `iot-app-refresh-mdns-hostname.service` after the first usable
+Wi-Fi or Ethernet IPv4 address appears, without delaying the dashboard.
+
 ### The image file is missing
 
 Check BitBake's deploy directory:
@@ -790,7 +795,7 @@ The expected Raspberry Pi Imager file is:
 | `meta-iot-app/conf/distro/iot-app-linux.conf` | Selects Poky policy and systemd |
 | `meta-iot-app/conf/templates/raspberrypi4-64/` | Creates `local.conf` and `bblayers.conf` |
 | `meta-iot-app/recipes-iot/iot-app/` | Builds the C++ runtime, creates its service account and device groups, and installs the systemd unit and shared image-support files |
-| `meta-iot-app/recipes-core/iot-app-system-config/` | Adds network units, Wi-Fi startup, time services, and the `tty2` emergency login |
+| `meta-iot-app/recipes-core/iot-app-system-config/` | Adds network units, Wi-Fi startup, the mDNS hostname refresh, time services, and the `tty2` emergency login |
 | `meta-iot-app/recipes-connectivity/` | Installs the private Wi-Fi file and shared development Mosquitto configuration without making two recipes own the same files |
 | `meta-iot-app/recipes-core/images/iot-app-image.bb` | Selects SSH, Mosquitto, Wi-Fi firmware, I2C tools, timezone data, and IoT App packages for the bootable image |
 | `Makefile` | Creates persistent paths and provides the short build commands |

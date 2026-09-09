@@ -23,6 +23,8 @@ FILESEXTRAPATHS:prepend := "${IOT_APP_PROJECT_ROOT}/iot_app/image_support:${TOPD
 SRC_URI = " \
     file://10-eth0.network \
     file://20-wlan0.network \
+    file://iot-app-refresh-mdns-hostname \
+    file://iot-app-refresh-mdns-hostname.service \
     file://iot-app-wifi.service \
     file://iot-app-prepare-data-storage \
     file://iot-app-storage.service \
@@ -30,7 +32,7 @@ SRC_URI = " \
     file://ssh_authorized_keys \
 "
 
-SYSTEMD_SERVICE:${PN} = "iot-app-wifi.service iot-app-storage.service"
+SYSTEMD_SERVICE:${PN} = "iot-app-wifi.service iot-app-refresh-mdns-hostname.service iot-app-storage.service"
 SYSTEMD_AUTO_ENABLE:${PN} = "enable"
 
 do_install() {
@@ -40,6 +42,10 @@ do_install() {
         "${D}${sysconfdir}/systemd/network/20-wlan0.network"
     install -D -m 0644 "${WORKDIR}/iot-app-wifi.service" \
         "${D}${systemd_system_unitdir}/iot-app-wifi.service"
+    install -D -m 0755 "${WORKDIR}/iot-app-refresh-mdns-hostname" \
+        "${D}${libexecdir}/iot-app-refresh-mdns-hostname"
+    install -D -m 0644 "${WORKDIR}/iot-app-refresh-mdns-hostname.service" \
+        "${D}${systemd_system_unitdir}/iot-app-refresh-mdns-hostname.service"
     install -D -m 0755 "${WORKDIR}/iot-app-prepare-data-storage" \
         "${D}${libexecdir}/iot-app-prepare-data-storage"
     install -D -m 0644 "${WORKDIR}/iot-app-storage.service" \
@@ -75,10 +81,12 @@ do_install() {
 FILES:${PN} += " \
     ${sysconfdir}/systemd/network \
     ${sysconfdir}/systemd/system \
+    ${systemd_system_unitdir}/iot-app-refresh-mdns-hostname.service \
     ${systemd_system_unitdir}/iot-app-wifi.service \
     ${systemd_system_unitdir}/iot-app-storage.service \
     ${libexecdir}/iot-app-prepare-data-storage \
+    ${libexecdir}/iot-app-refresh-mdns-hostname \
     ${ROOT_HOME}/.ssh \
 "
 
-RDEPENDS:${PN} += "e2fsprogs-resize2fs e2fsprogs-tune2fs mosquitto parted systemd util-linux-partx wpa-supplicant"
+RDEPENDS:${PN} += "avahi-daemon e2fsprogs-resize2fs e2fsprogs-tune2fs iproute2 mosquitto parted systemd util-linux-partx wpa-supplicant"

@@ -176,7 +176,9 @@ Yocto starts independent systemd services in parallel. `iot-app.service` is
 ordered after the storage and Mosquitto services and requires
 `dev-fb0.device`. Storage and Mosquitto are requested with `Wants`, so their
 failure does not stop the dashboard. It does not wait for
-`network-online.target`.
+`network-online.target`. A separate service waits for the first Wi-Fi or
+Ethernet IPv4 address and then restarts Avahi once. This corrects the advertised
+`.local` name without making the dashboard wait for the network.
 
 Neither image waits for an IP address or a correct clock before starting IoT
 App. The dashboard can start offline, and its MQTT client reconnects when the
@@ -228,7 +230,7 @@ hostname -I
 
 Ignore `127.0.0.1`; it is the device's internal loopback address.
 
-On Buildroot, check the name Avahi is currently advertising:
+Check the name Avahi is currently advertising:
 
 ```sh
 ps | grep '[a]vahi-daemon'
@@ -236,12 +238,26 @@ ps | grep '[a]vahi-daemon'
 
 If the output contains `rspi-iot-app-2.local`, Avahi detected the original name
 as already in use while the network was starting. Current images restart Avahi
-once after DHCP assigns the first address to prevent this startup race. For an
-older running image, restart it manually:
+once after the first address is assigned. Buildroot does this from its DHCP
+hook; Yocto uses `iot-app-refresh-mdns-hostname.service`.
+
+For an older Buildroot image, restart Avahi with:
 
 ```sh
 /etc/init.d/S50avahi-daemon stop
 /etc/init.d/S50avahi-daemon start
+```
+
+For an older Yocto image, use:
+
+```sh
+systemctl restart avahi-daemon
+```
+
+On a current Yocto image, check the automatic refresh service with:
+
+```sh
+systemctl status iot-app-refresh-mdns-hostname --no-pager
 ```
 
 BusyBox `netstat` can confirm that mDNS is listening on UDP port 5353:

@@ -1,0 +1,15 @@
+[Unit]
+Description=Refresh the IoT App mDNS hostname after network configuration
+After=avahi-daemon.service systemd-networkd.service iot-app-wifi.service
+Wants=avahi-daemon.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/iot-app-refresh-mdns-hostname
+RemainAfterExit=yes
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
