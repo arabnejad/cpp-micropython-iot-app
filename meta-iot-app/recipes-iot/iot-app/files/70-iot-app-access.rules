@@ -40,10 +40,14 @@ SUBSYSTEM=="graphics", KERNEL=="fb[0-9]*", GROUP="video", MODE="0660", TAG+="sys
 # reads these devices to discover connected monitors and their active modes.
 SUBSYSTEM=="drm", KERNEL=="card[0-9]*", GROUP="video", MODE="0660"
 
-# DRM render devices appear as /dev/dri/renderD128 and similar names. Assigning
-# them to the render group keeps the runtime ready for rendering APIs that use
-# a render node instead of the primary DRM card.
+# DRM render devices appear as /dev/dri/renderD128 and similar names. mpv and
+# Mesa use a render node while OpenGL prepares video frames for the monitor.
 SUBSYSTEM=="drm", KERNEL=="renderD[0-9]*", GROUP="render", MODE="0660"
+
+# The Raspberry Pi hardware video decoder appears as /dev/video10 and related
+# V4L2 devices. mpv opens these devices when it uses v4l2m2m-copy to decode an
+# H.264 video.
+SUBSYSTEM=="video4linux", KERNEL=="video[0-9]*", GROUP="video", MODE="0660"
 
 # Linux I2C buses appear as /dev/i2c-1 and similar names. Python gamepad
 # applications use these files to communicate with an I2C gamepad.

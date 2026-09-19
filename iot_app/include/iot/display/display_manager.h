@@ -14,7 +14,10 @@ class IDrmDisplayApi;
 /* Finds monitors through Linux DRM/KMS. */
 class DisplayManager final {
 public:
+  /* Production code uses the real Linux display API through this constructor. */
   DisplayManager();
+
+  /* Unit tests supply a fake display API so they do not need a connected monitor. */
   explicit DisplayManager(internal::IDrmDisplayApi &drmDisplayApi);
 
   /* Scans DRM and returns connected monitors with their current and supported modes. */

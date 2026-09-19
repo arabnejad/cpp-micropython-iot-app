@@ -9,6 +9,7 @@
 #include "iot/system/system_information.h"
 #include "iot/ui/render_backend.h"
 #include "iot/ui/screen_manager.h"
+#include "iot/video/iexclusive_video_player.h"
 
 #include "messaging/internal/imqtt_client_api.h"
 
@@ -23,12 +24,12 @@
 
 namespace {
 
-volatile std::sig_atomic_t keepRunning              = 1;
+volatile std::sig_atomic_t shutdownRequested        = 0;
 constexpr const char       preferredConnectorName[] = "HDMI-A-1";
 iot::logging::Logger       applicationLogger;
 
-extern "C" void stopApplication(int) {
-  keepRunning = 0;
+extern "C" void requestApplicationShutdown(int) {
+  shutdownRequested = 1;
 }
 
 const iot::display::DisplayInfo *
@@ -92,16 +93,17 @@ int main(int argc, char **argv) {
     }
     const iot::display::ActiveDisplay activeDisplay{*selectedDisplay, *selectedDisplay->currentMode};
     printDisplaySummary(activeDisplay);
-    std::signal(SIGINT, stopApplication);
-    std::signal(SIGTERM, stopApplication);
+    std::signal(SIGINT, requestApplicationShutdown);
+    std::signal(SIGTERM, requestApplicationShutdown);
 
     const iot::python::PythonApplicationLoader applicationLoader{iot::runtime::maximumPythonSourceSizeInBytes};
     IOT_LOG_INFO(applicationLogger, "Loading default application: ", runtimeConfig.defaultApplicationDirectory);
     const auto defaultPythonApplication = applicationLoader.load(runtimeConfig.defaultApplicationDirectory);
     const auto runtimePaths             = iot::runtime::calculateRuntimePathsForCurrentUser();
 
+    auto exclusiveVideoPlayer = iot::video::makeMpvExclusiveVideoPlayer([] { return shutdownRequested != 0; });
     iot::ui::ScreenManager screenManager{activeDisplay, iot::ui::makeLvglFramebufferRenderBackend(),
-                                         iot::runtime::maximumPendingRenderCommands};
+                                         iot::runtime::maximumPendingRenderCommands, std::move(exclusiveVideoPlayer)};
     screenManager.start();
 
     iot::network::HttpFileDownloader fileDownloader{
@@ -147,7 +149,7 @@ int main(int argc, char **argv) {
     }
 
     constexpr auto maximumMainLoopWait = std::chrono::milliseconds(1000);
-    while (keepRunning != 0) {
+    while (shutdownRequested == 0) {
       screenManager.throwIfRenderThreadFailed();
       const auto scheduledDelay = pythonApplicationManager.timeUntilNextScheduledCallback();
       const auto waitDuration   = scheduledDelay ? std::min(*scheduledDelay, maximumMainLoopWait) : maximumMainLoopWait;

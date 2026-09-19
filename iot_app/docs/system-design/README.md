@@ -38,6 +38,7 @@ IoT App handles these jobs:
 - Draw directly to the Linux framebuffer with LVGL.
 - Download bounded HTTP or HTTPS files into a temporary directory.
 - Decode, scale, cache, and display JPEG images.
+- Play full-screen H.264 video with hardware-assisted decoding.
 - Run one MicroPython application at a time.
 - Expose project-owned native modules as `iot.display`, `iot.input`,
   `iot.network`, `iot.scheduler`, and `iot.system`.
@@ -286,6 +287,8 @@ behavior.
 | OpenSSL Crypto | Decodes the Base64 Python source carried in JSON. One internal checksum helper uses it to calculate SHA-256 for deployments and downloaded files. Base64 is only an encoding, and SHA-256 only detects inconsistent or damaged content; neither one proves who sent the application. |
 | libcurl | Downloads HTTP and HTTPS files. Certificate and hostname checks remain enabled for HTTPS. |
 | libjpeg-turbo | Checks, scales, and decodes JPEG files before their pixels are sent to LVGL. |
+| libmpv | Plays full-screen video through the Raspberry Pi V4L2 decoder and direct OpenGL/DRM output. |
+| Mesa | Supplies the Raspberry Pi V3D OpenGL, EGL, and GBM implementation used by mpv. |
 
 MicroPython and LVGL are pinned repository submodules. Project code does not
 modify those source trees. CMake generates the MicroPython embed sources into
@@ -373,6 +376,7 @@ The main thread handles:
 - Parses and validates deployment messages.
 - Writes received applications into `/tmp`.
 - Downloads files requested by Python and decodes JPEG cache misses.
+- Stops framebuffer rendering, waits for full-screen video playback, and then restarts rendering.
 - Changes the application state.
 - Handles `SIGINT` and `SIGTERM` through a stop flag.
 
@@ -548,8 +552,9 @@ reported as a startup error because drawing with two different sizes gives
 unreliable output. Rendering uses `/dev/fb0`; it does not request DRM master
 ownership or use libdrm to draw.
 
-The framebuffer path keeps the target small. It does not require a desktop,
-window manager, Mesa, EGL, or OpenGL.
+Normal widgets use only the framebuffer and do not require a desktop or window
+manager. Full-screen video also uses Mesa, EGL, GBM, and OpenGL. Those graphics
+libraries stay idle while LVGL owns the screen.
 
 ### 11.1 `ScreenManager`
 
@@ -568,11 +573,17 @@ Its responsibilities are:
 - Give each text box or normal image a process-wide widget ID.
 - Decode JPEG files and reuse recently decoded pixels within a fixed memory
   limit.
+- Stop LVGL and give the selected monitor to libmpv during full-screen video.
 - Keep render commands in order.
 - Process commands in batches so LVGL can refresh while the queue is busy.
 - Bound the number of pending commands.
 - Drop old pending commands when a new application clears the screen.
 - Report render-thread failure to the main thread.
+
+`ScreenManager` owns the video transition because it already owns the render
+thread, framebuffer backend, widget IDs, and decoded-image cache. The small
+`IExclusiveVideoPlayer` boundary keeps the libmpv calls out of the screen and
+MicroPython code.
 
 Dropping pending commands during `clear()` matters during an application
 switch. It prevents delayed drawing from the old app appearing on the new app's
@@ -793,6 +804,60 @@ connect. A timeout raises a Python `RuntimeError` and removes the partial file.
 Python can catch that error; an unhandled error stops the application and shows
 the C++ emergency screen. Failure to clear the previous application's download
 directory is handled as a startup failure too. The default app is not restarted.
+
+### 11.5 How a full-screen video reaches the monitor
+
+Video and normal LVGL drawing do not use the monitor at the same time. Python
+starts playback from the main thread, and `ScreenManager` controls the switch:
+
+```text
+Python application
+  display.play_video(path)
+          |
+          v
+MicroPython display module and C++ bridge
+          |
+          v
+ScreenManager validates the local file
+          |
+          v
+Stop render thread -> close LVGL framebuffer backend
+          |
+          v
+libmpv -> V4L2 H.264 decoder -> OpenGL/EGL/DRM -> HDMI monitor
+          |
+          v
+Video ends -> reopen framebuffer -> restart render thread
+          |
+          v
+Return to Python so the application can draw its next screen
+```
+
+The Raspberry Pi 4 playback configuration uses `v4l2m2m-copy`. This is a setting
+chosen for the supplied Raspberry Pi images, not a general decoder choice for
+every Linux device. mpv reported hardware decoding and `yuv420p` output for
+OpenGL when this mode was tested. The 1080p test finished without dropped
+output or decoder frames. The direct DRM PRIME path dropped many output frames
+on the same device, so this version does not use it.
+
+The call waits until playback finishes. MicroPython therefore stays on its
+owner thread, but its scheduled callbacks and main-thread deployment work also
+wait. The Mosquitto network thread can continue receiving messages and place
+them in its bounded queue. The mpv event loop checks the process stop flag at
+intervals of no more than 100 ms, so `SIGINT` or `SIGTERM` can still stop the
+service during a long video.
+
+Stopping the framebuffer backend destroys its LVGL objects. `ScreenManager`
+also clears the related widget IDs and decoded JPEG cache, so Python must draw
+the screen again after playback. If mpv reports an error, `ScreenManager`
+first restarts the framebuffer and then passes the error back to Python. The
+player keeps at most 1 KiB of mpv error output and includes it when available.
+An uncaught error is handled like any other Python application failure.
+
+The direct mpv adapter is an operating-system integration boundary. Unit tests
+replace it with a recording implementation and verify the screen transition,
+Python error handling, and redraw behaviour. Smooth playback and hardware
+decoding are checked on the Raspberry Pi.
 
 ## 12. Python application package
 

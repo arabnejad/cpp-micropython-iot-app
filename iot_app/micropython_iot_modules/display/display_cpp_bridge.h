@@ -86,6 +86,8 @@ iot_native_result_t iot_display_move_image(uint64_t widget_id, int32_t x, int32_
 iot_native_result_t iot_display_set_image_scale(uint64_t widget_id, uint16_t scale_percent);
 /* Deletes an image widget. */
 iot_native_result_t iot_display_delete_image(uint64_t widget_id);
+/* Plays one local video full-screen and returns after it finishes. */
+iot_native_result_t iot_display_play_video(const char *file_path);
 /* Places a JPEG behind all normal widgets. */
 iot_native_result_t iot_display_set_background_image(const char *file_path, iot_background_image_mode_t mode,
                                                      uint16_t scale_percent);

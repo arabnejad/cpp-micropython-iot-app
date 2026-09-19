@@ -42,7 +42,7 @@ sudo apt update
 sudo apt install \
   build-essential cmake ninja-build git pkg-config \
   libdrm-dev libmosquitto-dev libcjson-dev libssl-dev \
-  libcurl4-openssl-dev libturbojpeg0-dev ca-certificates
+  libcurl4-openssl-dev libturbojpeg0-dev libmpv-dev mpv ca-certificates
 ```
 
 Copy or clone the project, then build:
@@ -51,6 +51,9 @@ Copy or clone the project, then build:
 cmake -S iot_app -B build/iot_app -G Ninja
 cmake --build build/iot_app
 ```
+
+Video playback is included in every build. CMake reports an error here if
+`libmpv-dev` is missing.
 
 VS Code Remote SSH lets you edit from Ubuntu while compiling and debugging on
 the Pi.
@@ -126,7 +129,8 @@ the desktop compositor does not redraw over the framebuffer.
 Modern Raspberry Pi OS uses DRM/KMS. Do not disable the KMS driver in
 `/boot/firmware/config.txt` because IoT App needs it for direct display access.
 Recent Raspberry Pi OS releases no longer support the old legacy graphics
-mode. See [Raspberry Pi display configuration](https://www.raspberrypi.com/documentation/configuration/config-txt/memory.md).
+mode. See the official
+[Raspberry Pi display settings guide](https://www.raspberrypi.com/documentation/computers/configuration.html#display-settings).
 
 Raspberry Pi OS Lite is not required. The normal desktop image can boot into
 console mode, and the GUI remains available if it is needed later.
@@ -196,10 +200,12 @@ sudo raspi-config
 Then select:
 
 ```text
-System Options --> Boot --> Console Text console
+1 System Options > S5 Boot > B1 Console Text console
 ```
 
-Select Desktop from the same menu to restore graphical boot. [Raspberry Pi boot-to-console documentation](https://www.raspberrypi.com/documentation/computers/configuration.html)
+Select `B2 Desktop Desktop GUI` from the same menu to restore graphical boot.
+See the official
+[Raspberry Pi boot-to-console documentation](https://www.raspberrypi.com/documentation/computers/configuration.html#boot-to-console-or-desktop).
 
 ## Display-device access
 

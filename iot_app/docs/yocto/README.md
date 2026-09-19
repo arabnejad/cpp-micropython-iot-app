@@ -1,8 +1,9 @@
 # Build and run the Yocto Raspberry Pi 4 image
 
 This guide builds a complete 64-bit Linux image for a Raspberry Pi 4 Model B
-using Yocto. The image contains IoT App, embedded MicroPython, LVGL, Wi-Fi,
-Ethernet, OpenSSH, the Mosquitto broker, I2C tools, and systemd services.
+using Yocto. The image contains IoT App, embedded MicroPython, LVGL,
+full-screen video support, Wi-Fi, Ethernet, OpenSSH, the Mosquitto broker, I2C
+tools, and systemd services.
 
 The Buildroot image remains supported. Both images run the same C++ executable
 and the same default Python application. The difference is how the Linux
@@ -10,6 +11,11 @@ system is assembled.
 
 Run the commands in this guide from the repository root unless a section says
 otherwise.
+
+For an introduction to layers, recipes, `.bbappend` files, BitBake tasks,
+systemd units, and the way this project assembles its image, read the
+[Yocto tutorial](../yocto-tutorial/README.md). This guide remains the place for
+the commands used to prepare, build, flash, and troubleshoot an image.
 
 ## Image storage
 
@@ -26,7 +32,7 @@ The Yocto image is configured to:
 
 - boot a 64-bit Raspberry Pi 4 system without a desktop;
 - use systemd for services, networking, logs, and time synchronization;
-- create a 1920x1080 framebuffer at 60 Hz;
+- request a 1920x1080 framebuffer at 60 Hz on either HDMI connector;
 - enable `/dev/fb0`, DRM/KMS, and `/dev/i2c-1`;
 - reserve `tty1` for the IoT App display;
 - provide a password-protected emergency root login on `tty2`;
@@ -34,6 +40,7 @@ The Yocto image is configured to:
 - listen for SSH connections;
 - run a local Mosquitto broker on IPv4 port 1883;
 - prepare the optional persistent data partition at `/data` when it exists;
+- play H.264 video through the Raspberry Pi decoder and direct OpenGL/DRM output;
 - start IoT App automatically after the framebuffer is available;
 - keep running offline if the network is unavailable; and
 - reconnect to Mosquitto when the broker becomes available.
@@ -41,6 +48,13 @@ The Yocto image is configured to:
 The [shared device-image guide](../device-image/README.md#1-development-image-defaults)
 lists the development login, SSH-key setup, recovery console, and security
 changes needed outside a trusted test network.
+
+The mode is assigned to both `HDMI-A-1` and `HDMI-A-2` in
+`meta-iot-app/conf/templates/raspberrypi4-64/local.conf.sample`. This matters
+because a 4K monitor connected to the second Raspberry Pi HDMI port would
+otherwise select its preferred 3840x2160 mode. See
+[The framebuffer uses the wrong resolution](../device-image/README.md#the-framebuffer-uses-the-wrong-resolution)
+for the commands that identify the active connector and framebuffer size.
 
 ### Change the root password
 
@@ -339,10 +353,10 @@ The project disables several Poky features that are not used by this image:
 |---|---|
 | SPDX generation | Local development builds skip package-by-package SBOM generation to save time and storage. Re-enable `create-spdx` when an image needs an SPDX SBOM. Third-party license requirements still apply. |
 | `ptest` suites | IoT App runs its own unit tests on the development computer and does not run package test suites on the Raspberry Pi. |
-| OpenGL, Wayland, Vulkan, and X11 | LVGL draws directly to `/dev/fb0`; the image has no desktop or window system. |
+| Wayland, Vulkan, and X11 | The image has no desktop or window system. OpenGL remains enabled because mpv uses it directly through DRM for full-screen video. |
 | Audio, Bluetooth, 3G, NFC, and NFS | The current hardware and Python API do not use these services. Some of them also start background services during boot. |
 | General-purpose base package group | The standard `core-image` base supports many kinds of hardware. This image starts with the minimal boot group and lists its required packages directly. |
-| Complete kernel-module package | Installing every Raspberry Pi kernel module added more than 1,800 packages to the test image. The image selects the Broadcom Wi-Fi driver, its small WCC vendor module, and the I2C modules directly. The Wi-Fi and I2C drivers are loaded during boot. |
+| Complete kernel-module package | Installing every Raspberry Pi kernel module added more than 1,800 packages to the test image. The image selects only the Wi-Fi, I2C, V3D graphics, and BCM2835 video-codec modules it needs. These drivers are loaded during boot. |
 | Extra `wpa_supplicant` tools | The Wi-Fi service needs the daemon, but it does not use `wpa_cli`, `wpa_passphrase`, or optional plugins. |
 | Timezone regions outside Europe | The image uses `Europe/London`, so it installs the timezone core and Europe data instead of every region. |
 | Translated locale packages | The dashboard and command-line tools use the C locale. This is separate from the `Europe/London` timezone setting. |
@@ -359,8 +373,9 @@ Yocto documents the generated files and the setting used here in its
 The smaller package list still supports the features used by this project:
 framebuffer output, Raspberry Pi Wi-Fi and Ethernet, I2C, MQTT, SSH/SFTP,
 systemd networking and time synchronization, mDNS discovery through Avahi,
-HTTPS downloads with CA certificate checks, JPEG decoding, the local console,
-and ext4 filesystem checks. `i2c-tools` is also kept for hardware
+HTTPS downloads with CA certificate checks, JPEG decoding, hardware-assisted
+full-screen video, the local console, and ext4 filesystem checks. `i2c-tools`
+is also kept for hardware
 troubleshooting. If a new peripheral needs another kernel module, add that
 module to
 `meta-iot-app/recipes-core/images/iot-app-image.bb`.
@@ -669,14 +684,56 @@ make yocto-check
 
 Yocto uses `pseudo` while creating packages. It lets an ordinary user record
 root ownership and permissions inside an image without running BitBake as
-root.
+root. The [Yocto source-directory reference](https://docs.yoctoproject.org/current/ref-manual/structure.html)
+describes the per-recipe `pseudo` database and log stored under `WORKDIR`.
 
-If several unrelated recipes fail in `do_package` with an error like this,
-check the host Python executable:
+Errors from `do_package` can have more than one cause. Check the host account
+first, then check Python, before deleting any build output.
+
+The checks below apply to errors such as:
 
 ```text
 PermissionError: [Errno 1] Operation not permitted: '.../package/usr'
 ```
+
+#### Check that the host user ID has a name
+
+Run:
+
+```bash
+id -u
+id -un
+getent passwd "$(id -u)"
+python3 -c 'import os, pwd; print(pwd.getpwuid(os.getuid()).pw_name)'
+```
+
+All four commands must complete successfully. `id -un`, `getent`, and Python
+should report the same login name.
+
+If Python reports an error like this, the host cannot currently resolve the
+numeric user ID through its user database:
+
+```text
+KeyError: 'getpwuid(): uid not found'
+```
+
+This can happen on a company-managed Ubuntu computer when its domain account
+service is unavailable. Reconnect any network or VPN required by the account,
+then check whether the computer uses `sssd` or `winbind`:
+
+```bash
+systemctl is-active sssd
+systemctl is-active winbind
+```
+
+Restart the active service if necessary, or ask the computer administrator to
+restore account lookup. Do not continue the Yocto build until the four user
+lookup commands work. Otherwise, packaging code that converts the build UID to
+a user name can fail in unrelated recipes.
+
+#### Check the host Python executable
+
+Run:
 
 ```bash
 python_path="$(readlink -f "$(command -v python3)")"
@@ -697,25 +754,46 @@ getcap "$python_path"
 
 The second command must print nothing. Do not run BitBake with `sudo`.
 
-Clean the recipes that failed before trying the image build again. For example:
+#### Clear inconsistent `pseudo` state
+
+If several unrelated recipes fail with `SIGABRT`, exit code 134,
+`path mismatch`, or `inode mismatch`, cleaning a short list of recipes is not
+enough. Those messages mean that `pseudo`'s saved file records no longer agree
+with the files in the generated Yocto work directory. The
+[Yocto `pseudo` abort guide](https://wiki.yoctoproject.org/wiki/Pseudo_Abort)
+explains how deleting files outside a `pseudo` context can leave an old inode
+record behind.
+
+First make sure that BitBake and `pseudo` are no longer running:
 
 ```bash
-env -u LD_LIBRARY_PATH bash -c '
-  set -e
-  source poky/oe-init-build-env \
-    /opt/iot-app-builds/yocto-raspberry-pi-4/build >/dev/null
+pgrep -af 'bitbake|pseudo'
+```
 
-  bitbake -c clean \
-    iot-app-system-config \
-    libjpeg-turbo \
-    mosquitto
-'
+After confirming that the command does not list an active build, remove the
+generated Yocto `tmp` directory:
 
+```bash
+rm -rf \
+  /opt/iot-app-builds/yocto-raspberry-pi-4/build/tmp
+```
+
+This removes generated work directories, package staging areas, `pseudo`
+databases, and the previous image output. It does not remove:
+
+- `build/conf`, including the prepared project configuration;
+- `/opt/iot-app-builds/yocto-downloads`; or
+- `/opt/iot-app-builds/yocto-sstate-cache`.
+
+Run the normal image target again:
+
+```bash
 make yocto-image
 ```
 
-The clean operation keeps the shared-state cache, so BitBake can reuse valid
-work from the earlier build.
+The Make target prepares the configuration when required. BitBake then restores
+valid work from the download and shared-state caches, so removing `tmp` does not
+always mean compiling every dependency again.
 
 ### Invalid `@` character in `COREBASE`
 
@@ -729,7 +807,7 @@ Then check:
 
 ```bash
 grep '^COREBASE' \
-  /opt/iot-app-builds/yocto-raspberry-pi-4/build/conf/local.conf
+  /opt/iot-app-builds/yocto-raspberry-pi-4/build/conf/iot-app-build-paths.conf
 ```
 
 It should show:
@@ -737,6 +815,10 @@ It should show:
 ```text
 COREBASE = "/opt/iot-app-builds/yocto-sources/poky"
 ```
+
+Both configuration files are expected to exist. `local.conf` contains the
+image settings and loads the generated `iot-app-build-paths.conf` file. The
+generated file is the one that stores `COREBASE`, `DL_DIR`, and `SSTATE_DIR`.
 
 ### Wi-Fi firmware license flag
 
@@ -752,6 +834,23 @@ The generated `local.conf` should contain:
 ```text
 LICENSE_FLAGS_ACCEPTED += "synaptics-killswitch"
 ```
+
+### FFmpeg licence flag
+
+mpv depends on FFmpeg. The checked-out Scarthgap
+[FFmpeg recipe sets `LICENSE_FLAGS = "commercial"`](https://github.com/yoctoproject/poky/blob/scarthgap/meta/recipes-multimedia/ffmpeg/ffmpeg_6.1.4.bb#L18).
+The project's development configuration accepts this flag so BitBake can
+include FFmpeg in the image:
+
+```text
+LICENSE_FLAGS_ACCEPTED += "commercial"
+```
+
+This setting only allows the recipe into this build. It does not grant any new
+redistribution rights. Review the resulting image licences before publishing
+or selling an image. The Yocto
+[`LICENSE_FLAGS_ACCEPTED` guide](https://docs.yoctoproject.org/scarthgap/dev-manual/licenses.html#enabling-commercially-licensed-recipes)
+explains how accepted flags are matched against flags set by recipes.
 
 ### Device startup and runtime problems
 
@@ -797,9 +896,23 @@ The expected Raspberry Pi Imager file is:
 | `meta-iot-app/recipes-iot/iot-app/` | Builds the C++ runtime, creates its service account and device groups, and installs the systemd unit and shared image-support files |
 | `meta-iot-app/recipes-core/iot-app-system-config/` | Adds network units, Wi-Fi startup, the mDNS hostname refresh, time services, and the `tty2` emergency login |
 | `meta-iot-app/recipes-connectivity/` | Installs the private Wi-Fi file and shared development Mosquitto configuration without making two recipes own the same files |
-| `meta-iot-app/recipes-core/images/iot-app-image.bb` | Selects SSH, Mosquitto, Wi-Fi firmware, I2C tools, timezone data, and IoT App packages for the bootable image |
+| `meta-iot-app/recipes-multimedia/mpv/` | Keeps mpv's direct DRM/OpenGL output while leaving desktop, audio, and Lua support disabled |
+| `meta-iot-app/recipes-core/images/iot-app-image.bb` | Selects SSH, Mosquitto, Wi-Fi firmware, video and I2C drivers, timezone data, and IoT App packages for the bootable image |
 | `Makefile` | Creates persistent paths and provides the short build commands |
 | `scripts/build/prepare-yocto.sh` | Creates the build directories and generated configuration files |
+
+The checked-out
+[meta-openembedded recipe](../../../meta-openembedded/meta-oe/recipes-multimedia/mplayer/mpv_0.35.1.bb)
+builds mpv 0.35.1 with Waf. Its normal configuration builds the command-line
+player but does not enable the shared libmpv library needed by IoT App. The
+project's
+[`mpv_0.35.1.bbappend`](../../../meta-iot-app/recipes-multimedia/mpv/mpv_0.35.1.bbappend)
+enables shared libmpv and keeps the DRM, GBM, EGL, and OpenGL output options.
+The image installs and automatically loads the BCM2835 video-codec and V3D
+graphics kernel modules. It does not add X11, Wayland, audio, or Lua controls.
+The exact version in the append filename is intentional: a newer mpv recipe
+may use different configuration options and should be checked before the
+append is renamed. The upstream recipe declares mpv as GPL-2.0-or-later.
 
 The upstream Yocto layers are read-only dependencies. All project-specific
 behaviour remains in `meta-iot-app`.

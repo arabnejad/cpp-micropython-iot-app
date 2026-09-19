@@ -9,6 +9,7 @@ those files.
 | `iot-app-launcher` | `/usr/libexec/iot-app-launcher` | Runs the development executable from a mounted `/data`; otherwise runs `/usr/bin/iot_app` |
 | `iot-app-prepare-data-storage` | `/usr/libexec/iot-app-prepare-data-storage` | Prepares the optional persistent `/data` partition when it exists |
 | `iot-app-hide-tty1-cursor` | `/usr/libexec/iot-app-hide-tty1-cursor` | Hides the terminal cursor before the framebuffer dashboard starts |
+| `iot-app-check-video-playback` | `/usr/bin/iot-app-check-video-playback` | Tests the Raspberry Pi video path and reports hardware decoding and dropped frames |
 | `mosquitto.conf` | `/etc/mosquitto/mosquitto.conf` | Opens the development MQTT listener used by the sender |
 
 The Buildroot package and Yocto recipes install these files into their images.
@@ -20,16 +21,19 @@ Buildroot image uses a SysV script and BusyBox `mdev`; Yocto uses systemd and
 udev. Partition descriptions also remain separate because Buildroot uses
 genimage and Yocto uses Wic.
 
-The private Wi-Fi configuration remains at the repository root. Preparation
-commands copy it into the appropriate Buildroot or Yocto build input without
-adding it to this public directory.
+The private Wi-Fi configuration remains at the repository root. The Yocto
+preparation script copies it into the Yocto build directory. Buildroot's
+post-build script installs it directly into the target filesystem while the
+image is assembled. Neither path adds the private file to this public
+directory.
 
 ## Why the helpers use `/usr/libexec`
 
-The main program is installed as `/usr/bin/iot_app` because users may run it
-directly while diagnosing a problem. The files under `/usr/libexec` are small
-executable helpers called by startup scripts and systemd services. They are
-programs, not shared libraries, but users do not normally run them by hand.
+The main program and the video check are installed under `/usr/bin` because a
+user may run them directly while diagnosing a problem. The files under
+`/usr/libexec` are small executable helpers called by startup scripts and
+systemd services. They are programs, not shared libraries, but users do not
+normally run them by hand.
 
 The services use each helper's complete path, so the helpers do not need to be
 placed in the normal command search path. The GNU directory conventions
@@ -66,7 +70,9 @@ service.
 ## Private Wi-Fi configuration
 
 `wpa_supplicant.conf` remains at the repository root because it normally holds
-a real network name and password and is excluded from Git. The preparation
-targets, `make buildroot-prepare` and `make yocto-prepare`, copy it to the
-location expected by each build system. The public
-`wpa_supplicant.conf.example` file shows the required format.
+a real network name and password and is excluded from Git. `make wifi-prepare`
+creates it from the public example when it is missing. `make yocto-prepare`
+then copies it to the Yocto build directory. For Buildroot, `post-build.sh`
+installs the root copy in `/etc/wpa_supplicant.conf` inside the target
+filesystem during the image build. The public `wpa_supplicant.conf.example`
+file shows the required format.

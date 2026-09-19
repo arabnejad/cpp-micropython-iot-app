@@ -15,7 +15,8 @@ TEST(ScreenManagerImageTest, RejectsWidgetIdsAndReleasesCachedImagesWhenTheRende
   tests::writeTestJpegFile(jpegPath);
   auto          recordingRenderBackend     = std::make_unique<tests::RecordingRenderBackend>();
   auto         *recordingRenderBackendView = recordingRenderBackend.get();
-  ScreenManager screenManager(tests::testActiveDisplay(), std::move(recordingRenderBackend), 8U);
+  ScreenManager screenManager(tests::testActiveDisplay(), std::move(recordingRenderBackend), 8U,
+                              std::make_unique<tests::RecordingExclusiveVideoPlayer>());
   screenManager.start();
   const auto previousTextBoxId = screenManager.drawTextBox({{0, 0, 100, 40}, "Old renderer"});
   const auto previousImageId   = screenManager.drawJpegImage({jpegPath, 10, 20, 100U});
@@ -49,7 +50,8 @@ TEST(ScreenManagerImageTest, ClearReleasesWidgetIdsAndDecodedImagesFromThePrevio
   tests::writeTestJpegFile(jpegPath);
   auto          recordingRenderBackend     = std::make_unique<tests::RecordingRenderBackend>();
   auto         *recordingRenderBackendView = recordingRenderBackend.get();
-  ScreenManager screenManager(tests::testActiveDisplay(), std::move(recordingRenderBackend), 8U);
+  ScreenManager screenManager(tests::testActiveDisplay(), std::move(recordingRenderBackend), 8U,
+                              std::make_unique<tests::RecordingExclusiveVideoPlayer>());
   screenManager.start();
 
   const auto textBoxId = screenManager.drawTextBox({{0, 0, 100, 40}, "Previous screen"});
@@ -88,7 +90,8 @@ TEST(ScreenManagerImageTest, SendsNormalAndBackgroundJpegCommandsToTheRenderThre
 
   auto          recordingRenderBackend     = std::make_unique<tests::RecordingRenderBackend>();
   auto         *recordingRenderBackendView = recordingRenderBackend.get();
-  ScreenManager screenManager(tests::testActiveDisplay(), std::move(recordingRenderBackend), 16U);
+  ScreenManager screenManager(tests::testActiveDisplay(), std::move(recordingRenderBackend), 16U,
+                              std::make_unique<tests::RecordingExclusiveVideoPlayer>());
   screenManager.start();
 
   const WidgetId imageId = screenManager.drawJpegImage({firstJpegPath, 10, 20, 75U});
@@ -122,7 +125,8 @@ TEST(ScreenManagerImageTest, SendsNormalAndBackgroundJpegCommandsToTheRenderThre
 
 TEST(ScreenManagerImageTest, RejectsInvalidImageRequestsBeforeTheyReachTheRenderThread) {
   auto          recordingRenderBackend = std::make_unique<tests::RecordingRenderBackend>();
-  ScreenManager screenManager(tests::testActiveDisplay(), std::move(recordingRenderBackend), 4U);
+  ScreenManager screenManager(tests::testActiveDisplay(), std::move(recordingRenderBackend), 4U,
+                              std::make_unique<tests::RecordingExclusiveVideoPlayer>());
   screenManager.start();
 
   EXPECT_THROW(screenManager.drawJpegImage({"missing.jpg", 0, 0, 100U}), std::runtime_error);
@@ -142,7 +146,8 @@ TEST(ScreenManagerImageTest, FailedImageReplacementKeepsTheExistingWidgetAndBack
   tests::writeTestJpegFile(jpegPath);
   auto          recordingRenderBackend     = std::make_unique<tests::RecordingRenderBackend>();
   auto         *recordingRenderBackendView = recordingRenderBackend.get();
-  ScreenManager screenManager(tests::testActiveDisplay(), std::move(recordingRenderBackend), 8U);
+  ScreenManager screenManager(tests::testActiveDisplay(), std::move(recordingRenderBackend), 8U,
+                              std::make_unique<tests::RecordingExclusiveVideoPlayer>());
   screenManager.start();
   const auto textBoxId = screenManager.drawTextBox({{0, 0, 100, 40}, "Previous screen"});
   const auto imageId   = screenManager.drawJpegImage({jpegPath, 10, 20, 100U});
@@ -184,7 +189,8 @@ TEST(ScreenManagerImageTest, RejectedImageDeletionKeepsTheImageId) {
   tests::writeTestJpegFile(jpegPath);
   auto          pausedRenderBackend     = std::make_unique<tests::PausedRecordingRenderBackend>();
   auto         *pausedRenderBackendView = pausedRenderBackend.get();
-  ScreenManager screenManager(tests::testActiveDisplay(), std::move(pausedRenderBackend), 1U);
+  ScreenManager screenManager(tests::testActiveDisplay(), std::move(pausedRenderBackend), 1U,
+                              std::make_unique<tests::RecordingExclusiveVideoPlayer>());
   screenManager.start();
   const bool rendererPaused = pausedRenderBackendView->waitUntilRenderThreadIsPaused();
 
@@ -214,7 +220,8 @@ TEST(ScreenManagerImageTest, RejectsImageCommandsWhenTheRenderQueueIsFull) {
 
   auto          pausedRenderBackend     = std::make_unique<tests::PausedRecordingRenderBackend>();
   auto         *pausedRenderBackendView = pausedRenderBackend.get();
-  ScreenManager screenManager(tests::testActiveDisplay(), std::move(pausedRenderBackend), 1U);
+  ScreenManager screenManager(tests::testActiveDisplay(), std::move(pausedRenderBackend), 1U,
+                              std::make_unique<tests::RecordingExclusiveVideoPlayer>());
   screenManager.start();
   ASSERT_TRUE(pausedRenderBackendView->waitUntilRenderThreadIsPaused());
 
@@ -241,7 +248,8 @@ TEST(ScreenManagerImageTest, ProcessesAnImageDeletionQueuedBeforeTheImageHasBeen
   tests::writeTestJpegFile(jpegPath);
   auto          pausedRenderBackend     = std::make_unique<tests::PausedRecordingRenderBackend>();
   auto         *pausedRenderBackendView = pausedRenderBackend.get();
-  ScreenManager screenManager(tests::testActiveDisplay(), std::move(pausedRenderBackend), 8U);
+  ScreenManager screenManager(tests::testActiveDisplay(), std::move(pausedRenderBackend), 8U,
+                              std::make_unique<tests::RecordingExclusiveVideoPlayer>());
   screenManager.start();
   const bool rendererPaused     = pausedRenderBackendView->waitUntilRenderThreadIsPaused();
   WidgetId   deletedImageId     = 0U;

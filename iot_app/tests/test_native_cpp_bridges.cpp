@@ -29,6 +29,7 @@ TEST(NativeDisplayCppBridgeTest, ReturnsErrorsInsteadOfThrowingAcrossTheCMicroPy
   EXPECT_FALSE(iot_display_move_image(0U, 0, 0).succeeded);
   EXPECT_FALSE(iot_display_set_image_scale(0U, 100U).succeeded);
   EXPECT_FALSE(iot_display_delete_image(0U).succeeded);
+  EXPECT_FALSE(iot_display_play_video(nullptr).succeeded);
   EXPECT_FALSE(iot_display_set_background_image(nullptr, IOT_BACKGROUND_IMAGE_CENTER, 100U).succeeded);
   EXPECT_FALSE(iot_display_clear_background_image().succeeded);
   EXPECT_FALSE(iot_display_fill_area(0, 0, 10, 10, 0U, 0U, 0U).succeeded);

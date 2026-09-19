@@ -1,0 +1,148 @@
+#!/bin/sh
+
+# /bin/sh runs this file as a shell script. Both supplied images provide it:
+# BusyBox sh in Buildroot and the system shell in Yocto.
+#
+# Run the same decoder and renderer path used by IoT App, then show mpv's
+# hardware-decoder and dropped-frame results. IoT App selects a DRM device and
+# connector from its startup display scan. This standalone check lets mpv pick
+# them, so it may use a different monitor when more than one is connected.
+# Run it while IoT App is stopped and has released the monitor.
+#
+# A shell condition such as [ "$#" -lt 1 ] uses the [ command, which is another
+# spelling of test. It returns 0 when the condition is true and a non-zero value
+# when it is false. The surrounding if statement uses that return value.
+
+# $# is the number of command-line arguments. This script requires one argument
+# for the video path and accepts one optional argument for the display mode.
+# -lt means "less than", -gt means "greater than", and || means "or". The error
+# is therefore shown when the argument count is below 1 or above 2.
+if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
+	# $0 is the command used to start this script. >&2 sends these messages to
+	# standard error instead of normal standard output.
+	echo "Usage: $0 VIDEO_FILE [DISPLAY_MODE]" >&2
+	echo "Example: $0 /data/iot-app/videos/demo.mp4 1920x1080@60" >&2
+
+	# Exit code 2 means that the command-line arguments were not valid.
+	exit 2
+fi
+
+# $1 is the first argument, which must be the path to the video file.
+video_file="$1"
+
+# ${2:-1920x1080@60} uses the second argument when one was supplied and is not
+# empty. Otherwise, it uses 1920x1080 at 60 Hz as the default display mode.
+display_mode="${2:-1920x1080@60}"
+
+# -f is true only when the path exists and is a normal file. ! reverses that
+# result, so this block rejects a missing path, directory, or device file.
+if [ ! -f "$video_file" ]; then
+	echo "Video file does not exist or is not a normal file: $video_file" >&2
+	# Exit code 1 reports a runtime check that failed, rather than bad command
+	# syntax.
+	exit 1
+fi
+
+# -r is true when the current user has permission to read the file. A normal
+# file is not useful to mpv if its permissions prevent the file being opened.
+if [ ! -r "$video_file" ]; then
+	echo "Video file cannot be read: $video_file" >&2
+	exit 1
+fi
+
+# command -v searches for an executable named mpv in PATH. ! enters the error
+# block when no mpv command is found. >/dev/null discards its normal output and
+# 2>&1 sends any error output to the same place, keeping this check quiet.
+if ! command -v mpv >/dev/null 2>&1; then
+	echo "mpv is not installed in this image" >&2
+	exit 1
+fi
+
+# Shell variables do not have a separate Boolean type, so this script stores
+# the words false and true and compares them later.
+iot_app_is_running=false
+
+# Yocto uses systemd. First check whether systemctl exists, then ask it whether
+# iot-app.service is active. && means both commands must succeed. --quiet stops
+# systemctl from printing a status message because only its return value is
+# needed here.
+if command -v systemctl >/dev/null 2>&1 &&
+	systemctl is-active --quiet iot-app.service; then
+	iot_app_is_running=true
+
+# Buildroot uses BusyBox init instead of systemd. Its startup script records the
+# process ID in /var/run/iot_app.pid. -r checks that the file can be read.
+# $(cat ...) reads the stored PID. kill -0 does not stop the process; it only
+# checks whether that PID still exists and can be signalled. 2>/dev/null hides
+# the error message produced for a stale PID file.
+elif [ -r /var/run/iot_app.pid ] &&
+	kill -0 "$(cat /var/run/iot_app.pid)" 2>/dev/null; then
+	iot_app_is_running=true
+fi
+
+# = compares two text values inside the [ command. mpv must not start while IoT
+# App owns the monitor, so report the correct stop command for each image.
+if [ "$iot_app_is_running" = true ]; then
+	echo "Stop IoT App before running this check so mpv can use the monitor." >&2
+	echo "Buildroot: /etc/init.d/iot-app stop" >&2
+	echo "Yocto:    systemctl stop iot-app" >&2
+	exit 1
+fi
+
+# v4l2m2m-copy was the best-performing decoder mode in the Raspberry Pi 4
+# test. It reported hardware decoding and no dropped frames for the 1080p
+# H.264 sample. Check the modes available in another mpv build with:
+#
+#   mpv --no-config --hwdec=help
+#
+# Use options supported by both mpv 0.35.1 in Yocto and mpv 0.40.0 in
+# Buildroot. The named fast profile is not available in mpv 0.35.1.
+#
+# exec replaces this small shell process with mpv instead of leaving an extra
+# shell waiting in the background. The script therefore finishes with the same
+# exit code that mpv returns. A backslash at the end of a line tells the shell
+# that the command continues on the next line.
+#
+# The mpv options mean:
+#
+#   --no-config
+#       ignores user configuration files, so the test always uses these options
+#   --fullscreen
+#       fills the selected monitor with the video
+#   --audio=no
+#       disables audio because this check measures video playback
+#   --vo=gpu
+#       uses mpv's GPU video-output driver
+#   --gpu-api=opengl
+#       asks that video-output driver to render through OpenGL
+#   --gpu-context=drm
+#       sends the output directly through Linux Direct Rendering Manager rather
+#       than through a desktop window system
+#   --hwdec=v4l2m2m-copy
+#       decodes supported video with the Raspberry Pi video hardware, then
+#       copies the decoded frame into memory that the OpenGL renderer can use
+#   --scale=bilinear
+#       uses simple bilinear filtering when a video is enlarged
+#   --dscale=bilinear
+#       uses the same filtering method when a video is reduced
+#   --drm-mode
+#       requests the chosen monitor resolution and refresh rate
+#   --term-status-msg
+#       prints the selected decoder and dropped-frame counters in the terminal
+#
+# The status message uses single quotes so the shell passes ${...} to mpv
+# unchanged. mpv, rather than the shell, replaces those properties while the
+# video is playing. The final argument is the video file to open.
+exec mpv \
+	--no-config \
+	--fullscreen \
+	--audio=no \
+	--vo=gpu \
+	--gpu-api=opengl \
+	--gpu-context=drm \
+	--hwdec=v4l2m2m-copy \
+	--scale=bilinear \
+	--dscale=bilinear \
+	--drm-mode="$display_mode" \
+	--term-status-msg='HWDEC=${hwdec-current} | VO dropped=${frame-drop-count} | Decoder dropped=${decoder-frame-drop-count}' \
+	"$video_file"

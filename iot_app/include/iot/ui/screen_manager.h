@@ -20,6 +20,10 @@
 #include <unordered_set>
 
 namespace iot {
+namespace video {
+class IExclusiveVideoPlayer;
+}
+
 namespace ui {
 
 namespace internal {
@@ -52,7 +56,7 @@ class JpegImageLoader;
 class ScreenManager {
 public:
   ScreenManager(display::ActiveDisplay activeDisplay, std::unique_ptr<IRenderBackend> renderBackend,
-                std::size_t maximumPendingCommands);
+                std::size_t maximumPendingCommands, std::unique_ptr<video::IExclusiveVideoPlayer> exclusiveVideoPlayer);
   ~ScreenManager();
 
   // Owns the backend, render thread, and queue; copying and moving are disabled.
@@ -77,6 +81,8 @@ public:
   void     moveJpegImage(WidgetId imageId, std::int32_t x, std::int32_t y);
   void     setJpegImageScale(WidgetId imageId, std::uint16_t scalePercent);
   void     deleteJpegImage(WidgetId imageId);
+  /* Gives the display to mpv until the video ends or application shutdown interrupts it. */
+  void playExclusiveVideoAndWait(const std::filesystem::path &videoFilePath);
   /* Decodes a JPEG and places it behind the other widgets. */
   void setBackgroundJpegImage(const BackgroundJpegImageSpec &backgroundJpegImageSpec);
   void clearBackgroundJpegImage();
@@ -123,11 +129,12 @@ private:
   static void           validateImageScalePercent(std::uint16_t scalePercent);
   JpegImageSourceState &findJpegImageSourceState(WidgetId imageId);
 
-  logging::Logger                            m_logger{"ScreenManager"};
-  display::ActiveDisplay                     m_activeDisplay;
-  std::unique_ptr<IRenderBackend>            m_renderBackend;
-  const std::size_t                          m_maximumPendingCommands;
-  std::unique_ptr<internal::JpegImageLoader> m_jpegImageLoader;
+  logging::Logger                               m_logger{"ScreenManager"};
+  display::ActiveDisplay                        m_activeDisplay;
+  std::unique_ptr<IRenderBackend>               m_renderBackend;
+  const std::size_t                             m_maximumPendingCommands;
+  std::unique_ptr<internal::JpegImageLoader>    m_jpegImageLoader;
+  std::unique_ptr<video::IExclusiveVideoPlayer> m_exclusiveVideoPlayer;
   // Widget creation is requested only by the main/MicroPython thread.
   WidgetId m_nextWidgetId{1U};
   // Includes queued text boxes. Deletion or clearing invalidates IDs immediately.

@@ -27,17 +27,26 @@ ENABLE_I2C = "1"
 # Load the I2C character-device driver and the Raspberry Pi Wi-Fi driver during
 # boot. The image contains only selected kernel modules, so these drivers are
 # listed explicitly rather than relying on the complete kernel-modules package.
-KERNEL_MODULE_AUTOLOAD:rpi += "brcmfmac i2c-dev"
+KERNEL_MODULE_AUTOLOAD:rpi += "brcmfmac i2c-dev bcm2835-codec v3d"
 
 # meta-raspberrypi marks the Raspberry Pi Wi-Fi firmware with this license
 # flag. Accepting it allows the image to include the firmware needed by wlan0.
 LICENSE_FLAGS_ACCEPTED += "synaptics-killswitch"
 
+# Poky's Scarthgap FFmpeg recipe sets LICENSE_FLAGS = "commercial". BitBake
+# requires a matching accepted flag before it will include that recipe. mpv
+# needs FFmpeg, so this development image accepts the flag. This setting only
+# enables the build; it does not grant new redistribution rights.
+# Recipe: https://github.com/yoctoproject/poky/blob/scarthgap/meta/recipes-multimedia/ffmpeg/ffmpeg_6.1.4.bb#L18
+# Yocto guide: https://docs.yoctoproject.org/scarthgap/dev-manual/licenses.html#enabling-commercially-licensed-recipes
+LICENSE_FLAGS_ACCEPTED += "commercial"
+
 # IoT App uses the existing framebuffer mode and does not change resolution at
-# runtime. Linux creates a 1920x1080 framebuffer during boot. quiet and
-# loglevel=4 keep normal kernel messages from being printed over the dashboard.
-# The messages are still available through dmesg and journalctl.
-CMDLINE:append = " quiet loglevel=4 video=HDMI-A-1:1920x1080@60"
+# runtime. Set both Raspberry Pi HDMI connectors so the selected mode does not
+# depend on which physical HDMI port is used. quiet and loglevel=4 keep normal
+# kernel messages from being printed over the dashboard. The messages are
+# still available through dmesg and journalctl.
+CMDLINE:append = " quiet loglevel=4 video=HDMI-A-1:1920x1080@60 video=HDMI-A-2:1920x1080@60"
 
 RPI_EXTRA_CONFIG:append = " \
 \n disable_overscan=1 \

@@ -18,7 +18,8 @@ bool waitForTextBox(tests::RecordingRenderBackend &recordingRenderBackend, Widge
 TEST(ScreenManagerTextBoxTest, SendsTextBoxCreationAndUpdatesToTheRenderThread) {
   auto          recordingRenderBackend     = std::make_unique<tests::RecordingRenderBackend>();
   auto         *recordingRenderBackendView = recordingRenderBackend.get();
-  ScreenManager screenManager(tests::testActiveDisplay(), std::move(recordingRenderBackend), 16U);
+  ScreenManager screenManager(tests::testActiveDisplay(), std::move(recordingRenderBackend), 16U,
+                              std::make_unique<tests::RecordingExclusiveVideoPlayer>());
   screenManager.start();
 
   TextBoxSpec textBoxSpecification;
@@ -49,7 +50,8 @@ TEST(ScreenManagerTextBoxTest, SendsTextBoxCreationAndUpdatesToTheRenderThread) 
 TEST(ScreenManagerTextBoxTest, RejectsInvalidTextBoxIdsAndSizesBeforeTheyReachTheRenderer) {
   auto          recordingRenderBackend     = std::make_unique<tests::RecordingRenderBackend>();
   auto         *recordingRenderBackendView = recordingRenderBackend.get();
-  ScreenManager screenManager(tests::testActiveDisplay(), std::move(recordingRenderBackend), 16U);
+  ScreenManager screenManager(tests::testActiveDisplay(), std::move(recordingRenderBackend), 16U,
+                              std::make_unique<tests::RecordingExclusiveVideoPlayer>());
   screenManager.start();
 
   // Bad requests must not remove an existing text box. Negative positions
@@ -79,7 +81,8 @@ TEST(ScreenManagerTextBoxTest, RejectsInvalidTextBoxIdsAndSizesBeforeTheyReachTh
 TEST(ScreenManagerTextBoxTest, UpdatesMovesAndDeletesATextBoxBeforeItsCreationIsRendered) {
   auto          pausedRenderBackend     = std::make_unique<tests::PausedRecordingRenderBackend>();
   auto         *pausedRenderBackendView = pausedRenderBackend.get();
-  ScreenManager screenManager(tests::testActiveDisplay(), std::move(pausedRenderBackend), 8U);
+  ScreenManager screenManager(tests::testActiveDisplay(), std::move(pausedRenderBackend), 8U,
+                              std::make_unique<tests::RecordingExclusiveVideoPlayer>());
   screenManager.start();
   const bool rendererPaused = pausedRenderBackendView->waitUntilRenderThreadIsPaused();
 
@@ -108,7 +111,8 @@ TEST(ScreenManagerTextBoxTest, UpdatesMovesAndDeletesATextBoxBeforeItsCreationIs
 TEST(ScreenManagerTextBoxTest, ClearAndEmergencyScreenInvalidateTextBoxIdsWhoseCreationWasStillQueued) {
   auto          pausedRenderBackend     = std::make_unique<tests::PausedRecordingRenderBackend>();
   auto         *pausedRenderBackendView = pausedRenderBackend.get();
-  ScreenManager screenManager(tests::testActiveDisplay(), std::move(pausedRenderBackend), 8U);
+  ScreenManager screenManager(tests::testActiveDisplay(), std::move(pausedRenderBackend), 8U,
+                              std::make_unique<tests::RecordingExclusiveVideoPlayer>());
   screenManager.start();
   const bool rendererPaused = pausedRenderBackendView->waitUntilRenderThreadIsPaused();
 
@@ -139,7 +143,8 @@ TEST(ScreenManagerTextBoxTest, ClearAndEmergencyScreenInvalidateTextBoxIdsWhoseC
 TEST(ScreenManagerTextBoxTest, RejectedCreationLeavesNoTextBoxIdAndRejectedDeletionKeepsTheExistingId) {
   auto          pausedRenderBackend     = std::make_unique<tests::PausedRecordingRenderBackend>();
   auto         *pausedRenderBackendView = pausedRenderBackend.get();
-  ScreenManager screenManager(tests::testActiveDisplay(), std::move(pausedRenderBackend), 1U);
+  ScreenManager screenManager(tests::testActiveDisplay(), std::move(pausedRenderBackend), 1U,
+                              std::make_unique<tests::RecordingExclusiveVideoPlayer>());
   screenManager.start();
   const bool rendererPaused = pausedRenderBackendView->waitUntilRenderThreadIsPaused();
 
@@ -166,7 +171,8 @@ TEST(ScreenManagerTextBoxTest, RejectedCreationLeavesNoTextBoxIdAndRejectedDelet
 TEST(ScreenManagerTextBoxTest, SendsFillDeleteClearAndEmergencyScreenCommandsToTheRenderThread) {
   auto          recordingRenderBackend     = std::make_unique<tests::RecordingRenderBackend>();
   auto         *recordingRenderBackendView = recordingRenderBackend.get();
-  ScreenManager screenManager(tests::testActiveDisplay(), std::move(recordingRenderBackend), 16U);
+  ScreenManager screenManager(tests::testActiveDisplay(), std::move(recordingRenderBackend), 16U,
+                              std::make_unique<tests::RecordingExclusiveVideoPlayer>());
   screenManager.start();
 
   const WidgetId textBoxId = screenManager.drawTextBox({{0, 0, 100, 40}, "Temporary"});

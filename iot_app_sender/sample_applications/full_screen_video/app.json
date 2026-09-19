@@ -1,0 +1,5 @@
+{
+  "id": "full-screen-video",
+  "name": "Full-screen video",
+  "entry_point": "main.py"
+}

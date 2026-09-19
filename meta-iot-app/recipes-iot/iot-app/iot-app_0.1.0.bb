@@ -22,9 +22,9 @@ LIC_FILES_CHKSUM = "file://LICENSE;md5=b2a551156d047ff7f73d0c43858d552a"
 
 inherit cmake pkgconfig systemd useradd externalsrc
 
-# Let file:// entries use the launcher and cursor helper shared with Buildroot.
-# The Yocto-specific systemd unit and udev rules still come from this recipe's
-# files directory through BitBake's normal search path.
+# Let file:// entries use the launcher and command-line helpers shared with
+# Buildroot. The Yocto-specific systemd unit and udev rules still come from
+# this recipe's files directory through BitBake's normal search path.
 FILESEXTRAPATHS:prepend := "${IOT_APP_PROJECT_ROOT}/iot_app/image_support:"
 
 # Build the source already checked out beside this layer. The root repository
@@ -34,9 +34,9 @@ EXTERNALSRC = "${IOT_APP_PROJECT_ROOT}"
 EXTERNALSRC_BUILD = "${WORKDIR}/build"
 OECMAKE_SOURCEPATH = "${S}/iot_app"
 
-# curl provides HTTP and HTTPS downloads. libjpeg-turbo provides the TurboJPEG
-# API used to decode and reduce JPEG images before they reach LVGL.
-DEPENDS = "cjson curl libdrm libjpeg-turbo mosquitto openssl python3-native"
+# curl provides downloads, libjpeg-turbo decodes JPEG files, and mpv provides
+# hardware-assisted full-screen video playback through DRM and OpenGL.
+DEPENDS = "cjson curl libdrm libjpeg-turbo mosquitto mpv openssl python3-native"
 
 EXTRA_OECMAKE = " \
     -DLVGL_DIR=${S}/lvgl \
@@ -48,8 +48,12 @@ SRC_URI = " \
     file://iot-app-launcher \
     file://iot-app.service \
     file://iot-app-hide-tty1-cursor \
+    file://iot-app-check-video-playback \
     file://70-iot-app-access.rules \
 "
+
+# The check script runs mpv from the command line on the target device.
+RDEPENDS:${PN} += "mpv"
 
 SYSTEMD_SERVICE:${PN} = "iot-app.service"
 SYSTEMD_AUTO_ENABLE:${PN} = "enable"
@@ -65,6 +69,8 @@ do_install:append() {
         "${D}${libexecdir}/iot-app-launcher"
     install -D -m 0755 "${WORKDIR}/iot-app-hide-tty1-cursor" \
         "${D}${libexecdir}/iot-app-hide-tty1-cursor"
+    install -D -m 0755 "${WORKDIR}/iot-app-check-video-playback" \
+        "${D}${bindir}/iot-app-check-video-playback"
     install -D -m 0644 "${WORKDIR}/iot-app.service" \
         "${D}${systemd_system_unitdir}/iot-app.service"
     install -D -m 0644 "${WORKDIR}/70-iot-app-access.rules" \
@@ -74,6 +80,7 @@ do_install:append() {
 FILES:${PN} += " \
     ${libexecdir}/iot-app-launcher \
     ${libexecdir}/iot-app-hide-tty1-cursor \
+    ${bindir}/iot-app-check-video-playback \
     ${systemd_system_unitdir}/iot-app.service \
     ${nonarch_base_libdir}/udev/rules.d/70-iot-app-access.rules \
 "

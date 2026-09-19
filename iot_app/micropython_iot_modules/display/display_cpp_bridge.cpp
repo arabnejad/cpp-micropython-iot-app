@@ -174,6 +174,15 @@ extern "C" iot_native_result_t iot_display_delete_image(uint64_t widget_id) {
   });
 }
 
+extern "C" iot_native_result_t iot_display_play_video(const char *file_path) {
+  return nativeBridgeErrorHandler.runSafely([=] {
+    if (file_path == nullptr) {
+      throw std::invalid_argument("Video file path is required");
+    }
+    context().screenManager().playExclusiveVideoAndWait(file_path);
+  });
+}
+
 extern "C" iot_native_result_t iot_display_set_background_image(const char *file_path, iot_background_image_mode_t mode,
                                                                 uint16_t scale_percent) {
   return nativeBridgeErrorHandler.runSafely([=] {

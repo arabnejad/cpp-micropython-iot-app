@@ -1,20 +1,55 @@
 # Project-owned Raspberry Pi 4 Model B firmware configuration.
+#
+# The Raspberry Pi firmware reads this file from the boot partition before it
+# starts Linux. Each active line has the form name=value. A value of 1 usually
+# means enabled. The Device Tree is the hardware description passed to Linux;
+# dtoverlay and dtparam lines change that description before Linux starts.
+#
+# Raspberry Pi config.txt reference:
+# https://www.raspberrypi.com/documentation/computers/config_txt.html
 
+# start_file selects the VideoCore firmware loaded before Linux. start4.elf is
+# the normal firmware for the Raspberry Pi 4 family.
 start_file=start4.elf
+
+# fixup_file adjusts the firmware's memory layout. fixup4.dat is the required
+# matching partner for start4.elf; mixing files from different pairs can stop
+# the board from booting.
 fixup_file=fixup4.dat
+
+# kernel gives the exact Linux kernel filename on the boot partition. Buildroot
+# installs its uncompressed 64-bit kernel under the name Image.
 kernel=Image
+
+# A value of 1 starts the Arm CPU and Linux kernel in 64-bit mode. This matches
+# the aarch64 toolchain and userspace selected by iot_rpi4_defconfig.
 arm_64bit=1
 
-# Use the full HDMI image without overscan borders.
+# Overscan adds a border for old displays which hide the edge of the picture.
+# Setting disable_overscan to 1 turns that adjustment off, allowing the HDMI
+# image to use the full monitor area.
 disable_overscan=1
 
-# Enable the full KMS driver used for display discovery and /dev/fb0.
+# dtoverlay loads a named Device Tree overlay. vc4-kms-v3d enables the Raspberry
+# Pi's full Linux display driver. Linux can then discover monitors, choose a
+# display mode, and use the V3D graphics hardware. The kernel's framebuffer
+# support also provides /dev/fb0 for LVGL.
 dtoverlay=vc4-kms-v3d
+
+# Allow firmware to create at most two framebuffers because Raspberry Pi 4 has
+# two HDMI outputs. This value does not claim that two monitors are connected
+# and does not force two framebuffer devices to be created.
 max_framebuffers=2
 
-# Enable the serial console used during image bring-up.
+# Move Bluetooth to the mini UART and make the stable PL011 hardware serial
+# controller available as ttyAMA0. This file only selects the UART routing;
+# cmdline.txt separately asks Linux to use ttyAMA0 at 115200 baud as a serial
+# console.
 dtoverlay=miniuart-bt
 
-# Enable /dev/i2c-1 at the 400 kHz rate recommended for the Adafruit gamepad.
+# dtparam changes parameters provided by the Raspberry Pi Device Tree.
+# i2c_arm=on enables the Arm-side I2C controller, which Linux exposes as
+# /dev/i2c-1 on Raspberry Pi 4. i2c_arm_baudrate=400000 selects the 400,000
+# bits-per-second I2C fast-mode clock used by the Adafruit gamepad.
 # https://learn.adafruit.com/gamepad-qt/circuitpython-and-python
 dtparam=i2c_arm=on,i2c_arm_baudrate=400000

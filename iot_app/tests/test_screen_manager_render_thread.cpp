@@ -104,7 +104,8 @@ private:
 TEST(ScreenManagerRenderThreadTest, ProcessesBackendEventsBetweenRenderCommandBatches) {
   auto          renderBackend     = std::make_unique<RenderBatchObservationBackend>();
   auto         *renderBackendView = renderBackend.get();
-  ScreenManager screenManager(tests::testActiveDisplay(), std::move(renderBackend), 32U);
+  ScreenManager screenManager(tests::testActiveDisplay(), std::move(renderBackend), 32U,
+                              std::make_unique<tests::RecordingExclusiveVideoPlayer>());
   screenManager.start();
   const bool firstEventProcessingCallStarted = renderBackendView->waitUntilFirstEventProcessingCallStarts();
 
@@ -125,20 +126,28 @@ TEST(ScreenManagerRenderThreadTest, ProcessesBackendEventsBetweenRenderCommandBa
 
 TEST(ScreenManagerRenderThreadTest, RejectsDrawingBeforeTheRenderThreadStarts) {
   auto          recordingRenderBackend = std::make_unique<tests::RecordingRenderBackend>();
-  ScreenManager screenManager(tests::testActiveDisplay(), std::move(recordingRenderBackend), 1U);
+  ScreenManager screenManager(tests::testActiveDisplay(), std::move(recordingRenderBackend), 1U,
+                              std::make_unique<tests::RecordingExclusiveVideoPlayer>());
 
   EXPECT_THROW(screenManager.drawTextBox({{0, 0, 100, 40}, "Not started"}), std::logic_error);
 }
 
 TEST(ScreenManagerRenderThreadTest, RequiresABackendAndANonZeroCommandLimit) {
-  EXPECT_THROW(ScreenManager(tests::testActiveDisplay(), nullptr, 1U), std::invalid_argument);
-  EXPECT_THROW(ScreenManager(tests::testActiveDisplay(), std::make_unique<tests::RecordingRenderBackend>(), 0U),
+  EXPECT_THROW(
+      ScreenManager(tests::testActiveDisplay(), nullptr, 1U, std::make_unique<tests::RecordingExclusiveVideoPlayer>()),
+      std::invalid_argument);
+  EXPECT_THROW(ScreenManager(tests::testActiveDisplay(), std::make_unique<tests::RecordingRenderBackend>(), 0U,
+                             std::make_unique<tests::RecordingExclusiveVideoPlayer>()),
                std::invalid_argument);
+  EXPECT_THROW(
+      ScreenManager(tests::testActiveDisplay(), std::make_unique<tests::RecordingRenderBackend>(), 1U, nullptr),
+      std::invalid_argument);
 }
 
 TEST(ScreenManagerRenderThreadTest, LetsStartAndStopBeCalledMoreThanOnce) {
   auto          recordingRenderBackend = std::make_unique<tests::RecordingRenderBackend>();
-  ScreenManager screenManager(tests::testActiveDisplay(), std::move(recordingRenderBackend), 2U);
+  ScreenManager screenManager(tests::testActiveDisplay(), std::move(recordingRenderBackend), 2U,
+                              std::make_unique<tests::RecordingExclusiveVideoPlayer>());
   screenManager.start();
   EXPECT_NO_THROW(screenManager.start());
   screenManager.stop();
@@ -146,12 +155,14 @@ TEST(ScreenManagerRenderThreadTest, LetsStartAndStopBeCalledMoreThanOnce) {
 }
 
 TEST(ScreenManagerRenderThreadTest, ReportsRenderBackendInitializationFailure) {
-  ScreenManager screenManager(tests::testActiveDisplay(), std::make_unique<FailingRenderBackend>(true), 2U);
+  ScreenManager screenManager(tests::testActiveDisplay(), std::make_unique<FailingRenderBackend>(true), 2U,
+                              std::make_unique<tests::RecordingExclusiveVideoPlayer>());
   EXPECT_THROW(screenManager.start(), std::runtime_error);
 }
 
 TEST(ScreenManagerRenderThreadTest, ReportsRenderBackendDrawingFailure) {
-  ScreenManager screenManager(tests::testActiveDisplay(), std::make_unique<FailingRenderBackend>(false), 2U);
+  ScreenManager screenManager(tests::testActiveDisplay(), std::make_unique<FailingRenderBackend>(false), 2U,
+                              std::make_unique<tests::RecordingExclusiveVideoPlayer>());
   screenManager.start();
   screenManager.drawTextBox({{0, 0, 10, 10}, "draw"});
 

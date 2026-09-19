@@ -34,6 +34,7 @@ recovery use one authoritative copy.
 | `countdown_timer` | Controls a countdown with the gamepad | 50 ms and 1000 ms | Adafruit I2C gamepad |
 | `system_information_carousel` | Rotates through operating-system information | 1000 ms and 5000 ms | None |
 | `downloaded_jpeg_gallery` | Downloads verified JPEG files and rotates the screen background | 5000 ms | Internet access |
+| `full_screen_video` | Plays a local H.264 MP4 with hardware-assisted full-screen output | None | Video copied to `/data` |
 | `scheduled_callback_failure` | Shows the emergency screen when a scheduled callback fails | 100 ms | None |
 | `traceback_failure` | Raises an import error during startup and displays its traceback | None | None |
 | `joystick_visualizer` | Shows live joystick movement with text bars | 50 ms | Adafruit I2C gamepad |

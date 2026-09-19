@@ -28,6 +28,7 @@ add_custom_target(coverage
     --filter "${PROJECT_SOURCE_DIR}/micropython_iot_modules"
     --exclude "${PROJECT_SOURCE_DIR}/src/runtime/main.cpp"
     --exclude "${PROJECT_SOURCE_DIR}/src/messaging/mqtt_client_api.cpp"
+    --exclude "${PROJECT_SOURCE_DIR}/src/video/mpv_exclusive_video_player.cpp"
     # This threshold applies to the combined result, not to every source file.
     --fail-under-line 90
     --print-summary

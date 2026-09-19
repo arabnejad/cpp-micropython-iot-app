@@ -27,8 +27,10 @@ IMAGE_INSTALL:append = " \
     iot-app-system-config \
     i2c-tools \
     iproute2 \
+    kernel-module-bcm2835-codec \
     kernel-module-brcmfmac \
     kernel-module-brcmfmac-wcc \
+    kernel-module-v3d \
     linux-firmware-rpidistro-bcm43455 \
     linux-firmware-rpidistro-bcm43456 \
     mosquitto \

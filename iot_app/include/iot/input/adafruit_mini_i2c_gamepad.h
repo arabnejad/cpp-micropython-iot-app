@@ -20,9 +20,10 @@ namespace input {
  */
 class AdafruitMiniI2cGamepad : public GameController {
 public:
-  /* Opens the gamepad through Linux I2C. */
+  /* Production code uses this constructor to open the real gamepad through Linux I2C. */
   AdafruitMiniI2cGamepad(int i2cBusNumber, std::uint8_t i2cAddress);
-  /* Uses the supplied I2C implementation. */
+
+  /* Unit tests use this constructor to supply a fake I2C device. */
   AdafruitMiniI2cGamepad(std::unique_ptr<hardware::II2cDevice> gamepadI2cDevice);
   ~AdafruitMiniI2cGamepad() override = default;
 

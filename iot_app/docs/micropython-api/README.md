@@ -18,7 +18,7 @@ The public modules are:
 
 | Module | What it provides |
 |---|---|
-| `iot.display` | Screen size, monitor details, text boxes, filled areas, and JPEG images |
+| `iot.display` | Screen size, monitor details, text boxes, filled areas, JPEG images, and full-screen video |
 | `iot.input` | The Adafruit Mini I2C STEMMA QT Gamepad driver |
 | `iot.network` | HTTP and HTTPS downloads with size, timeout, and optional SHA-256 checks |
 | `iot.scheduler` | Repeating callbacks for live applications |
@@ -359,6 +359,54 @@ The modes work as follows:
 
 `display.clear_background_image()` removes only the background image. Other
 widgets remain on screen.
+
+### `display.play_video()`
+
+```python
+from iot import display
+
+display.play_video("/data/iot-app/videos/demo.mp4")
+
+# The old screen was removed while mpv owned the monitor. Draw it again after
+# playback returns.
+display.clear(color=(8, 13, 22))
+display.draw_text_box(40, 40, 600, 100, "Video finished")
+```
+
+Plays one local video full-screen and returns after it finishes. H.264 video
+in an MP4 container is the format this project tests and supports on the
+Raspberry Pi 4. libmpv may open other formats, but IoT App does not guarantee
+them. Audio is not played.
+
+The `path` argument must point to a normal local file that the `iot-app` user
+can read. To play a file from the internet, download it first with
+`network.download_file()` and pass the returned path. That downloader accepts
+files up to 10 MiB. A larger video can be copied to persistent storage such as
+`/data/iot-app/videos/`.
+
+Video uses the same monitor and mode that IoT App selected during startup.
+Before playback, `ScreenManager` stops the LVGL render thread and closes the
+framebuffer. libmpv can then use OpenGL and DRM without competing with LVGL.
+When playback ends, IoT App reopens the framebuffer and starts the render
+thread again.
+
+Stopping LVGL removes the current widgets and decoded JPEG cache. Text-box and
+image IDs created before `play_video()` must not be used afterwards. Draw the
+next screen after the function returns. Those IDs referred to LVGL objects
+that were destroyed when the framebuffer closed, so clearing them is safer
+than keeping IDs which no longer point to a valid widget.
+
+The call is synchronous. Scheduled Python callbacks and received application
+processing wait until the video ends. The MQTT network thread can still receive
+and queue a deployment message during that time. Stopping the IoT App process
+interrupts playback, so a long file does not delay service shutdown.
+
+If playback fails, IoT App reopens the framebuffer and raises `RuntimeError`.
+When mpv provides an error message, the exception includes up to 1 KiB of that
+detail. This can help explain problems such as an unsupported video or a file
+which mpv cannot read. Python may catch the error and draw another screen. An
+unhandled error follows the normal application-failure path and shows the
+emergency screen.
 
 ### `display.fill_area()`
 

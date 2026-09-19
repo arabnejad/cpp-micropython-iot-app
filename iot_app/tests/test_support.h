@@ -4,6 +4,7 @@
 #include "iot/network/ifile_downloader.h"
 #include "iot/system/system_information.h"
 #include "iot/ui/render_backend.h"
+#include "iot/video/iexclusive_video_player.h"
 
 #include <chrono>
 #include <condition_variable>
@@ -97,7 +98,9 @@ private:
 class RecordingRenderBackend : public ui::IRenderBackend {
 public:
   void initialize(const display::ActiveDisplay &) override {
-    wasInitialized = true;
+    std::lock_guard<std::mutex> lock(renderStateMutex);
+    isInitialized = true;
+    ++numberOfInitializeCalls;
   }
   void shutdown() noexcept override {
     std::lock_guard<std::mutex> lock(renderStateMutex);
@@ -106,6 +109,8 @@ public:
     backgroundJpegImage.reset();
     lastErrorScreenText.clear();
     shutdownWasCalled = true;
+    isInitialized     = false;
+    ++numberOfShutdownCalls;
   }
   void createTextBox(ui::WidgetId textBoxId, const ui::TextBoxSpec &textBoxSpec) override {
     std::lock_guard<std::mutex> lock(renderStateMutex);
@@ -171,14 +176,39 @@ public:
     return 1U;
   }
 
-  bool                                              wasInitialized{false};
   bool                                              shutdownWasCalled{false};
+  bool                                              isInitialized{false};
+  std::size_t                                       numberOfInitializeCalls{0U};
+  std::size_t                                       numberOfShutdownCalls{0U};
   std::mutex                                        renderStateMutex;
   std::map<ui::WidgetId, ui::TextBoxSpec>           textBoxesById;
   std::map<ui::WidgetId, ui::DecodedJpegImageSpec>  jpegImagesById;
   std::optional<ui::DecodedBackgroundJpegImageSpec> backgroundJpegImage;
   std::vector<ui::FilledAreaSpec>                   drawnAreas;
   std::string                                       lastErrorScreenText;
+};
+
+/* Records a video request without opening the display or decoding a file. */
+class RecordingExclusiveVideoPlayer final : public video::IExclusiveVideoPlayer {
+public:
+  void playVideoAndWait(const std::filesystem::path  &videoFilePath,
+                        const display::ActiveDisplay &activeDisplay) override {
+    ++numberOfPlaybackCalls;
+    lastVideoFilePath = videoFilePath;
+    lastActiveDisplay = activeDisplay;
+    if (actionWhenPlaybackStarts) {
+      actionWhenPlaybackStarts();
+    }
+    if (!playbackErrorMessage.empty()) {
+      throw std::runtime_error(playbackErrorMessage);
+    }
+  }
+
+  std::size_t                           numberOfPlaybackCalls{0U};
+  std::filesystem::path                 lastVideoFilePath;
+  std::optional<display::ActiveDisplay> lastActiveDisplay;
+  std::string                           playbackErrorMessage;
+  std::function<void()>                 actionWhenPlaybackStarts;
 };
 
 /* Keeps the render thread busy so a test can fill its command queue. */

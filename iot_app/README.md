@@ -96,13 +96,15 @@ src/network/                Bounded HTTP and HTTPS file downloads
 src/platform/linux/         Linux display, I2C, and system-information support
 src/python/                 Embedded interpreter and MicroPython application context
 src/ui/                     Process-wide screen manager and LVGL framebuffer backend
+src/video/                  Full-screen libmpv playback on the selected monitor
 src/runtime/                Executable entry point and runtime lifecycle
 ```
 
 The CMake build uses two internal libraries:
 
 - `iot_platform` contains Linux display discovery, framebuffer rendering,
-  JPEG decoding and caching, system information, I2C, and input hardware.
+  JPEG decoding and caching, full-screen video playback, system information,
+  I2C, and input hardware.
 - `iot_runtime` contains MicroPython, native modules, scheduling, MQTT,
   deployment, file downloads, and application supervision.
 
@@ -119,7 +121,7 @@ sudo apt update
 sudo apt install \
   build-essential cmake pkg-config \
   libdrm-dev libmosquitto-dev libcjson-dev libssl-dev \
-  libcurl4-openssl-dev libturbojpeg0-dev ca-certificates \
+  libcurl4-openssl-dev libturbojpeg0-dev libmpv-dev ca-certificates \
   mosquitto mosquitto-clients
 ```
 
@@ -140,6 +142,9 @@ Console mode prevents a desktop compositor from redrawing over the framebuffer.
 IoT App uses the active framebuffer size and pixel format; it does not change
 the monitor mode. It starts the shipped default Python application and then
 listens for replacement applications through MQTT. Stop it with `Ctrl+C`.
+
+Video playback is included in every build. CMake stops with an error if the
+libmpv development package is missing.
 
 The [Raspberry Pi OS guide](docs/raspberry-pi-os/README.md) covers console mode,
 display permissions, copying a native build to the Pi, and switching back to

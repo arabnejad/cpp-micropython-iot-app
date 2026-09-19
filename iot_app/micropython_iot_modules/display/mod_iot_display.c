@@ -242,6 +242,12 @@ static mp_obj_t display_delete_image(mp_obj_t widget_id_object) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(display_delete_image_object, display_delete_image);
 
+static mp_obj_t display_play_video(mp_obj_t path_object) {
+  iot_raise_native_error(iot_display_play_video(mp_obj_str_get_str(path_object)));
+  return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(display_play_video_object, display_play_video);
+
 static iot_background_image_mode_t background_image_mode(mp_obj_t mode_object) {
   const char *mode = mp_obj_str_get_str(mode_object);
   if (strcmp(mode, "center") == 0) {
@@ -406,6 +412,7 @@ static const mp_rom_map_elem_t display_module_globals_table[] = {
     {MP_ROM_QSTR(MP_QSTR_move_image), MP_ROM_PTR(&display_move_image_object)},
     {MP_ROM_QSTR(MP_QSTR_set_image_scale), MP_ROM_PTR(&display_set_image_scale_object)},
     {MP_ROM_QSTR(MP_QSTR_delete_image), MP_ROM_PTR(&display_delete_image_object)},
+    {MP_ROM_QSTR(MP_QSTR_play_video), MP_ROM_PTR(&display_play_video_object)},
     {MP_ROM_QSTR(MP_QSTR_set_background_image), MP_ROM_PTR(&display_set_background_image_object)},
     {MP_ROM_QSTR(MP_QSTR_clear_background_image), MP_ROM_PTR(&display_clear_background_image_object)},
     {MP_ROM_QSTR(MP_QSTR_fill_area), MP_ROM_PTR(&display_fill_area_object)},

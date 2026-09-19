@@ -1,21 +1,56 @@
 #!/bin/sh
 
+# /bin/sh runs this file as a shell script. Buildroot uses BusyBox sh in the
+# supplied image.
+#
 # Buildroot installs this script as S90iot-app, so BusyBox starts IoT App near
 # the end of boot. It is also available as /etc/init.d/iot-app for manual
 # start, stop, and restart commands.
+#
+# A shell condition such as [ -r "$PIDFILE" ] uses the [ command, which is
+# another spelling of test. It returns 0 when the condition is true and a
+# non-zero value when it is false. Shell commands such as if, while, &&, and ||
+# use that return value to decide what to do next.
 
+# This helper chooses between the normal executable and the optional
+# development executable stored under /data.
 LAUNCHER="/usr/libexec/iot-app-launcher"
+
+# This helper hides the blinking text cursor on the framebuffer console.
 CURSOR_HELPER="/usr/libexec/iot-app-hide-tty1-cursor"
+
+# BusyBox start-stop-daemon uses this process name when it stops IoT App.
 PROCESS_NAME="iot_app"
+
+# The PID file stores the numeric process ID of the running IoT App process.
 PIDFILE="/var/run/iot_app.pid"
+
+# Standard output and standard error from the background process go here.
 LOGFILE="/var/log/iot_app.log"
+
+# IoT App runs as this restricted user rather than as root.
 RUNTIME_USER="iot-app"
+
+# /dev/fb0 is the character device through which IoT App draws to the screen.
 FRAMEBUFFER_DEVICE="/dev/fb0"
+
+# Do not wait forever when the kernel does not create the framebuffer device.
 FRAMEBUFFER_WAIT_SECONDS=10
 
 iot_app_is_running() {
+	# -r is true when the PID file exists and can be read. || means "if the
+	# test failed, run the command on the right", so a missing PID file makes
+	# this function report that IoT App is not running.
 	[ -r "$PIDFILE" ] || return 1
+
+	# $(...) runs a command and uses its output. Here it reads a value such as
+	# 287 from the PID file.
 	iot_app_pid="$(cat "$PIDFILE")"
+
+	# -n is true when the value is not empty. kill -0 does not send a signal or
+	# stop the process; it only asks the kernel whether that PID still exists
+	# and can be signalled. && runs kill only when a PID was read successfully.
+	# 2>/dev/null hides the error message produced for a stale PID.
 	[ -n "$iot_app_pid" ] && kill -0 "$iot_app_pid" 2>/dev/null
 }
 
@@ -23,38 +58,83 @@ wait_for_framebuffer() {
 	# Network access and MQTT are optional. Only the framebuffer must be ready
 	# before the application can draw its first screen.
 	waited_seconds=0
+
+	# -c is true when the path exists and is a character device. Linux exposes
+	# hardware interfaces such as /dev/fb0 as character devices rather than as
+	# normal files. ! reverses the result, so:
+	#
+	#   [ -c "$FRAMEBUFFER_DEVICE" ]
+	#       is true when /dev/fb0 is ready
+	#
+	#   [ ! -c "$FRAMEBUFFER_DEVICE" ]
+	#       is true while /dev/fb0 is missing or is not a character device
+	#
+	# The loop continues only while both conditions joined by && are true: the
+	# framebuffer is not ready, and fewer than 10 seconds have passed. -lt means
+	# "less than" for integer values.
 	while [ ! -c "$FRAMEBUFFER_DEVICE" ] &&
 	      [ "$waited_seconds" -lt "$FRAMEBUFFER_WAIT_SECONDS" ]; do
 		sleep 1
+		# $((...)) performs integer arithmetic in the shell.
 		waited_seconds=$((waited_seconds + 1))
 	done
 
+	# The function returns the result of this final test. A ready character
+	# device returns 0, which the shell treats as success. If the wait expired
+	# without /dev/fb0, the test returns a non-zero failure value.
 	[ -c "$FRAMEBUFFER_DEVICE" ]
 }
 
 start() {
+	# Calling a function in an if condition checks its return value. A return
+	# value of 0 means the process is already running, so no second copy starts.
 	if iot_app_is_running; then
 		echo "iot_app is already running"
 		return 0
 	fi
+
+	# Remove a PID file left behind by a process that is no longer running.
+	# -f also makes rm succeed when the file does not exist.
 	rm -f "$PIDFILE"
 
 	# tty1 belongs to the framebuffer dashboard. Hide its terminal cursor before
 	# the first screen is drawn.
 	"$CURSOR_HELPER"
 
+	# ! reverses the function result. This block runs only when the framebuffer
+	# did not appear before the timeout.
 	if ! wait_for_framebuffer; then
 		echo "Cannot start iot_app: $FRAMEBUFFER_DEVICE is not available"
 		return 1
 	fi
 
 	printf "Starting iot_app: "
+
+	# Create the log file if needed, then let the restricted runtime user write
+	# to it. On this image /var/log points to temporary storage under /tmp.
 	touch "$LOGFILE"
 	chown "$RUNTIME_USER:$RUNTIME_USER" "$LOGFILE"
+
+	# start-stop-daemon starts one managed background process:
+	#
+	#   --start          starts a new process
+	#   --background     detaches it from the boot console
+	#   --make-pidfile   writes the new process ID to PIDFILE
+	#   --pidfile        says where that PID must be stored
+	#   --chuid          changes to the restricted runtime user first
+	#   --output         sends program output to the log file
+	#   --exec           runs the launcher script
+	#
+	# The launcher ends with exec, so it is replaced by /usr/bin/iot_app while
+	# keeping the same PID recorded in the file.
 	start-stop-daemon --start --background --make-pidfile \
 		--pidfile "$PIDFILE" --chuid "$RUNTIME_USER" \
 		--output "$LOGFILE" --exec "$LAUNCHER"
+
+	# $? is the return value of the command that ran immediately before it.
 	status=$?
+	# -ne means "not equal" for integers. Zero means start-stop-daemon
+	# succeeded; any other value means it failed.
 	if [ "$status" -ne 0 ]; then
 		echo "FAIL"
 		return "$status"
@@ -64,6 +144,9 @@ start() {
 	# Give it a moment to load its libraries and initialize the display, then
 	# confirm that it is still running.
 	sleep 1
+
+	# This repeats the readable-PID-file and live-process checks. Both tests
+	# joined by && must succeed before startup is reported as successful.
 	if [ -r "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
 		echo "OK"
 	else
@@ -75,6 +158,10 @@ start() {
 
 stop() {
 	printf "Stopping iot_app: "
+
+	# --test asks what start-stop-daemon would do without actually stopping the
+	# process. It matches both the PID file and the process name. ! reverses the
+	# result, so this block handles a missing or stale process as "not running".
 	if ! start-stop-daemon --stop --test --quiet \
 		--pidfile "$PIDFILE" --name "$PROCESS_NAME"; then
 		rm -f "$PIDFILE"
@@ -82,14 +169,25 @@ stop() {
 		return 0
 	fi
 
+	# The matching process exists, so this call sends its normal termination
+	# signal. --quiet prevents start-stop-daemon from printing its own status;
+	# this script prints the final OK or FAIL message instead.
 	start-stop-daemon --stop --quiet \
 		--pidfile "$PIDFILE" --name "$PROCESS_NAME"
 	status=$?
+
+	# Poll until --test says that the process no longer exists. The short sleep
+	# avoids repeatedly checking as fast as the CPU can run.
 	while start-stop-daemon --stop --test --quiet \
 		--pidfile "$PIDFILE" --name "$PROCESS_NAME"; do
 		sleep 0.1
 	done
+
+	# The process has gone, so its old PID file must not be reused later.
 	rm -f "$PIDFILE"
+
+	# -eq means "equal" for integers. Report the result from the real stop
+	# command and return the same value to the caller.
 	if [ "$status" -eq 0 ]; then
 		echo "OK"
 	else
@@ -98,6 +196,9 @@ stop() {
 	return "$status"
 }
 
+# $1 is the first command-line argument. For example,
+# /etc/init.d/iot-app restart sets $1 to restart. case chooses the matching
+# block, and ;; marks the end of each choice.
 case "$1" in
 	start)
 		start
@@ -109,6 +210,7 @@ case "$1" in
 		stop
 		start
 		;;
+	# * matches anything not handled above, including a missing argument.
 	*)
 		echo "Usage: $0 {start|stop|restart}"
 		exit 1

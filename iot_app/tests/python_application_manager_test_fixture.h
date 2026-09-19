@@ -30,7 +30,10 @@ protected:
   PythonApplicationManagerTest()
       : m_recordingRenderBackend(std::make_unique<tests::RecordingRenderBackend>()),
         m_recordingRenderBackendView(m_recordingRenderBackend.get()),
-        m_screenManager(tests::testActiveDisplay(), std::move(m_recordingRenderBackend), 32U) {}
+        m_recordingExclusiveVideoPlayer(std::make_unique<tests::RecordingExclusiveVideoPlayer>()),
+        m_recordingExclusiveVideoPlayerView(m_recordingExclusiveVideoPlayer.get()),
+        m_screenManager(tests::testActiveDisplay(), std::move(m_recordingRenderBackend), 32U,
+                        std::move(m_recordingExclusiveVideoPlayer)) {}
 
   void SetUp() override {
     m_screenManager.start();
@@ -58,11 +61,13 @@ protected:
     return m_recordingRenderBackendView->lastErrorScreenText;
   }
 
-  std::unique_ptr<tests::RecordingRenderBackend> m_recordingRenderBackend;
-  tests::RecordingRenderBackend                 *m_recordingRenderBackendView;
-  ui::ScreenManager                              m_screenManager;
-  tests::TestSystemInformationProvider           m_systemInformationProvider;
-  tests::TestFileDownloader                      m_fileDownloader;
+  std::unique_ptr<tests::RecordingRenderBackend>        m_recordingRenderBackend;
+  tests::RecordingRenderBackend                        *m_recordingRenderBackendView;
+  std::unique_ptr<tests::RecordingExclusiveVideoPlayer> m_recordingExclusiveVideoPlayer;
+  tests::RecordingExclusiveVideoPlayer                 *m_recordingExclusiveVideoPlayerView;
+  ui::ScreenManager                                     m_screenManager;
+  tests::TestSystemInformationProvider                  m_systemInformationProvider;
+  tests::TestFileDownloader                             m_fileDownloader;
 };
 
 } // namespace python

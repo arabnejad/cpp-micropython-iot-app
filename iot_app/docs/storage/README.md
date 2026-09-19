@@ -13,17 +13,22 @@ The sizes are kept in the root-level
 [`storage_layout.conf`](../../../storage_layout.conf):
 
 ```makefile
-ROOT_PARTITION_SIZE_MIB ?= 256
+ROOT_PARTITION_SIZE_MIB ?= 512
 ```
 
 MiB means mebibytes. One MiB is 1,048,576 bytes.
+
+The earlier framebuffer-only image used a 256 MiB root partition. The
+video-enabled image needs more space because it includes mpv, FFmpeg, and
+Mesa. For that reason, the supplied configuration now uses 512 MiB and
+`make storage-check` rejects smaller values.
 
 The generated image contains three partitions:
 
 ```text
 SD card
 ├── Partition 1: Raspberry Pi boot files
-├── Partition 2: Linux root filesystem (256 MiB by default)
+├── Partition 2: Linux root filesystem (512 MiB by default)
 └── Partition 3: persistent data (all remaining card space)
 ```
 
@@ -52,7 +57,7 @@ job reports the error, but IoT App still starts from `/usr/bin/iot_app`.
 The script can run again safely. After the first successful boot, there is
 normally nothing left to expand.
 
-For example, a 128 GB card keeps a 256 MiB root partition and gives almost all
+For example, a 128 GB card keeps a 512 MiB root partition and gives almost all
 remaining space to `/data`. The exact reported capacity is slightly lower
 because card manufacturers use decimal units and the image also contains the
 boot partition and partition alignment gaps.

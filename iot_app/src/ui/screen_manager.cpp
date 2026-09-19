@@ -2,9 +2,11 @@
 
 #include "internal/jpeg_image_loader.h"
 #include "iot/ui/jpeg_limits.h"
+#include "iot/video/iexclusive_video_player.h"
 
 #include <algorithm>
 #include <chrono>
+#include <fstream>
 #include <stdexcept>
 #include <utility>
 
@@ -38,14 +40,37 @@ void logTextBoxRequest(logging::Logger &logger, WidgetId textBoxId, const TextBo
                 ", borderWidth=", textBoxSpec.borderWidth);
 }
 
+std::filesystem::path validateAndResolveVideoFilePath(const std::filesystem::path &videoFilePath) {
+  if (videoFilePath.empty()) {
+    throw std::invalid_argument("Video file path must not be empty");
+  }
+
+  std::error_code fileStatusError;
+  if (!std::filesystem::is_regular_file(videoFilePath, fileStatusError) || fileStatusError) {
+    throw std::invalid_argument("Video file does not exist or is not a normal file: " + videoFilePath.string());
+  }
+
+  const std::filesystem::path absoluteVideoFilePath = std::filesystem::canonical(videoFilePath);
+
+  // Check permissions before closing the current screen. A file can exist and
+  // still be unreadable by the user running IoT App.
+  std::ifstream readableVideoFile{absoluteVideoFilePath, std::ios::binary};
+  if (!readableVideoFile) {
+    throw std::invalid_argument("Video file cannot be read: " + absoluteVideoFilePath.string());
+  }
+  return absoluteVideoFilePath;
+}
+
 } // namespace
 
 ScreenManager::ScreenManager(display::ActiveDisplay activeDisplay, std::unique_ptr<IRenderBackend> renderBackend,
-                             std::size_t maximumPendingCommands)
+                             std::size_t                                   maximumPendingCommands,
+                             std::unique_ptr<video::IExclusiveVideoPlayer> exclusiveVideoPlayer)
     : m_activeDisplay(std::move(activeDisplay)), m_renderBackend(std::move(renderBackend)),
       m_maximumPendingCommands(maximumPendingCommands),
       m_jpegImageLoader(std::make_unique<internal::JpegImageLoader>(internal::makeLibjpegTurboJpegImageDecoder(),
-                                                                    decodedJpegCacheCapacityInBytes)) {
+                                                                    decodedJpegCacheCapacityInBytes)),
+      m_exclusiveVideoPlayer(std::move(exclusiveVideoPlayer)) {
   if (!m_renderBackend) {
     IOT_LOG_ERROR(m_logger, "Cannot create ScreenManager because the render backend is null");
     throw std::invalid_argument("ScreenManager requires a render backend");
@@ -53,6 +78,10 @@ ScreenManager::ScreenManager(display::ActiveDisplay activeDisplay, std::unique_p
   if (m_maximumPendingCommands == 0U) {
     IOT_LOG_ERROR(m_logger, "Cannot create ScreenManager because maximumPendingCommands is zero");
     throw std::invalid_argument("ScreenManager requires a non-zero command queue limit");
+  }
+  if (!m_exclusiveVideoPlayer) {
+    IOT_LOG_ERROR(m_logger, "Cannot create ScreenManager because the exclusive video player is null");
+    throw std::invalid_argument("ScreenManager requires an exclusive video player");
   }
 }
 
@@ -240,6 +269,36 @@ void ScreenManager::deleteJpegImage(WidgetId imageId) {
   static_cast<void>(findJpegImageSourceState(imageId));
   enqueueRenderCommand([imageId](IRenderBackend &renderBackend) { renderBackend.deleteJpegImage(imageId); });
   m_jpegImageSourceStatesById.erase(imageId);
+}
+
+void ScreenManager::playExclusiveVideoAndWait(const std::filesystem::path &videoFilePath) {
+  const std::filesystem::path absoluteVideoFilePath = validateAndResolveVideoFilePath(videoFilePath);
+
+  {
+    std::lock_guard<std::mutex> lock(m_renderStateMutex);
+    throwIfRenderThreadIsUnavailableWhileLocked();
+  }
+
+  IOT_LOG_INFO(m_logger, "Releasing the framebuffer before playing video: ", absoluteVideoFilePath);
+  stop();
+
+  try {
+    m_exclusiveVideoPlayer->playVideoAndWait(absoluteVideoFilePath, m_activeDisplay);
+  } catch (...) {
+    try {
+      start();
+    } catch (const std::exception &restartError) {
+      IOT_LOG_ERROR(m_logger, "Video playback failed and the framebuffer could not be reopened: ", restartError.what());
+      throw;
+    }
+    throw;
+  }
+
+  // The player can also return because the service is stopping. Reopen the
+  // framebuffer before returning because the Python application may still run
+  // a few more lines while the main loop begins shutdown.
+  start();
+  IOT_LOG_INFO(m_logger, "Video playback ended and framebuffer rendering restarted");
 }
 
 void ScreenManager::setBackgroundJpegImage(const BackgroundJpegImageSpec &backgroundJpegImageSpec) {

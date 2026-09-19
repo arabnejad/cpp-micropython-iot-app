@@ -47,10 +47,12 @@ add_executable(iot_unit_tests
   test_python_application_manager_images.cpp
   test_python_application_manager_lifecycle.cpp
   test_python_application_manager_scheduler.cpp
+  test_python_application_manager_video.cpp
   test_runtime_config.cpp
   test_screen_manager_images.cpp
   test_screen_manager_render_thread.cpp
   test_screen_manager_text_boxes.cpp
+  test_screen_manager_video.cpp
   test_temporary_python_application_installer.cpp
   test_system_information.cpp
 )

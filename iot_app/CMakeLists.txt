@@ -25,6 +25,7 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBDRM REQUIRED IMPORTED_TARGET libdrm)
 pkg_check_modules(LIBMOSQUITTO REQUIRED IMPORTED_TARGET libmosquitto)
 pkg_check_modules(CJSON REQUIRED IMPORTED_TARGET libcjson)
+pkg_check_modules(LIBMPV REQUIRED IMPORTED_TARGET mpv)
 find_package(OpenSSL REQUIRED COMPONENTS Crypto)
 find_package(CURL REQUIRED)
 find_package(TurboJPEG REQUIRED)
@@ -59,11 +60,12 @@ add_library(iot_platform STATIC
   src/platform/linux/system_information.cpp
   src/ui/lvgl_framebuffer_render_backend.cpp
   src/ui/screen_manager.cpp
+  src/video/mpv_exclusive_video_player.cpp
 )
 target_include_directories(iot_platform PUBLIC "${PROJECT_SOURCE_DIR}/include")
 target_link_libraries(iot_platform
   PUBLIC Threads::Threads
-  PRIVATE lvgl::lvgl PkgConfig::LIBDRM TurboJPEG::TurboJPEG
+  PRIVATE lvgl::lvgl PkgConfig::LIBDRM PkgConfig::LIBMPV TurboJPEG::TurboJPEG
 )
 iot_apply_compiler_warnings(iot_platform)
 
@@ -175,3 +177,4 @@ endif()
 include(clang_format)
 
 message(STATUS "IoT App configured with LVGL framebuffer output")
+message(STATUS "IoT App configured with exclusive libmpv video playback")

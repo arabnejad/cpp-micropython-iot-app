@@ -366,6 +366,8 @@ Check the display and I2C devices:
 ```sh
 ls -l /dev/fb0
 ls -l /dev/dri/card*
+ls -l /dev/dri/renderD*
+ls -l /dev/video*
 ls -l /dev/i2c-1
 ```
 
@@ -377,7 +379,7 @@ cat /sys/class/graphics/fb0/bits_per_pixel
 ```
 
 The images request this mode with the Linux `video=` kernel argument. Raspberry
-Pi documents that syntax in its [KMS command-line guide](https://www.raspberrypi.com/documentation/computers/configuration.html#set-the-kms-display-mode).
+Pi documents that syntax in its [display settings guide](https://www.raspberrypi.com/documentation/computers/configuration.html#display-settings).
 
 The Yocto image also includes `i2c-tools`, so it can scan bus 1:
 
@@ -395,7 +397,16 @@ Check the runtime user's device groups with:
 id iot-app
 ```
 
-The expected groups include `video`, `render`, `i2c`, and `input`.
+The expected groups include `video`, `render`, `i2c`, and `input`. The `video`
+group covers `/dev/fb0`, the primary DRM card, and the `/dev/video*` devices
+used by the Raspberry Pi hardware decoder. The `render` group covers the DRM
+render node used by Mesa and mpv.
+
+Check that mpv is installed:
+
+```sh
+mpv --version
+```
 
 Check the installed runtime and default Python application with:
 
@@ -472,11 +483,13 @@ systemctl status iot-app-wifi --no-pager
 journalctl -b -u iot-app-wifi --no-pager
 ```
 
-On Buildroot, `S30wifi` starts `wpa_supplicant` and waits briefly for
-association. `S40network` then requests an address using DHCP. A successful
-Wi-Fi restart reports `Starting Wi-Fi: connected`. If it reports `started, but
-not associated`, check the network name, country, password, signal, and power
-supply.
+On Buildroot, `S30wifi` waits up to 10 seconds for the `wlan0` interface to
+appear, starts `wpa_supplicant`, and returns without waiting for association.
+`S40network` starts the DHCP client, which keeps trying in the background until
+the connection is ready. A successful Wi-Fi restart reports
+`Starting Wi-Fi: started; connecting to Wi-Fi in the background`. If the
+device still does not connect, check the network name, country, password,
+signal, and power supply.
 
 Verify the country and network name without displaying the password:
 
@@ -623,6 +636,73 @@ systemctl stop iot-app
 
 Press `Ctrl+C` after the test, then start the normal service again.
 
+### The framebuffer uses the wrong resolution
+
+IoT App uses the framebuffer mode selected while Linux starts. It does not
+change the monitor resolution itself. A 4K monitor may therefore start at
+3840x2160 when the boot command sets a mode for a different HDMI connector.
+
+Start by checking the complete command line received by Linux:
+
+```sh
+cat /proc/cmdline
+```
+
+The Raspberry Pi firmware may add arguments before the values from the
+project's `cmdline.txt` or Yocto configuration. Confirm that the final command
+line includes a 1920x1080 setting for both connectors:
+
+```text
+video=HDMI-A-1:1920x1080@60 video=HDMI-A-2:1920x1080@60
+```
+
+Next inspect the framebuffer and Raspberry Pi display modules:
+
+```sh
+cat /sys/class/graphics/fb0/name
+cat /sys/class/graphics/fb0/virtual_size
+lsmod | grep -E 'vc4|v3d'
+```
+
+For the expected Raspberry Pi framebuffer, the name is `vc4drmfb`. A
+1920x1080 framebuffer reports:
+
+```text
+1920,1080
+```
+
+Check which HDMI connector has a monitor attached:
+
+```sh
+for connector in /sys/class/drm/card*-HDMI-A-*; do
+    echo "$connector"
+    cat "$connector/status"
+done
+```
+
+For example, this result means the cable is connected to the Raspberry Pi's
+second HDMI port:
+
+```text
+/sys/class/drm/card0-HDMI-A-1
+disconnected
+/sys/class/drm/card0-HDMI-A-2
+connected
+```
+
+If the boot command contains only an `HDMI-A-1` mode in this case,
+`HDMI-A-2` is free to select the monitor's preferred 3840x2160 mode. The
+project configures both ports in these files:
+
+- Buildroot: `iot_app/buildroot_external/board/raspberrypi4/cmdline.txt`
+- Yocto: `meta-iot-app/conf/templates/raspberrypi4-64/local.conf.sample`
+
+After changing either file, rebuild and flash the corresponding image. For
+Yocto, `make yocto-prepare` copies the tracked template into the generated
+`build/conf/local.conf` before the image build. Buildroot's post-image script
+refreshes the boot copy of `cmdline.txt`, including during an incremental
+image build.
+
 ### The clock starts near 1970
 
 The Raspberry Pi 4 has no battery-backed real-time clock by default. It needs
@@ -706,6 +786,76 @@ When partition 3 exists, it must have the `iot-data` label. The storage helper
 refuses to resize an unexpected partition. A missing partition 3 is allowed
 and means that this image has no optional persistent storage. See the
 [storage guide](../storage/README.md) for the complete checks.
+
+### Video does not play smoothly
+
+Building an image confirms that the video packages compile and link. It cannot
+confirm that hardware decoding and monitor output work smoothly on the
+Raspberry Pi, so repeat this check on the device after relevant image changes.
+
+First stop IoT App so mpv can use the monitor on its own:
+
+```sh
+# Buildroot
+/etc/init.d/iot-app stop
+
+# Yocto
+systemctl stop iot-app
+```
+
+Run the installed playback check. The display-mode argument is optional and
+defaults to `1920x1080@60`:
+
+```sh
+iot-app-check-video-playback \
+  /data/iot-app/videos/demo.mp4 \
+  1920x1080@60
+```
+
+The helper also checks whether the IoT App service is still running. If it is,
+the helper exits without starting mpv and prints the correct stop command for
+Buildroot and Yocto.
+
+The check uses the same decoder and renderer path as IoT App. It lets mpv
+choose the DRM device and connector, while IoT App selects them from its
+startup display scan. On a system with more than one monitor, the check may
+therefore use a different monitor. The expected status contains
+`HWDEC=v4l2m2m-copy`. The tested Raspberry Pi 4 completed a 1920x1080 H.264 MP4
+with both dropped-frame values at zero. A message about `VT_GETMODE` is
+expected when this command runs through SSH; it only means mpv cannot switch
+physical console terminals from that session.
+
+If hardware decoding is unavailable, check the video and graphics devices and
+loaded modules:
+
+```sh
+ls -l /dev/video* /dev/dri/card* /dev/dri/renderD*
+lsmod | grep -E 'bcm2835_codec|v4l2_mem2mem|v3d'
+```
+
+Start IoT App again after the test:
+
+```sh
+# Buildroot
+/etc/init.d/iot-app start
+
+# Yocto
+systemctl start iot-app
+```
+
+This standalone check separates an mpv or graphics-driver problem from the
+handoff inside IoT App. After it works, follow the
+[full-screen video sample](../../../iot_app_sender/sample_applications/full_screen_video/README.md)
+to copy a video, send the Python application, and confirm that LVGL closes for
+playback and starts again afterwards.
+
+The [mpv hardware-decoding guide](https://mpv.io/manual/master/#options-hwdec)
+explains `-copy` modes in general: decoded video is copied back into system
+memory. The guide does not list `v4l2m2m-copy` by name. That exact mode was
+selected because `mpv --hwdec=help` listed it on the tested Raspberry Pi, and
+the test above confirmed that it worked without dropped frames. The
+[video playback guide](../video-playback/README.md) contains the complete
+Raspberry Pi test record and explains the selected playback design.
 
 ### Yocto starts IoT App later than Buildroot
 

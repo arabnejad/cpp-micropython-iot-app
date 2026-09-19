@@ -11,11 +11,11 @@ application.
 
 The runtime draws directly to the Linux framebuffer with LVGL, reads Linux
 system information, supports an Adafruit I2C gamepad, downloads files over
-HTTP or HTTPS, displays JPEG images, and receives replacement Python
-applications over MQTT. A new Python application can replace the current one
-without restarting the C++ process. If a Python application fails, the C++
-runtime stops it and shows an emergency error screen until another valid
-application arrives or the runtime restarts.
+HTTP or HTTPS, displays JPEG images, plays full-screen video through libmpv,
+and receives replacement Python applications over MQTT. A new Python
+application can replace the current one without restarting the C++ process.
+If a Python application fails, the C++ runtime stops it and shows an emergency
+error screen until another valid application arrives or the runtime restarts.
 
 ## Project History
 
@@ -57,9 +57,12 @@ MQTT broker* -----------------------> iot_app C++ runtime
                                            +--> libcurl file downloads
                                            |
                                            +--> ScreenManager render thread
-                                                    |
-                                                    v
-                                             LVGL -> /dev/fb0 -> HDMI
+                                           |        |
+                                           |        v
+                                           | LVGL -> /dev/fb0 -> HDMI
+                                           |
+                                           +--> libmpv -> OpenGL/DRM -> HDMI
+                                                full-screen video; LVGL pauses
 ```
 
 Note: the MQTT broker can run on the Raspberry Pi, the Ubuntu computer, or
@@ -186,8 +189,8 @@ sudo apt update
 sudo apt install \
   build-essential cmake pkg-config \
   libdrm-dev libmosquitto-dev libcjson-dev libssl-dev \
-  libcurl4-openssl-dev libturbojpeg0-dev ca-certificates \
-  mosquitto mosquitto-clients
+  libcurl4-openssl-dev libturbojpeg0-dev libmpv-dev ca-certificates \
+  mosquitto mosquitto-clients mpv
 ```
 
 Initialize the required submodules, then build from the repository root:
@@ -196,6 +199,9 @@ Initialize the required submodules, then build from the repository root:
 make submodules
 make iot-app
 ```
+
+Video playback is part of every IoT App build. CMake reports an error if the
+libmpv development package is missing.
 
 Run the application from a Linux console where `/dev/fb0` is available:
 
@@ -239,7 +245,8 @@ make test
 ```
 
 Use `make coverage` to print coverage in the terminal and generate
-`build/iot_app_coverage/coverage/index.html` and `coverage.xml`.
+`build/iot_app_coverage/coverage/index.html` and
+`build/iot_app_coverage/coverage/coverage.xml`.
 Install `gcovr` first if it is not already available:
 
 ```bash
@@ -255,7 +262,11 @@ Linux system or Raspberry Pi.
 The coverage command requires at least 90% line coverage across all included
 project files together. It does not require every individual source file to
 reach 90%. Low-level operating-system interfaces remain internal testing
-details rather than part of the main application architecture.
+details rather than part of the main application architecture. The executable
+entry point, raw Mosquitto adapter, and direct libmpv adapter are left out of
+the unit-coverage calculation because their useful checks need a running Linux
+system, broker, or Raspberry Pi display. The surrounding deployment and video
+state changes are covered with replacement implementations.
 
 ## Documentation
 
@@ -271,13 +282,16 @@ API, deployment, hardware, Buildroot, or Yocto.
 | [MicroPython API](iot_app/docs/micropython-api/README.md) | Native `iot` modules, required and optional arguments, return values, and examples |
 | [Hardware](iot_app/docs/hardware/README.md) | Adafruit gamepad button wiring and mask conversion |
 | [Device image](iot_app/docs/device-image/README.md) | Shared Wi-Fi, SSH, mDNS, services, device checks, and troubleshooting |
+| [Buildroot tutorial](iot_app/docs/buildroot-tutorial/README.md) | How Buildroot configurations, packages, overlays, startup scripts, and image assembly work in this project |
 | [Buildroot](iot_app/docs/buildroot/README.md) | Buildroot preparation, image build, flashing, package updates, and Buildroot-specific problems |
+| [Yocto tutorial](iot_app/docs/yocto-tutorial/README.md) | How Yocto layers, recipes, appends, BitBake tasks, systemd services, and Wic images work in this project |
 | [Yocto](iot_app/docs/yocto/README.md) | Yocto layers, preparation, image build, flashing, updates, and BitBake-specific problems |
 | [Image storage](iot_app/docs/storage/README.md) | Shared root and `/data` partition sizes, first-boot expansion, and verification |
 | [Development executable](iot_app/docs/development-executable/README.md) | Test a rebuilt executable from `/data` without replacing the installed copy |
 | [IoT App Sender](iot_app_sender/README.md) | Ubuntu sender installation, configuration, MQTT topics, and status replies |
 | [Sample applications](iot_app_sender/sample_applications/README.md) | Available Python examples and their hardware requirements |
 | [Raspberry Pi OS](iot_app/docs/raspberry-pi-os/README.md) | Raspberry Pi OS configuration notes used during development |
+| [Video playback](iot_app/docs/video-playback/README.md) | Full-screen video behaviour, Python API, Raspberry Pi test results, and current limits |
 
 ## Main technology choices
 
@@ -288,6 +302,7 @@ API, deployment, hardware, Buildroot, or Yocto.
 - MQTT 5 with Mosquitto for application deployment
 - libcurl for HTTP and HTTPS downloads
 - libjpeg-turbo for JPEG decoding and decoder-side scaling
+- libmpv with V4L2 decoding and direct OpenGL/DRM video output
 - Buildroot or Yocto for a complete Raspberry Pi image
 - GoogleTest and Google Mock for automated tests
 

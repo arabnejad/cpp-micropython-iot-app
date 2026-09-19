@@ -107,7 +107,8 @@ format-check:
 		check "$(CLANG_FORMAT)" $(IOT_FORMAT_DIRECTORIES)
 
 iot-app:
-	cmake -S "$(PROJECT_ROOT)/iot_app" -B "$(IOT_APP_BUILD)" -DCMAKE_BUILD_TYPE=Release
+	cmake -S "$(PROJECT_ROOT)/iot_app" -B "$(IOT_APP_BUILD)" \
+		-DCMAKE_BUILD_TYPE=Release
 	cmake --build "$(IOT_APP_BUILD)" --parallel "$(BUILD_JOBS)"
 
 test:
@@ -141,8 +142,8 @@ storage-check:
 		echo "ROOT_PARTITION_SIZE_MIB must be a whole number of MiB: $(ROOT_PARTITION_SIZE_MIB)" >&2; \
 		exit 1; \
 	fi
-	@if [ "$(ROOT_PARTITION_SIZE_MIB)" -lt 256 ]; then \
-		echo "ROOT_PARTITION_SIZE_MIB must be at least 256 MiB" >&2; \
+	@if [ "$(ROOT_PARTITION_SIZE_MIB)" -lt 512 ]; then \
+		echo "ROOT_PARTITION_SIZE_MIB must be at least 512 MiB" >&2; \
 		exit 1; \
 	fi
 	@echo "Storage layout: $(ROOT_PARTITION_SIZE_MIB) MiB root; /data uses the remaining card space"

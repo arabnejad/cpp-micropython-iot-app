@@ -41,6 +41,9 @@ sender_config.json
 # Optional personal SSH public keys included in development images
 /ssh_authorized_keys
 
+# Video downloaded locally for the full-screen sample application
+/demo.mp4
+
 # Editor and operating-system files
 *.swp
 *.swo

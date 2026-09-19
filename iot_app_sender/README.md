@@ -32,7 +32,10 @@ external app replaces the current Python session without restarting the C++
 process. If compilation, startup, or a scheduled callback fails, the device
 writes the traceback to its log and shows its native emergency screen. It does
 not send another deployment status. The default app runs again only
-after `iot_app` restarts.
+after `iot_app` restarts; IoT App does not restore it automatically after a
+failure. You can also resend the default dashboard manually through MQTT as
+described below. That deployment uses the same Python source, but it is handled
+as an external application for the rest of the current process.
 
 The `sample_applications` catalog contains clocks, system displays, gamepad
 diagnostics, menus, counters, a countdown, and failure tests for startup and
@@ -250,7 +253,8 @@ sudo journalctl -u mosquitto -n 50 --no-pager
 
 If Mosquitto listens on `0.0.0.0:1883` but the test still fails, check the
 Raspberry Pi firewall. When UFW is active, allow MQTT only from the trusted
-local network:
+local network. Replace `192.168.0.0/24` with the subnet used by your trusted
+LAN:
 
 ```bash
 sudo ufw allow from 192.168.0.0/24 to any port 1883 proto tcp

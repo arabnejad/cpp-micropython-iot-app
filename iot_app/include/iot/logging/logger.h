@@ -39,9 +39,11 @@ enum class LogLevel {
 class Logger {
 public:
   /* Creates a logger for standalone functions. */
+
+  /* Production code uses this form for messages from standalone functions. */
   Logger() = default;
 
-  /* Creates a logger that identifies messages from one class. */
+  /* Production classes use this form so each message includes the class name. */
   explicit Logger(std::string className);
 
   /* Returns true when a message at this level would be written. */

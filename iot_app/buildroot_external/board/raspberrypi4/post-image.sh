@@ -45,9 +45,15 @@ if [ -f "$storage_layout_file" ]; then
 	# shellcheck disable=SC1090
 	source "$storage_layout_file"
 else
-	ROOT_PARTITION_SIZE_MIB=1024
+	ROOT_PARTITION_SIZE_MIB=512
 	DATA_PARTITION_BOOTSTRAP_SIZE_MIB=64
 fi
+
+# Buildroot does not automatically reinstall rpi-firmware when only one of
+# these source files changes. Refresh the copies used by genimage so an
+# incremental image build always receives the latest boot configuration.
+install -m 0644 "${board_directory}/config_4_64bit.txt" "${BINARIES_DIR}/rpi-firmware/config.txt"
+install -m 0644 "${board_directory}/cmdline.txt" "${BINARIES_DIR}/rpi-firmware/cmdline.txt"
 
 # Build the list copied into boot.vfat. Raspberry Pi firmware files and device
 # trees are generated under BINARIES_DIR. config.txt tells us which kernel file

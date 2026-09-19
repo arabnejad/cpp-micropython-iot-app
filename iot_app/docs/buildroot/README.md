@@ -1,11 +1,17 @@
 # Build and run the Raspberry Pi 4 image
 
 This guide builds a complete 64-bit Linux image for a Raspberry Pi 4 Model B.
-The image contains IoT App, its embedded MicroPython runtime, LVGL, Wi-Fi
-support, the Mosquitto broker, and the Dropbear SSH server.
+The image contains IoT App, its embedded MicroPython runtime, LVGL, full-screen
+video support, Wi-Fi, the Mosquitto broker, and the Dropbear SSH server.
 
 The instructions assume the repository is on an Ubuntu computer and that the
 target uses a microSD card. Run all build commands from the repository root.
+
+For an introduction to Buildroot packages, configurations, overlays, startup
+scripts, and the way this project assembles its image, read the
+[Buildroot tutorial](../buildroot-tutorial/README.md). This guide remains the
+place for the commands used to prepare, build, flash, and troubleshoot an
+image.
 
 ## Image storage
 
@@ -30,6 +36,8 @@ The `iot_rpi4_defconfig` configuration prepares the Pi to:
 - start Mosquitto on IPv4 port 1883 for development deployments from the
   local network;
 - prepare the optional persistent data partition at `/data` when it exists;
+- play H.264 video through the Raspberry Pi decoder and direct OpenGL/DRM
+  output;
 - start IoT App automatically near the end of boot; and
 - provide `/etc/init.d/iot-app` for manually starting, stopping, or restarting
   the service.
@@ -189,8 +197,8 @@ The important selections include:
 
 ### Set the startup display resolution
 
-The Raspberry Pi 4 image starts HDMI-A-1 at 1920x1080 and 60 Hz. The setting
-is stored in the project-owned boot command line:
+The Raspberry Pi 4 image requests 1920x1080 at 60 Hz on both HDMI connectors.
+The settings are stored in the project-owned boot command line:
 
 ```text
 iot_app/buildroot_external/board/raspberrypi4/cmdline.txt
@@ -199,12 +207,14 @@ iot_app/buildroot_external/board/raspberrypi4/cmdline.txt
 Its display option is:
 
 ```text
-video=HDMI-A-1:1920x1080@60
+video=HDMI-A-1:1920x1080@60 video=HDMI-A-2:1920x1080@60
 ```
 
-Linux applies this mode while it creates the display and framebuffer. IoT App
-then uses the existing `/dev/fb0` resolution; it does not change the display
-mode itself.
+Linux applies the matching setting while it creates the display and
+framebuffer. IoT App then uses the existing `/dev/fb0` resolution; it does not
+change the display mode itself. Both connectors are listed because a monitor
+connected to HDMI-A-2 would otherwise use its preferred mode, which can be
+3840x2160 on a 4K monitor.
 
 The same command line contains `quiet loglevel=4`. These options keep normal
 kernel status messages off the LVGL dashboard. Serious kernel messages may
@@ -215,17 +225,16 @@ with:
 dmesg
 ```
 
-See the [Raspberry Pi KMS display documentation](https://www.raspberrypi.com/documentation/computers/configuration.html#set-the-kms-display-mode)
+See the [Raspberry Pi display settings documentation](https://www.raspberrypi.com/documentation/computers/configuration.html#display-settings)
 for the `video=` setting. The separate
 [Linux kernel parameter reference](https://docs.kernel.org/admin-guide/kernel-parameters.html)
 documents `quiet` and `loglevel=`.
 
-To use another resolution, replace only the value after `video=` with a mode
-supported by the monitor. Keep the complete command line on one line. For
-example:
+To use another resolution, update both `video=` values to a mode supported by
+the monitor. Keep the complete command line on one line. For example:
 
 ```text
-video=HDMI-A-1:1280x720@60
+video=HDMI-A-1:1280x720@60 video=HDMI-A-2:1280x720@60
 ```
 
 After changing this file, regenerate and flash `sdcard.img`. On the running
@@ -235,6 +244,10 @@ Pi, confirm the applied setting with:
 cat /proc/cmdline
 cat /sys/class/graphics/fb0/virtual_size
 ```
+
+If the result is still the monitor's preferred mode, follow
+[The framebuffer uses the wrong resolution](../device-image/README.md#the-framebuffer-uses-the-wrong-resolution)
+to identify the connected HDMI port and inspect the settings Linux received.
 
 If an older image prints kernel messages over the dashboard, this command
 applies the same console filter until the next reboot:
@@ -308,21 +321,23 @@ LD_LIBRARY_PATH environment variable. This doesn't work.
 Use the same `env -u LD_LIBRARY_PATH` prefix on later Buildroot rebuild
 commands if the Ubuntu shell sets that variable.
 
-Buildroot already compiles the contents of each package in parallel. The
-number of those jobs defaults to the number of host CPU threads plus one, so
-the command above uses the available CPU without a top-level `-j` option.
+The root Makefile passes `-j$(BUILD_JOBS)` to Buildroot. `BUILD_JOBS` defaults
+to the number of host CPU threads. The build system of the active package can
+use those job slots to compile its own files in parallel.
 
 Buildroot also has experimental support for building independent packages at
 the same time. That feature requires `BR2_PER_PACKAGE_DIRECTORIES=y`, which the
-current `iot_rpi4_defconfig` does not enable. If that option is
-enabled later, request one top-level job per available CPU thread with:
+current `iot_rpi4_defconfig` does not enable. As a result, separate packages
+are still built one after another. If that option is enabled later, the same
+top-level `-j` value can also allow independent packages to build at the same
+time. The equivalent direct command is:
 
 ```bash
 env -u LD_LIBRARY_PATH \
   make -C buildroot \
   BR2_EXTERNAL="$PWD/iot_app/buildroot_external" \
   O=/opt/iot-app-builds/buildroot-raspberry-pi-4 \
-  -j"$(nproc)"
+  all -j"$(getconf _NPROCESSORS_ONLN)"
 ```
 
 Without `BR2_PER_PACKAGE_DIRECTORIES=y`, Buildroot serializes top-level package
@@ -816,9 +831,18 @@ dependency.
 | `Makefile` | Provides the short prepare, package-build, and image-build commands |
 
 The package links IoT App with the selected cJSON, DRM, Mosquitto, OpenSSL,
-LVGL, and MicroPython dependencies. Its runtime account belongs to the
-`video`, `render`, `i2c`, and `input` groups so it can use the required device
-files.
+libmpv, LVGL, and MicroPython dependencies. The Raspberry Pi configuration
+also selects Mesa's V3D driver, EGL, and OpenGL ES for direct video output.
+Together with mpv, these packages provide the DRM, GBM, EGL, and OpenGL path
+used during playback without adding X11, Wayland, audio, or Lua controls. The
+runtime account belongs to the `video`, `render`, `i2c`, and `input` groups so
+it can use the required device files.
+
+The checked-out [Buildroot mpv recipe](../../../buildroot/package/mpv/mpv.mk)
+builds mpv 0.40.0. It enables the shared libmpv library used by IoT App and
+depends on libplacebo. The recipe declares mpv as `GPL-2.0+`, which means
+GPL-2.0-or-later. Review the licences collected for the complete image before
+distributing it.
 
 The supplied Raspberry Pi 4 configuration uses BusyBox init. It installs
 `/etc/init.d/S90iot-app` for automatic startup and provides

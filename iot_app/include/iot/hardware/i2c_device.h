@@ -25,9 +25,10 @@ class ILinuxI2cSystemCalls;
  */
 class I2cDevice : public II2cDevice {
 public:
-  /* Opens the Linux I2C device using the normal system calls. */
+  /* Production code uses this constructor to open the device with real Linux system calls. */
   I2cDevice(int i2cBusNumber, std::uint8_t i2cAddress);
-  /* Opens the device using Linux calls supplied by a longer-lived owner. */
+
+  /* Unit tests supply fake Linux system calls through this constructor. */
   I2cDevice(int i2cBusNumber, std::uint8_t i2cAddress, internal::ILinuxI2cSystemCalls &linuxSystemCalls);
   ~I2cDevice() override;
 

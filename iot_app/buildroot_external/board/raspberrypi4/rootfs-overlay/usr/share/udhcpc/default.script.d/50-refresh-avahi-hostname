@@ -1,22 +1,56 @@
 #!/bin/sh
 
-# BusyBox udhcpc runs this hook after handling a DHCP event. Avahi can start
-# before Wi-Fi receives an address and temporarily choose a name such as
-# rspi-iot-app-2.local. Restarting it after the first address is assigned makes
-# it check the configured hostname again. This happens in the background DHCP
-# flow, so it does not delay the dashboard.
+# This file is called indirectly through Buildroot's normal DHCP startup path:
+#
+#   BusyBox init
+#       -> S30wifi starts wpa_supplicant
+#       -> S40network runs ifup -a
+#       -> /etc/network/interfaces requests DHCP for wlan0 and eth0
+#       -> BusyBox ifup starts udhcpc
+#       -> udhcpc calls /usr/share/udhcpc/default.script with a DHCP event
+#       -> default.script runs each executable file in default.script.d
+#       -> this file receives the same event as its first argument
+#
+# Buildroot's default.script builds its hook directory by adding ".d" to its
+# own path. It then loops over that directory and runs every regular executable
+# file. The root filesystem overlay installs this script there with mode 0755,
+# which makes it eligible for that loop.
+#
+# The "50-" prefix only controls this hook's order if more hooks are installed
+# in the same directory. It is not an init-script number and does not cause the
+# file to run by itself.
+#
+# Avahi can start before Wi-Fi receives an address and temporarily choose a
+# name such as rspi-iot-app-2.local. Restarting it after the first address is
+# assigned makes it check the configured hostname again. This happens in the
+# background DHCP flow, so it does not delay the dashboard.
 
 AVAHI_DAEMON="/usr/sbin/avahi-daemon"
 AVAHI_INIT_SCRIPT="/etc/init.d/S50avahi-daemon"
 REFRESH_MARKER="/run/iot-app-avahi-hostname-refreshed"
 
+# udhcpc passes the DHCP event name as the first argument. "bound" means that
+# the interface has just received a new lease and address. Other events, such
+# as lease renewal or address removal, do not need to refresh Avahi's hostname.
 [ "$1" = "bound" ] || exit 0
+
+# DHCP can report more than one bound event during the same boot. The marker
+# prevents every later event from restarting Avahi again. /run is held in
+# temporary memory, so the marker disappears automatically at the next boot.
 [ -e "$REFRESH_MARKER" ] && exit 0
 
+# avahi-daemon -c returns success only when an Avahi daemon is already running.
+# Hide the check's output because this hook normally runs without a terminal.
 if "$AVAHI_DAEMON" -c >/dev/null 2>&1; then
+	# Restart the running daemon so it reads the configured hostname again and
+	# advertises rspi-iot-app.local instead of a temporary conflict name. A
+	# restart failure must not turn a successful DHCP lease into a network
+	# failure, so leave the hook successfully without creating the marker. If
+	# Avahi is running again before another bound event, that event can retry.
 	"$AVAHI_INIT_SCRIPT" stop || exit 0
 	"$AVAHI_INIT_SCRIPT" start || exit 0
 fi
 
+# Record that the first bound event was handled. If Avahi has not started yet,
+# its later normal startup will read the hostname after the address has arrived.
 touch "$REFRESH_MARKER"
-
