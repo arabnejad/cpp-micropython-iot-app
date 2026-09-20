@@ -28,6 +28,8 @@ public:
   int  contentTypePropertyResult{MOSQ_ERR_SUCCESS};
   int  publishResult{MOSQ_ERR_SUCCESS};
   bool failClientCreation{false};
+  bool throwWhenCreatingClient{false};
+  bool throwWhenPublishing{false};
 
   bool        libraryWasCleanedUp{false};
   bool        clientWasDestroyed{false};

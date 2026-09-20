@@ -65,15 +65,15 @@ void MqttApplicationReceiver::start() {
   }
 
   throwForMosquittoError(m_mqttClientApi, m_mqttClientApi.initializeLibrary(), "Could not initialize libmosquitto");
-  m_libraryIsInitialized     = true;
-  const std::string clientId = "iot-app-" + m_mqttReceiverSettings.deviceId;
-  m_mqttClient               = m_mqttClientApi.createClient(clientId.c_str(), this);
-  if (m_mqttClient == nullptr) {
-    stop();
-    throw std::runtime_error("Could not allocate the MQTT application receiver");
-  }
+  m_libraryIsInitialized = true;
 
   try {
+    const std::string clientId = "iot-app-" + m_mqttReceiverSettings.deviceId;
+    m_mqttClient               = m_mqttClientApi.createClient(clientId.c_str(), this);
+    if (m_mqttClient == nullptr) {
+      throw std::runtime_error("Could not allocate the MQTT application receiver");
+    }
+
     throwForMosquittoError(m_mqttClientApi, m_mqttClientApi.selectMqtt5(m_mqttClient), "Could not select MQTT 5");
     throwForMosquittoError(m_mqttClientApi, m_mqttClientApi.setReconnectDelay(m_mqttClient),
                            "Could not configure MQTT reconnection");
@@ -136,14 +136,21 @@ void MqttApplicationReceiver::publishStatus(const ApplicationDeploymentStatus &d
       return;
     }
 
-    mosquitto_property *mqttProperties      = nullptr;
-    int                 mosquittoResultCode = m_mqttClientApi.addJsonContentType(&mqttProperties);
-
+    // Build the topic before allocating MQTT properties, so a string allocation failure leaves nothing to free.
     const std::string statusTopic =
         "iot/devices/" + m_mqttReceiverSettings.deviceId + "/applications/status/" + deploymentStatus.transferId;
-    if (mosquittoResultCode == MOSQ_ERR_SUCCESS) {
-      mosquittoResultCode = m_mqttClientApi.publish(m_mqttClient, statusTopic.c_str(), statusPayload.data(),
-                                                    static_cast<int>(statusPayload.size()), mqttProperties);
+    mosquitto_property *mqttProperties      = nullptr;
+    int                 mosquittoResultCode = MOSQ_ERR_SUCCESS;
+    try {
+      mosquittoResultCode = m_mqttClientApi.addJsonContentType(&mqttProperties);
+      if (mosquittoResultCode == MOSQ_ERR_SUCCESS) {
+        mosquittoResultCode = m_mqttClientApi.publish(m_mqttClient, statusTopic.c_str(), statusPayload.data(),
+                                                      static_cast<int>(statusPayload.size()), mqttProperties);
+      }
+    } catch (...) {
+      // The outer catch logs the error. Free the MQTT properties before it runs.
+      m_mqttClientApi.freeProperties(&mqttProperties);
+      throw;
     }
     m_mqttClientApi.freeProperties(&mqttProperties);
     if (mosquittoResultCode != MOSQ_ERR_SUCCESS) {

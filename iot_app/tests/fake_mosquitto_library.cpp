@@ -1,5 +1,7 @@
 #include "fake_mosquitto_library.h"
 
+#include <stdexcept>
+
 namespace iot {
 namespace tests {
 
@@ -13,6 +15,9 @@ int FakeMqttClientApi::cleanupLibrary() {
 }
 
 struct mosquitto *FakeMqttClientApi::createClient(const char *, void *userData) {
+  if (throwWhenCreatingClient) {
+    throw std::runtime_error("client creation failed");
+  }
   if (failClientCreation) {
     return nullptr;
   }
@@ -86,6 +91,9 @@ int FakeMqttClientApi::addJsonContentType(mosquitto_property **mqttProperties) {
 
 int FakeMqttClientApi::publish(struct mosquitto *, const char *topic, const void *payload, int payloadSize,
                                const mosquitto_property *) {
+  if (throwWhenPublishing) {
+    throw std::runtime_error("status publication failed");
+  }
   publishedTopic = topic == nullptr ? "" : topic;
   publishedPayload.assign(static_cast<const char *>(payload), static_cast<std::size_t>(payloadSize));
   publishedQualityOfService = 1;

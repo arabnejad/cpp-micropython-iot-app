@@ -150,6 +150,10 @@ TEST_F(MqttApplicationReceiverTest, CleansPropertiesWhenStatusPublicationFails) 
   m_mqttClientApi.publishResult             = MOSQ_ERR_NO_CONN;
   m_receiver->publishStatus({"publish-failure", "failed", "app", "failure"});
   EXPECT_EQ(m_mqttClientApi.propertyFreeCount, 2U);
+
+  m_mqttClientApi.throwWhenPublishing = true;
+  EXPECT_NO_THROW(m_receiver->publishStatus({"publish-exception", "failed", "app", "failure"}));
+  EXPECT_EQ(m_mqttClientApi.propertyFreeCount, 3U);
 }
 
 TEST_F(MqttApplicationReceiverTest, ReleasesResourcesAfterEveryStartupFailure) {
@@ -164,6 +168,17 @@ TEST_F(MqttApplicationReceiverTest, ReleasesResourcesAfterEveryStartupFailure) {
   createReceiver();
   EXPECT_THROW(m_receiver->start(), std::runtime_error);
   EXPECT_TRUE(m_mqttClientApi.libraryWasCleanedUp);
+}
+
+TEST_F(MqttApplicationReceiverTest, CleansTheLibraryWhenClientCreationThrows) {
+  createReceiver();
+  m_mqttClientApi.throwWhenCreatingClient = true;
+
+  EXPECT_THROW(m_receiver->start(), std::runtime_error);
+  EXPECT_TRUE(m_mqttClientApi.libraryWasCleanedUp);
+
+  m_mqttClientApi.throwWhenCreatingClient = false;
+  EXPECT_NO_THROW(m_receiver->start());
 }
 
 } // namespace
