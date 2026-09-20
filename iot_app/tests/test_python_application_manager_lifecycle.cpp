@@ -1,5 +1,7 @@
 #include "python_application_manager_test_fixture.h"
 
+#include "iot/python/micropython_application_context.h"
+
 namespace iot {
 namespace python {
 namespace {
@@ -14,15 +16,18 @@ TEST_F(PythonApplicationManagerTest, StartsStopsAndRestartsTheShippedDefaultAppl
 
   pythonApplicationManager.startDefaultApplication(defaultApplication);
   EXPECT_EQ(pythonApplicationManager.state(), ApplicationState::DefaultApplication);
+  EXPECT_NE(MicroPythonApplicationContext::active(), nullptr);
   EXPECT_EQ(m_fileDownloader.numberOfClearCalls, 1U);
   EXPECT_EQ(pythonApplicationManager.activeScreenName(), "Default");
 
   pythonApplicationManager.stop();
   EXPECT_EQ(pythonApplicationManager.state(), ApplicationState::Stopped);
+  EXPECT_EQ(MicroPythonApplicationContext::active(), nullptr);
   EXPECT_TRUE(pythonApplicationManager.activeScreenName().empty());
 
   pythonApplicationManager.startDefaultApplication(defaultApplication);
   EXPECT_EQ(pythonApplicationManager.state(), ApplicationState::DefaultApplication);
+  EXPECT_NE(MicroPythonApplicationContext::active(), nullptr);
   EXPECT_EQ(m_fileDownloader.numberOfClearCalls, 2U);
 }
 

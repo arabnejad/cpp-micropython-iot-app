@@ -1,5 +1,7 @@
 #include "python_application_manager_test_fixture.h"
 
+#include "iot/python/micropython_application_context.h"
+
 #include <chrono>
 #include <stdexcept>
 #include <thread>
@@ -214,6 +216,25 @@ TEST_F(PythonApplicationManagerTest, ShowsTheEmergencyScreenWhenAnExternalApplic
   EXPECT_EQ(pythonApplicationManager.state(), ApplicationState::EmergencyScreen);
   ASSERT_TRUE(waitForEmergencyScreen());
   EXPECT_NE(emergencyScreenText().find("external broke"), std::string::npos);
+}
+
+TEST_F(PythonApplicationManagerTest, ReleasesTheApplicationContextWhenStartupThrowsAndCanRetry) {
+  auto pythonApplicationManager = createApplicationManager();
+  auto invalidApplication       = createPythonApplication("Missing entry point", "value = 1\n");
+  invalidApplication.entryPointPath.clear();
+
+  const auto failedActivation = pythonApplicationManager.activateExternalApplication(invalidApplication);
+
+  EXPECT_FALSE(failedActivation.externalApplicationIsRunning);
+  EXPECT_EQ(failedActivation.failureReason, "Python application is empty");
+  EXPECT_EQ(MicroPythonApplicationContext::active(), nullptr);
+  EXPECT_EQ(pythonApplicationManager.state(), ApplicationState::EmergencyScreen);
+  ASSERT_TRUE(waitForEmergencyScreen());
+
+  const auto retry =
+      pythonApplicationManager.activateExternalApplication(createPythonApplication("Valid replacement", "value = 2\n"));
+  ASSERT_TRUE(retry.externalApplicationIsRunning) << retry.failureReason;
+  EXPECT_NE(MicroPythonApplicationContext::active(), nullptr);
 }
 
 TEST_F(PythonApplicationManagerTest, ShowsTheEmergencyScreenWhenAScheduledCallbackFails) {

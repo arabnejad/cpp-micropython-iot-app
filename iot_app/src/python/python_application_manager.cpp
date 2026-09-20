@@ -123,7 +123,6 @@ PythonApplicationManager::activateExternalApplication(const PythonApplication &p
     failureTraceback               = activationResult.failureReason;
   }
 
-  stopPythonInterpreter();
   if (!showEmergencyScreenForApplicationFailure(
           "The external Python application failed to start, so no Python app is running.",
           pythonApplication.applicationName, "Startup", std::move(failureTraceback))) {
@@ -145,26 +144,26 @@ PythonApplicationManager::startApplicationInNewInterpreter(const PythonApplicati
                 ", sourceBytes=", pythonApplication.sourceCode.size(), ", heapBytes=", m_pythonHeapSizeInBytes);
   m_screenManager.throwIfRenderThreadFailed();
   try {
-    m_microPythonApplicationContext = std::make_unique<MicroPythonApplicationContext>(
+    auto applicationContext = std::make_unique<MicroPythonApplicationContext>(
         m_screenManager, m_activeDisplay, m_connectedDisplays, m_systemInformationProvider, m_fileDownloader,
         m_systemInformationProvider.readSystemInformation(), pythonApplication.applicationName);
-    m_microPythonRuntime = std::make_unique<MicroPythonRuntime>(m_pythonHeapSizeInBytes);
+    // If startup fails, destroy the interpreter before the context used by its native modules.
+    auto microPythonRuntime = std::make_unique<MicroPythonRuntime>(m_pythonHeapSizeInBytes);
 
-    const auto pythonExecutionResult = m_microPythonRuntime->executeApplication(pythonApplication);
-    if (!pythonExecutionResult.succeeded) {
-      stopPythonInterpreter();
+    auto pythonExecutionResult = microPythonRuntime->executeApplication(pythonApplication);
+    if (pythonExecutionResult.succeeded) {
+      m_microPythonApplicationContext = std::move(applicationContext);
+      m_microPythonRuntime            = std::move(microPythonRuntime);
     }
     return pythonExecutionResult;
   } catch (const std::exception &error) {
     IOT_LOG_ERROR(m_logger, "Application startup threw an exception; id=", pythonApplication.applicationId, ", name='",
                   pythonApplication.applicationName, "', entryPoint=", pythonApplication.entryPointPath, ": ",
                   error.what());
-    stopPythonInterpreter();
     throw;
   } catch (...) {
     IOT_LOG_ERROR(m_logger, "Application startup threw an unknown exception; id=", pythonApplication.applicationId,
                   ", name='", pythonApplication.applicationName, "', entryPoint=", pythonApplication.entryPointPath);
-    stopPythonInterpreter();
     throw;
   }
 }
