@@ -51,14 +51,13 @@ struct DisplayInfo {
 /* The selected monitor together with its current mode. */
 class ActiveDisplay {
 public:
-  ActiveDisplay(DisplayInfo displayInformation, DisplayMode activeDisplayMode);
+  explicit ActiveDisplay(DisplayInfo displayInformation);
 
   const DisplayInfo &display() const noexcept;
   const DisplayMode &mode() const noexcept;
 
 private:
   DisplayInfo m_displayInformation;
-  DisplayMode m_activeDisplayMode;
 };
 
 } // namespace display

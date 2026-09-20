@@ -14,6 +14,7 @@
 #include <cctype>
 #include <cstdint>
 #include <filesystem>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -218,9 +219,12 @@ internal::IDrmDisplayApi &linuxDrmDisplayApi() {
 
 } // namespace
 
-/* Saves the monitor details and current mode from one scan. */
-ActiveDisplay::ActiveDisplay(DisplayInfo displayInformation, DisplayMode activeDisplayMode)
-    : m_displayInformation(std::move(displayInformation)), m_activeDisplayMode(std::move(activeDisplayMode)) {}
+/* Saves a monitor whose current mode was found during the startup scan. */
+ActiveDisplay::ActiveDisplay(DisplayInfo displayInformation) : m_displayInformation(std::move(displayInformation)) {
+  if (!m_displayInformation.currentMode) {
+    throw std::invalid_argument("The selected display does not have an active mode");
+  }
+}
 
 /* Monitor details from the scan. */
 const DisplayInfo &ActiveDisplay::display() const noexcept {
@@ -229,7 +233,7 @@ const DisplayInfo &ActiveDisplay::display() const noexcept {
 
 /* Mode that was active during the scan. */
 const DisplayMode &ActiveDisplay::mode() const noexcept {
-  return m_activeDisplayMode;
+  return *m_displayInformation.currentMode;
 }
 
 DisplayManager::DisplayManager() : DisplayManager(linuxDrmDisplayApi()) {}

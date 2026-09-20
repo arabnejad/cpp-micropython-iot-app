@@ -289,7 +289,7 @@ inline display::ActiveDisplay testActiveDisplay() {
   testDisplayMode.preferred          = true;
   testDisplayInformation.currentMode = testDisplayMode;
   testDisplayInformation.supportedModes.push_back(testDisplayMode);
-  return display::ActiveDisplay{testDisplayInformation, testDisplayMode};
+  return display::ActiveDisplay{testDisplayInformation};
 }
 
 inline std::vector<display::DisplayInfo> testConnectedDisplays() {

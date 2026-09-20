@@ -7,6 +7,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <stdexcept>
 #include <vector>
 
 namespace iot {
@@ -26,6 +27,14 @@ TEST(ActiveDisplayTest, KeepsTheSelectedDisplayAndItsActiveModeTogether) {
   EXPECT_EQ(activeDisplay.mode().name, "1920x1080");
   EXPECT_EQ(activeDisplay.mode().width, 1920U);
   EXPECT_EQ(activeDisplay.mode().height, 1080U);
+  EXPECT_EQ(&activeDisplay.mode(), &*activeDisplay.display().currentMode);
+}
+
+TEST(ActiveDisplayTest, RejectsASelectedDisplayWithoutAnActiveMode) {
+  DisplayInfo displayInformation = tests::testActiveDisplay().display();
+  displayInformation.currentMode.reset();
+
+  EXPECT_THROW(static_cast<void>(ActiveDisplay(displayInformation)), std::invalid_argument);
 }
 
 TEST(DisplayTypesTest, ComparesEveryPartOfADisplayIdentity) {

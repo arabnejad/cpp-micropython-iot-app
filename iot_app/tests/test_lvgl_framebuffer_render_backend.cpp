@@ -30,11 +30,10 @@ public:
 };
 
 display::ActiveDisplay createActiveDisplayWithResolution(std::uint32_t width, std::uint32_t height) {
-  auto activeDisplay = tests::testActiveDisplay();
-  auto activeMode    = activeDisplay.mode();
-  activeMode.width   = width;
-  activeMode.height  = height;
-  return display::ActiveDisplay(activeDisplay.display(), activeMode);
+  auto displayInformation                = tests::testActiveDisplay().display();
+  displayInformation.currentMode->width  = width;
+  displayInformation.currentMode->height = height;
+  return display::ActiveDisplay(displayInformation);
 }
 
 TextBoxSpec createTextBoxSpecificationWithFontSize(std::uint16_t fontSize) {

@@ -91,7 +91,7 @@ int main(int argc, char **argv) {
       throw std::runtime_error("Display " + selectedDisplay->displayId.connectorName +
                                " is connected but does not currently have an active DRM mode");
     }
-    const iot::display::ActiveDisplay activeDisplay{*selectedDisplay, *selectedDisplay->currentMode};
+    const iot::display::ActiveDisplay activeDisplay{*selectedDisplay};
     printDisplaySummary(activeDisplay);
     std::signal(SIGINT, requestApplicationShutdown);
     std::signal(SIGTERM, requestApplicationShutdown);
