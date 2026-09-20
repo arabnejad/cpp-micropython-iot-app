@@ -59,6 +59,18 @@ IoT App creates one display and connects it to `/dev/fb0`. The framebuffer
 already has a width, height, and pixel format selected by Linux. IoT App reads
 those values instead of choosing new ones.
 
+`/dev/fb0` is not another name for HDMI-A-1. On the Raspberry Pi 4, the two
+HDMI connectors belong to the same graphics device and share its framebuffer.
+If the only monitor is connected to HDMI-A-2, Linux can show `/dev/fb0` there,
+which is why IoT App works without changing the framebuffer path.
+[A Raspberry Pi engineer explains this framebuffer-per-graphics-device
+behaviour](https://forums.raspberrypi.com/viewtopic.php?t=363669).
+
+The current LVGL and video setup supports one connected monitor. IoT App can
+list additional monitors, but writing to `/dev/fb0` does not tell Linux which
+HDMI connector LVGL should use. With two connected monitors, the dashboard and
+full-screen video are not guaranteed to appear on the same one.
+
 ### 2.2 Screen
 
 A screen is the root container for normal widgets. This project gets the

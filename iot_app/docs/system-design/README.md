@@ -541,6 +541,11 @@ with `display.monitors()` and identify the selected monitor with
 `display.active_monitor()`. The current runtime does not support display
 hot-plug. Restarting IoT App performs a new scan.
 
+Selecting a monitor here supplies its details and active mode to the runtime
+and tells mpv which connector to use for video. It does not make the LVGL
+framebuffer target that connector. The current rendering and video setup
+supports one connected monitor; the list can still report more than one.
+
 ## 11. Rendering subsystem
 
 The renderer uses LVGL's Linux framebuffer backend with `/dev/fb0`.
@@ -555,6 +560,11 @@ ownership or use libdrm to draw.
 Normal widgets use only the framebuffer and do not require a desktop or window
 manager. Full-screen video also uses Mesa, EGL, GBM, and OpenGL. Those graphics
 libraries stay idle while LVGL owns the screen.
+
+`/dev/fb0` belongs to the Linux framebuffer for the graphics device, not to
+HDMI-A-1 specifically. Linux can show it on HDMI-A-2 when that is the connected
+port. With more than one monitor, the framebuffer size check above only checks
+dimensions; it cannot prove that LVGL and mpv use the same physical output.
 
 ### 11.1 `ScreenManager`
 

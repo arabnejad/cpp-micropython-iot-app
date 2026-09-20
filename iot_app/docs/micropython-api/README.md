@@ -504,6 +504,13 @@ zero for the same reason.
 The list is a startup snapshot. Connecting or disconnecting a monitor later
 does not update it. Restart IoT App to scan the displays again.
 
+This list can contain several monitors, but the current LVGL and full-screen
+video setup supports one connected monitor. The `active` field identifies the
+monitor selected for its mode and for video playback; it does not route
+`/dev/fb0` to a particular HDMI connector. See the
+[LVGL guide](../lvgl/README.md#21-display) for why HDMI-A-2 still works when it
+is the only connected monitor.
+
 ### `display.active_monitor()`
 
 ```python

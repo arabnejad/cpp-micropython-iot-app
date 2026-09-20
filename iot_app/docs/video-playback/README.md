@@ -389,9 +389,9 @@ The implementation can be followed in this order:
 ### Why LVGL stops during playback
 
 LVGL normally draws IoT App through the Linux framebuffer. mpv uses
-DRM/EGL/OpenGL to control the same monitor directly. Allowing both renderers to
-write to the display at the same time would make ownership unclear and could
-leave either renderer showing stale content.
+DRM/EGL/OpenGL to control the selected monitor directly. Allowing both renderers
+to write to the display at the same time would make ownership unclear and
+could leave either renderer showing stale content.
 
 `ScreenManager` therefore stops its LVGL render thread and closes the
 framebuffer backend before it calls libmpv. When the video ends, the libmpv
@@ -544,8 +544,11 @@ that decoding failed.
 The earlier test also said that no preferred mode was found. Supplying
 `drm-mode=1920x1080@60` removed that uncertainty. IoT App builds this value from
 the display selected during startup. It also supplies the selected DRM device
-and connector so mpv uses the same monitor as LVGL. The mpv manual documents
-the [`drm-mode`, `drm-device`, and `drm-connector` options](https://mpv.io/manual/master/#video-output-drivers).
+and connector to mpv. With one connected monitor, this is the display used by
+LVGL through `/dev/fb0`. With more than one, the Linux framebuffer does not
+give LVGL an individual HDMI connector, so the dashboard and video may appear
+on different monitors. The mpv manual documents the
+[`drm-mode`, `drm-device`, and `drm-connector` options](https://mpv.io/manual/master/#video-output-drivers).
 
 ## Project reference guides
 
