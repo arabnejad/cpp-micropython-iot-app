@@ -1,5 +1,6 @@
 #include "iot/messaging/temporary_python_application_installer.h"
 #include "iot/python/path_validation.h"
+#include "json/json_field_reader.h"
 
 #include <cjson/cJSON.h>
 
@@ -7,28 +8,12 @@
 
 #include <exception>
 #include <fstream>
-#include <memory>
 #include <stdexcept>
 #include <string>
 
 namespace iot {
 namespace messaging {
 namespace {
-
-struct CJsonObjectDeleter {
-  void operator()(cJSON *jsonObject) const noexcept {
-    cJSON_Delete(jsonObject);
-  }
-};
-
-struct CJsonTextDeleter {
-  void operator()(char *jsonText) const noexcept {
-    cJSON_free(jsonText);
-  }
-};
-
-using UniqueCJsonObject = std::unique_ptr<cJSON, CJsonObjectDeleter>;
-using UniqueCJsonText   = std::unique_ptr<char, CJsonTextDeleter>;
 
 void throwIfPathIsUnsafe(const std::filesystem::path &path, const char *description) {
   if (!python::isSafeRelativePath(path)) {
@@ -52,14 +37,14 @@ void writePrivateFile(const std::filesystem::path &filePath, const std::string &
 }
 
 std::string createApplicationMetadataJson(const ApplicationDeploymentRequest &deploymentRequest) {
-  UniqueCJsonObject metadata{cJSON_CreateObject()};
+  iot::internal::UniqueCJsonObject metadata{cJSON_CreateObject()};
   if (!metadata || cJSON_AddStringToObject(metadata.get(), "id", deploymentRequest.applicationId.c_str()) == nullptr ||
       cJSON_AddStringToObject(metadata.get(), "name", deploymentRequest.applicationName.c_str()) == nullptr ||
       cJSON_AddStringToObject(metadata.get(), "entry_point", deploymentRequest.entryPoint.c_str()) == nullptr) {
     throw std::runtime_error("Could not create the temporary application metadata");
   }
 
-  UniqueCJsonText serializedMetadata{cJSON_Print(metadata.get())};
+  iot::internal::UniqueCJsonText serializedMetadata{cJSON_Print(metadata.get())};
   if (!serializedMetadata) {
     throw std::runtime_error("Could not serialize the temporary application metadata");
   }

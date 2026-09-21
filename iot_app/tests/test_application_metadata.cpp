@@ -43,6 +43,16 @@ TEST(ApplicationMetadataTest, RejectsMissingInvalidAndEmptyFields) {
                std::runtime_error);
 }
 
+TEST(ApplicationMetadataTest, RejectsAnEmbeddedNullOrTextAfterTheJsonObject) {
+  const std::string validMetadataJson = R"json({"id":"clock","name":"Clock","entry_point":"main.py"})json";
+  std::string       metadataWithNull  = validMetadataJson;
+  metadataWithNull.push_back('\0');
+  metadataWithNull += "ignored";
+
+  EXPECT_THROW(parseApplicationMetadata(metadataWithNull), std::runtime_error);
+  EXPECT_THROW(parseApplicationMetadata(validMetadataJson + " extra"), std::runtime_error);
+}
+
 TEST(ApplicationMetadataTest, AcceptsAllSupportedApplicationIdCharacters) {
   const ApplicationMetadata applicationMetadata{"app.Name-01_test", "Test", "nested/main.py"};
 

@@ -75,6 +75,13 @@ TEST(ApplicationDeploymentMessageParserTest, RejectsEmptyNonObjectDuplicateField
   EXPECT_THROW(deploymentMessageParser.parse(unsupportedType, "raspberrypi-01"), std::runtime_error);
 }
 
+TEST(ApplicationDeploymentMessageParserTest, RejectsTextAfterTheJsonObject) {
+  const ApplicationDeploymentMessageParser deploymentMessageParser(1024U);
+
+  EXPECT_THROW(deploymentMessageParser.parse(std::string(validDeploymentMessageJson) + " extra", "raspberrypi-01"),
+               std::runtime_error);
+}
+
 TEST(ApplicationDeploymentMessageParserTest,
      RejectsUnsafeTransferIdsInvalidEncodingInvalidBase64WrongSourceSizeAndZeroLimit) {
   const ApplicationDeploymentMessageParser deploymentMessageParser(14U);

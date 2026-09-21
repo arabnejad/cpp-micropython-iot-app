@@ -8,6 +8,27 @@
 namespace iot {
 namespace internal {
 
+void CJsonObjectDeleter::operator()(cJSON *jsonObject) const noexcept {
+  cJSON_Delete(jsonObject);
+}
+
+void CJsonTextDeleter::operator()(char *jsonText) const noexcept {
+  cJSON_free(jsonText);
+}
+
+UniqueCJsonObject parseCompleteJsonObject(const std::string &jsonText, std::string_view documentName) {
+  if (jsonText.empty() || jsonText.find('\0') != std::string::npos) {
+    throw std::runtime_error(std::string(documentName) + " is empty or contains a null byte");
+  }
+
+  const char       *parseEnd = nullptr;
+  UniqueCJsonObject jsonObject{cJSON_ParseWithLengthOpts(jsonText.c_str(), jsonText.size() + 1U, &parseEnd, 1)};
+  if (!jsonObject || !cJSON_IsObject(jsonObject.get())) {
+    throw std::runtime_error(std::string(documentName) + " is not one complete JSON object");
+  }
+  return jsonObject;
+}
+
 const cJSON *findUniqueJsonField(const cJSON *jsonObject, std::string_view fieldName, std::string_view documentName) {
   const cJSON *matchingField = nullptr;
   for (const cJSON *field = jsonObject == nullptr ? nullptr : jsonObject->child; field != nullptr;

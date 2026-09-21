@@ -2,10 +2,7 @@
 #include "iot/python/path_validation.h"
 #include "json/json_field_reader.h"
 
-#include <cjson/cJSON.h>
-
 #include <filesystem>
-#include <memory>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -15,14 +12,6 @@ namespace python {
 namespace {
 
 constexpr std::size_t maximumApplicationIdLength = 128U;
-
-struct CJsonObjectDeleter {
-  void operator()(cJSON *jsonObject) const noexcept {
-    cJSON_Delete(jsonObject);
-  }
-};
-
-using UniqueCJsonObject = std::unique_ptr<cJSON, CJsonObjectDeleter>;
 
 bool isValidApplicationId(std::string_view applicationId) {
   if (applicationId.empty() || applicationId.size() > maximumApplicationIdLength) {
@@ -55,16 +44,7 @@ void validateApplicationMetadata(const ApplicationMetadata &metadata) {
 }
 
 ApplicationMetadata parseApplicationMetadata(const std::string &metadataJson) {
-  if (metadataJson.empty() || metadataJson.find('\0') != std::string::npos) {
-    throw std::runtime_error("Application metadata is empty or contains a null byte");
-  }
-
-  const char       *parseEnd = nullptr;
-  UniqueCJsonObject metadataObject{
-      cJSON_ParseWithLengthOpts(metadataJson.c_str(), metadataJson.size() + 1U, &parseEnd, 1)};
-  if (!metadataObject || !cJSON_IsObject(metadataObject.get())) {
-    throw std::runtime_error("Application metadata is not one complete JSON object");
-  }
+  const auto metadataObject = iot::internal::parseCompleteJsonObject(metadataJson, "Application metadata");
 
   ApplicationMetadata metadata{
       iot::internal::requireNonEmptyJsonStringField(metadataObject.get(), "id", "Application metadata"),

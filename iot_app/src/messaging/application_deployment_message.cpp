@@ -11,7 +11,6 @@
 #include <cstdint>
 #include <cstdlib>
 #include <limits>
-#include <memory>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -22,21 +21,6 @@ namespace messaging {
 namespace {
 
 constexpr std::size_t maximumIdentifierLength = 128U;
-
-struct CJsonObjectDeleter {
-  void operator()(cJSON *jsonObject) const noexcept {
-    cJSON_Delete(jsonObject);
-  }
-};
-
-struct CJsonTextDeleter {
-  void operator()(char *jsonText) const noexcept {
-    cJSON_free(jsonText);
-  }
-};
-
-using UniqueCJsonObject = std::unique_ptr<cJSON, CJsonObjectDeleter>;
-using UniqueCJsonText   = std::unique_ptr<char, CJsonTextDeleter>;
 
 bool isSafeIdentifier(std::string_view identifier) {
   if (identifier.empty() || identifier.size() > maximumIdentifierLength) {
@@ -71,20 +55,6 @@ std::size_t requireSizeField(const cJSON *jsonObject, const char *fieldName, std
     throw std::runtime_error("Deployment field '" + std::string(fieldName) + "' has an invalid byte count");
   }
   return static_cast<std::size_t>(field->valuedouble);
-}
-
-UniqueCJsonObject parseJson(const std::string &messagePayload) {
-  if (messagePayload.empty() || messagePayload.find('\0') != std::string::npos) {
-    throw std::runtime_error("Deployment message is empty or contains a null byte");
-  }
-
-  const char       *parseEnd = nullptr;
-  UniqueCJsonObject jsonObject{
-      cJSON_ParseWithLengthOpts(messagePayload.c_str(), messagePayload.size() + 1U, &parseEnd, 1)};
-  if (!jsonObject || !cJSON_IsObject(jsonObject.get())) {
-    throw std::runtime_error("Deployment message is not one complete JSON object");
-  }
-  return jsonObject;
 }
 
 std::string decodeBase64(const std::string &encodedText, std::size_t maximumDecodedSize) {
@@ -153,7 +123,7 @@ ApplicationDeploymentMessageParser::ApplicationDeploymentMessageParser(std::size
 
 ApplicationDeploymentRequest ApplicationDeploymentMessageParser::parse(const std::string &messagePayload,
                                                                        const std::string &expectedDeviceId) const {
-  const auto jsonObject = parseJson(messagePayload);
+  const auto jsonObject = iot::internal::parseCompleteJsonObject(messagePayload, "Deployment message");
 
   if (requireStringField(jsonObject.get(), "message_type") != "install_single_file_application") {
     throw std::runtime_error("Deployment message_type is not supported");
@@ -202,7 +172,7 @@ ApplicationDeploymentRequest ApplicationDeploymentMessageParser::parse(const std
 std::optional<std::string>
 ApplicationDeploymentMessageParser::tryReadTransferId(const std::string &messagePayload) const noexcept {
   try {
-    const auto        jsonObject = parseJson(messagePayload);
+    const auto        jsonObject = iot::internal::parseCompleteJsonObject(messagePayload, "Deployment message");
     const std::string transferId = requireStringField(jsonObject.get(), "transfer_id");
     if (isSafeIdentifier(transferId)) {
       return transferId;
@@ -214,7 +184,7 @@ ApplicationDeploymentMessageParser::tryReadTransferId(const std::string &message
 
 std::string
 ApplicationDeploymentMessageParser::serializeStatusPayload(const ApplicationDeploymentStatus &deploymentStatus) {
-  UniqueCJsonObject jsonObject{cJSON_CreateObject()};
+  iot::internal::UniqueCJsonObject jsonObject{cJSON_CreateObject()};
   if (!jsonObject) {
     throw std::runtime_error("Could not allocate deployment status JSON");
   }
@@ -223,7 +193,7 @@ ApplicationDeploymentMessageParser::serializeStatusPayload(const ApplicationDepl
   addJsonString(jsonObject.get(), "application_id", deploymentStatus.applicationId);
   addJsonString(jsonObject.get(), "message", deploymentStatus.message);
 
-  UniqueCJsonText serializedJson{cJSON_PrintUnformatted(jsonObject.get())};
+  iot::internal::UniqueCJsonText serializedJson{cJSON_PrintUnformatted(jsonObject.get())};
   if (!serializedJson) {
     throw std::runtime_error("Could not serialize deployment status JSON");
   }
