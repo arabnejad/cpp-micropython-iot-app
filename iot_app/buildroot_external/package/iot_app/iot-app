@@ -37,6 +37,9 @@ FRAMEBUFFER_DEVICE="/dev/fb0"
 # Do not wait forever when the kernel does not create the framebuffer device.
 FRAMEBUFFER_WAIT_SECONDS=10
 
+# Give IoT App time to finish after SIGTERM, but do not block stop or restart forever.
+STOP_WAIT_SECONDS=10
+
 iot_app_is_running() {
 	# -r is true when the PID file exists and can be read. || means "if the
 	# test failed, run the command on the right", so a missing PID file makes
@@ -176,12 +179,24 @@ stop() {
 		--pidfile "$PIDFILE" --name "$PROCESS_NAME"
 	status=$?
 
-	# Poll until --test says that the process no longer exists. The short sleep
-	# avoids repeatedly checking as fast as the CPU can run.
-	while start-stop-daemon --stop --test --quiet \
-		--pidfile "$PIDFILE" --name "$PROCESS_NAME"; do
-		sleep 0.1
+	# Check once per second, for at most STOP_WAIT_SECONDS seconds. A Python
+	# application could be stuck, so waiting without a limit would also block
+	# a manual restart or system shutdown.
+	waited_seconds=0
+	while [ "$waited_seconds" -lt "$STOP_WAIT_SECONDS" ] &&
+		start-stop-daemon --stop --test --quiet \
+			--pidfile "$PIDFILE" --name "$PROCESS_NAME"; do
+		sleep 1
+		waited_seconds=$((waited_seconds + 1))
 	done
+
+	# Keep the PID file if the process is still running. Restart must not start
+	# another copy, and this script does not force-kill the current one.
+	if start-stop-daemon --stop --test --quiet \
+		--pidfile "$PIDFILE" --name "$PROCESS_NAME"; then
+		echo "FAIL (still running after ${STOP_WAIT_SECONDS} seconds)"
+		return 1
+	fi
 
 	# The process has gone, so its old PID file must not be reused later.
 	rm -f "$PIDFILE"
@@ -207,7 +222,7 @@ case "$1" in
 		stop
 		;;
 	restart)
-		stop
+		stop || exit 1
 		start
 		;;
 	# * matches anything not handled above, including a missing argument.

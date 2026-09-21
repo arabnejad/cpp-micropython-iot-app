@@ -310,6 +310,11 @@ Buildroot commands:
 cat /var/log/iot_app.log
 ```
 
+Buildroot gives IoT App 10 seconds to stop after SIGTERM. If it is still
+running, `stop` reports a failure and keeps the PID file. `restart` then stops
+without starting another copy. The script does not force-kill the process;
+check `/var/log/iot_app.log` if shutdown gets stuck.
+
 Yocto commands:
 
 ```sh
