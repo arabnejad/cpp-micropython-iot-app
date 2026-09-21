@@ -24,6 +24,7 @@ MQTT_KEEP_ALIVE_SECONDS = 60
 MQTT_CONNECTION_TIMEOUT_SECONDS = 10
 # The device replies after validation and installation, before running Python.
 DEVICE_ACKNOWLEDGEMENT_TIMEOUT_SECONDS = 30
+MAXIMUM_PYTHON_SOURCE_SIZE_BYTES = 512 * 1024
 MAXIMUM_DEPLOYMENT_MESSAGE_SIZE_BYTES = 1_000_000
 
 FINAL_DEVICE_STATUSES = {
@@ -245,6 +246,12 @@ def build_deployment_message(
         raise SenderError("main Python source is empty")
     if b"\0" in source_bytes:
         raise SenderError("main Python source contains a null byte")
+    if len(source_bytes) > MAXIMUM_PYTHON_SOURCE_SIZE_BYTES:
+        raise SenderError(
+            "Python source is %d bytes, which exceeds the "
+            "single-file source limit of %d bytes (512 KiB)."
+            % (len(source_bytes), MAXIMUM_PYTHON_SOURCE_SIZE_BYTES)
+        )
 
     install_topic = f"iot/devices/{configuration.device_id}/applications/install"
     status_topic = (
@@ -265,8 +272,9 @@ def build_deployment_message(
     payload = json.dumps(message, separators=(",", ":"), sort_keys=True).encode("utf-8")
     if len(payload) > MAXIMUM_DEPLOYMENT_MESSAGE_SIZE_BYTES:
         raise SenderError(
-            "Deployment message is %d bytes, which exceeds the sender's %d-byte limit. "
-            "Use a smaller app or the future archive download/chunk protocol."
+            "Deployment message is %d bytes, which exceeds the %d-byte limit "
+            "for one MQTT message. "
+            "This sender sends the application in a single message."
             % (len(payload), MAXIMUM_DEPLOYMENT_MESSAGE_SIZE_BYTES)
         )
     return PreparedDeployment(

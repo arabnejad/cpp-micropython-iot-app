@@ -83,12 +83,14 @@ The sender uses these defaults from `send_app.py`:
 MQTT keep alive:             60 seconds
 MQTT connection timeout:     10 seconds
 Device reply wait:           30 seconds
+Maximum Python source:       524,288 bytes (512 KiB)
 Maximum deployment message:  1,000,000 bytes
 ```
 
 The fixed message limit remains below IoT App's 1,048,576-byte MQTT limit. The
-decoded Python entry point also has a separate 524,288-byte limit on the
-Raspberry Pi.
+Python entry point has a separate 524,288-byte limit on the device. The sender
+checks the source size before Base64 encoding and checks the final MQTT message
+size afterward, so it can report either problem before sending anything.
 
 The sender waits up to 30 seconds for acceptance or a validation/installation
 error. It does not wait for `main.py`, downloads, or scheduled callbacks. Each
