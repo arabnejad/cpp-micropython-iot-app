@@ -345,10 +345,17 @@ DownloadedFile HttpFileDownloader::downloadFile(const FileDownloadRequest &fileD
     throw std::runtime_error("Downloaded file does not match expected_sha256");
   }
 
-  if (auto existingDownload = findValidCachedDownload(calculatedSha256)) {
-    existingDownload->contentType     = contentType;
-    existingDownload->loadedFromCache = false;
-    return *existingDownload;
+  // We downloaded this file, but its bytes may already be in the cache.
+  // Check that the cached file is still valid before reusing it.
+  if (findValidCachedDownload(calculatedSha256).has_value()) {
+    // The check above returns a copy. Change the stored record so future
+    // cache hits also see the content type from this response.
+    DownloadedFile &cachedDownload = m_downloadedFilesBySha256.at(calculatedSha256);
+    cachedDownload.contentType     = contentType;
+    DownloadedFile currentDownload = cachedDownload;
+    // This request used the network, even though it reused the cached file.
+    currentDownload.loadedFromCache = false;
+    return currentDownload;
   }
 
   const std::filesystem::path finalFilePath = m_downloadCacheDirectory / (calculatedSha256 + ".download");

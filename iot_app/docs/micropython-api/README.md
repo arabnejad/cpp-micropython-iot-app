@@ -638,10 +638,18 @@ calculates this value, whether or not `expected_sha256` was supplied.
 
 When `expected_sha256` is supplied, another request for that hash can return
 the existing file without making a network request. In that case,
-`loaded_from_cache` is `True`. Without an expected hash, the downloader must
-receive the file before it can calculate its identity, so it cannot skip the
-network request. It still reuses the same final path if those bytes were
-downloaded earlier by the current application.
+`loaded_from_cache` is `True`.
+
+Without an expected hash, IoT App has to download the file before it can
+calculate its SHA-256. If it already has the same bytes, it keeps the existing
+file instead of storing a second copy. `loaded_from_cache` is still `False`
+for this call because the download happened.
+
+For example, one URL might return a file with `Content-Type: application/octet-stream`,
+while a second URL returns the same bytes with `Content-Type: image/jpeg`.
+After the second download, the cached file keeps `image/jpeg` as its content
+type. A later cache hit returns that value. The `content_type` value comes
+from the HTTP response; it is not a check of the file's actual format.
 
 Without an expected hash, the transfer needs room within the remaining
 50 MiB allowance before IoT App knows whether its bytes are already cached.

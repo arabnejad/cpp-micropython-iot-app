@@ -278,6 +278,27 @@ TEST(HttpFileDownloaderTest, ReusesAnExistingHashNamedFileAfterASecondDownload) 
   EXPECT_FALSE(secondDownload.loadedFromCache);
 }
 
+TEST(HttpFileDownloaderTest, CacheHitKeepsTheContentTypeFromTheLatestSuccessfulResponse) {
+  tests::TemporaryDirectory cacheDirectory;
+  HttpFileDownloader        fileDownloader(cacheDirectory.path(), testDownloadLimits());
+
+  DownloadedFile firstDownload;
+  {
+    OneRequestHttpServer firstHttpServer("same bytes", "application/octet-stream");
+    firstDownload = fileDownloader.downloadFile({firstHttpServer.url(), {}});
+  }
+
+  OneRequestHttpServer secondHttpServer("same bytes", "image/jpeg");
+  const DownloadedFile secondDownload = fileDownloader.downloadFile({secondHttpServer.url(), {}});
+  const DownloadedFile cachedDownload = fileDownloader.downloadFile({"http://127.0.0.1:1/file", firstDownload.sha256});
+
+  EXPECT_EQ(secondDownload.filePath, firstDownload.filePath);
+  EXPECT_EQ(secondDownload.contentType, "image/jpeg");
+  EXPECT_FALSE(secondDownload.loadedFromCache);
+  EXPECT_EQ(cachedDownload.contentType, "image/jpeg");
+  EXPECT_TRUE(cachedDownload.loadedFromCache);
+}
+
 TEST(HttpFileDownloaderTest, ReplacesACorruptHashNamedFileAtTheFinalCachePath) {
   tests::TemporaryDirectory cacheDirectory;
   HttpFileDownloader        fileDownloader(cacheDirectory.path(), testDownloadLimits());
