@@ -17,6 +17,14 @@ std::array<std::uint8_t, 128U> createEdidBlockWithValidHeader() {
   return edidBytes;
 }
 
+void updateEdidChecksum(std::array<std::uint8_t, 128U> &edidBytes) {
+  unsigned int byteSum = 0U;
+  for (std::size_t index = 0U; index < edidBytes.size() - 1U; ++index) {
+    byteSum += edidBytes[index];
+  }
+  edidBytes.back() = static_cast<std::uint8_t>((256U - byteSum % 256U) % 256U);
+}
+
 TEST(EdidParserTest, ReadsManufacturerModelAndTextSerialFromAValidBaseBlock) {
   auto edidBytes = createEdidBlockWithValidHeader();
   edidBytes[8U]  = 0x05U; // AOC encoded as 1, 15, 3.
@@ -25,6 +33,7 @@ TEST(EdidParserTest, ReadsManufacturerModelAndTextSerialFromAValidBaseBlock) {
   std::memcpy(edidBytes.data() + 59U, "Test monitor\n", 13U);
   edidBytes[75U] = 0xffU;
   std::memcpy(edidBytes.data() + 77U, "SERIAL-42\n", 10U);
+  updateEdidChecksum(edidBytes);
 
   const EdidInfo parsedEdidInformation = parseEdidBytes(edidBytes.data(), edidBytes.size());
 
@@ -53,6 +62,7 @@ TEST(EdidParserTest, UsesANumericSerialWhenNoTextSerialDescriptorExists) {
   edidBytes[15U] = 0x12U;
   edidBytes[57U] = 0xfcU;
   std::memcpy(edidBytes.data() + 59U, "Model  \n", 8U);
+  updateEdidChecksum(edidBytes);
 
   const EdidInfo parsedEdidInformation = parseEdidBytes(edidBytes.data(), edidBytes.size());
 
@@ -61,13 +71,30 @@ TEST(EdidParserTest, UsesANumericSerialWhenNoTextSerialDescriptorExists) {
   EXPECT_EQ(parsedEdidInformation.serial, "305419896");
 }
 
+TEST(EdidParserTest, ReturnsEmptyMonitorDetailsWhenTheBaseBlockChecksumIsInvalid) {
+  auto edidBytes = createEdidBlockWithValidHeader();
+  edidBytes[8U]  = 0x05U; // AOC encoded as 1, 15, 3.
+  edidBytes[9U]  = 0xe3U;
+  edidBytes[57U] = 0xfcU;
+  std::memcpy(edidBytes.data() + 59U, "Test monitor\n", 13U);
+  updateEdidChecksum(edidBytes);
+  edidBytes[59U] = 'X'; // Change one byte without updating the checksum.
+
+  const EdidInfo parsedEdidInformation = parseEdidBytes(edidBytes.data(), edidBytes.size());
+
+  EXPECT_TRUE(parsedEdidInformation.manufacturer.empty());
+  EXPECT_TRUE(parsedEdidInformation.model.empty());
+  EXPECT_TRUE(parsedEdidInformation.serial.empty());
+}
+
 TEST(EdidParserTest, RejectsNullAndIncompleteDataAndIgnoresUnknownDescriptors) {
   EXPECT_TRUE(parseEdidBytes(nullptr, 128U).manufacturer.empty());
   std::array<std::uint8_t, 127U> incompleteEdidBytes{};
   EXPECT_TRUE(parseEdidBytes(incompleteEdidBytes.data(), incompleteEdidBytes.size()).manufacturer.empty());
 
-  auto edidBytes                       = createEdidBlockWithValidHeader();
-  edidBytes[57U]                       = 0xfeU;
+  auto edidBytes = createEdidBlockWithValidHeader();
+  edidBytes[57U] = 0xfeU;
+  updateEdidChecksum(edidBytes);
   const EdidInfo parsedEdidInformation = parseEdidBytes(edidBytes.data(), edidBytes.size());
   EXPECT_TRUE(parsedEdidInformation.model.empty());
   EXPECT_TRUE(parsedEdidInformation.serial.empty());

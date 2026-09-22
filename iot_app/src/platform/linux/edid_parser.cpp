@@ -21,6 +21,8 @@ namespace display {
 namespace internal {
 namespace {
 
+constexpr std::size_t edidBaseBlockSizeInBytes = 128U;
+
 /*
  * Turns a fixed-width EDID text field into a normal C++ string.
  *
@@ -51,7 +53,7 @@ EdidInfo parseEdidBytes(const void *data, std::size_t size) {
   EdidInfo result;
 
   // A base EDID block is always 128 bytes.
-  if (data == nullptr || size < 128U) {
+  if (data == nullptr || size < edidBaseBlockSizeInBytes) {
     return result;
   }
 
@@ -59,6 +61,16 @@ EdidInfo parseEdidBytes(const void *data, std::size_t size) {
   // Every valid base block starts with this eight-byte header.
   constexpr std::array<std::uint8_t, 8> header{{0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00}};
   if (!std::equal(header.begin(), header.end(), bytes)) {
+    return result;
+  }
+
+  // The last byte is a checksum. All 128 bytes must add up to a multiple of
+  // 256; otherwise the monitor details may have been corrupted.
+  unsigned int byteSum = 0U;
+  for (std::size_t index = 0U; index < edidBaseBlockSizeInBytes; ++index) {
+    byteSum += bytes[index];
+  }
+  if (byteSum % 256U != 0U) {
     return result;
   }
 
