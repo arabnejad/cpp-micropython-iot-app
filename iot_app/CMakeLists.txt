@@ -174,7 +174,5 @@ if(IOT_BUILD_TESTS)
   add_subdirectory(tests)
 endif()
 
-include(clang_format)
-
 message(STATUS "IoT App configured with LVGL framebuffer output")
 message(STATUS "IoT App configured with exclusive libmpv video playback")
