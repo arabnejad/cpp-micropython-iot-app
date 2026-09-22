@@ -1715,7 +1715,7 @@ The controller publishes progress as it works:
 
 ```text
 received
-validating
+validated
 accepted
 ```
 

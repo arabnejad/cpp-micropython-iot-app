@@ -48,7 +48,7 @@ void ApplicationDeploymentController::process(const ReceivedApplicationMessage &
   try {
     deploymentRequest                = m_messageParser.parse(receivedMessage.payload, m_deviceId);
     deploymentStatus.applicationId   = deploymentRequest.applicationId;
-    deploymentStatus.deploymentState = "validating";
+    deploymentStatus.deploymentState = "validated";
     deploymentStatus.message         = "Source size and SHA-256 are valid";
     IOT_LOG_INFO(m_logger, "Validated application id=", deploymentRequest.applicationId, ", name='",
                  deploymentRequest.applicationName, "', transferId=", deploymentRequest.transferId,

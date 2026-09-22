@@ -75,7 +75,8 @@ TEST(NativeSystemCppBridgeTest, RejectsSystemCallsWhenNoApplicationContextIsActi
 class NativeSystemCppBridgeWithContextTest : public ::testing::Test {
 protected:
   NativeSystemCppBridgeWithContextTest()
-      : m_screenManager(iot::tests::testActiveDisplay(), std::make_unique<iot::tests::RecordingRenderBackend>(), 4U),
+      : m_screenManager(iot::tests::testActiveDisplay(), std::make_unique<iot::tests::RecordingRenderBackend>(), 4U,
+                        std::make_unique<iot::tests::RecordingExclusiveVideoPlayer>()),
         m_connectedDisplays(iot::tests::testConnectedDisplays()),
         m_applicationContext(m_screenManager, iot::tests::testActiveDisplay(), m_connectedDisplays,
                              m_systemInformationProvider, m_fileDownloader,

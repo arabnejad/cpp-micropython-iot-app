@@ -290,7 +290,7 @@ Transfer ID: 71b84271630a467aa16ee7b4a0c39632
 Message size: 6657 bytes
 The MQTT broker acknowledged the deployment message.
 Device status: received: Message received by IoT App
-Device status: validating: Source size and SHA-256 are valid
+Device status: validated: Source size and SHA-256 are valid
 Device status: accepted: Application received and ready to execute
 ```
 
@@ -369,7 +369,7 @@ App:
 | Status | Meaning |
 |---|---|
 | `received` | IoT App received the message and started processing its transfer ID. |
-| `validating` | The JSON fields, device ID, metadata, source size, Base64 data, and SHA-256 passed validation. |
+| `validated` | The JSON fields, device ID, metadata, source size, Base64 data, and SHA-256 passed validation. |
 | `accepted` | The temporary files are installed. IoT App is about to stop the current app and compile and run the new source. This is the final successful delivery reply. |
 | `rejected` | Message validation failed. The current app or emergency screen is left unchanged. |
 | `failed` | Temporary installation failed. The current app or emergency screen is left unchanged. |
@@ -378,7 +378,7 @@ For example, a file-writing error ends with `failed` and includes the reason:
 
 ```text
 Device status: received: Message received by IoT App
-Device status: validating: Source size and SHA-256 are valid
+Device status: validated: Source size and SHA-256 are valid
 Device status: failed: Could not create temporary application file: /tmp/iot-app-<uid>/applications/.staging-<transfer-id>/main.py
 ```
 

@@ -73,7 +73,8 @@ protected:
   ApplicationDeploymentControllerTest()
       : m_recordingRenderBackend(std::make_unique<tests::RecordingRenderBackend>()),
         m_recordingRenderBackendView(m_recordingRenderBackend.get()),
-        m_screenManager(tests::testActiveDisplay(), std::move(m_recordingRenderBackend), 16U),
+        m_screenManager(tests::testActiveDisplay(), std::move(m_recordingRenderBackend), 16U,
+                        std::make_unique<tests::RecordingExclusiveVideoPlayer>()),
         m_pythonApplicationManager(m_screenManager, tests::testActiveDisplay(), tests::testConnectedDisplays(),
                                    m_systemInformationProvider, m_fileDownloader, 256U * 1024U) {}
 
@@ -128,7 +129,7 @@ TEST_F(ApplicationDeploymentControllerTest, AcceptsAValidatedApplicationBeforeSt
   EXPECT_CALL(mqttApplicationReceiver,
               publishStatus(::testing::Field(&ApplicationDeploymentStatus::deploymentState, "received")));
   EXPECT_CALL(mqttApplicationReceiver,
-              publishStatus(::testing::Field(&ApplicationDeploymentStatus::deploymentState, "validating")));
+              publishStatus(::testing::Field(&ApplicationDeploymentStatus::deploymentState, "validated")));
   EXPECT_CALL(mqttApplicationReceiver,
               publishStatus(::testing::Field(&ApplicationDeploymentStatus::deploymentState, "accepted")))
       .WillOnce([&](const ApplicationDeploymentStatus &deploymentStatus) {
