@@ -1,6 +1,9 @@
 #include "iot/input/adafruit_mini_i2c_gamepad.h"
 
+#include "iot/hardware/i2c_device.h"
+
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -58,15 +61,6 @@ constexpr std::uint16_t adafruitMiniI2cGamepadProductId = 5743; // _5743_PID
 // Adafruit's date-code implementation is here:
 // https://github.com/adafruit/Adafruit_Seesaw/blob/master/Adafruit_seesaw.cpp#L172-L179
 
-// Adafruit calls these input numbers "pins" in its examples:
-// https://learn.adafruit.com/gamepad-qt/circuitpython-and-python
-constexpr int buttonXInputNumber      = 6;  // BUTTON_X
-constexpr int buttonYInputNumber      = 2;  // BUTTON_Y
-constexpr int buttonAInputNumber      = 5;  // BUTTON_A
-constexpr int buttonBInputNumber      = 1;  // BUTTON_B
-constexpr int buttonSelectInputNumber = 0;  // BUTTON_SELECT
-constexpr int buttonStartInputNumber  = 16; // BUTTON_START
-
 // Each joystick axis returns 0 to 1023. The board is mounted so the raw values
 // run backwards, so 1023 - rawValue makes right and up increase the result.
 constexpr std::uint8_t joystickXAxisAnalogInputNumber = 14;   // Joystick X analog input
@@ -77,17 +71,37 @@ constexpr int          joystickAxisMaximumValue       = 1023; // Maximum 10-bit 
 // means zero is pressed. The driver converts those input bits into the button
 // bits defined by GamepadButton. The full mapping is explained in
 // iot_app/docs/hardware/README.md.
+// Adafruit calls these input numbers "pins" in its examples:
+// https://learn.adafruit.com/gamepad-qt/circuitpython-and-python
+struct GamepadButtonInputMapping {
+  int           inputNumber;
+  GamepadButton gamepadButton;
+};
+
+constexpr std::array<GamepadButtonInputMapping, 6> gamepadButtonInputMappings{{
+    {6, GamepadButton::X},      // BUTTON_X
+    {2, GamepadButton::Y},      // BUTTON_Y
+    {5, GamepadButton::A},      // BUTTON_A
+    {1, GamepadButton::B},      // BUTTON_B
+    {0, GamepadButton::Select}, // BUTTON_SELECT
+    {16, GamepadButton::Start}, // BUTTON_START
+}};
 
 /* Makes the bit used to select one numbered button input. */
 constexpr std::uint32_t createButtonInputMask(int inputNumber) {
   return static_cast<std::uint32_t>(1UL << inputNumber);
 }
 
-/* Bit mask that selects all six button inputs at once. */
-constexpr std::uint32_t allGamepadButtonInputsMask =
-    createButtonInputMask(buttonXInputNumber) | createButtonInputMask(buttonYInputNumber) |
-    createButtonInputMask(buttonAInputNumber) | createButtonInputMask(buttonBInputNumber) |
-    createButtonInputMask(buttonSelectInputNumber) | createButtonInputMask(buttonStartInputNumber);
+/* Combines the six physical inputs into the mask sent to the gamepad. */
+constexpr std::uint32_t createAllGamepadButtonInputsMask() {
+  std::uint32_t selectedButtonInputsMask = 0U;
+  for (const auto &buttonMapping : gamepadButtonInputMappings) {
+    selectedButtonInputsMask |= createButtonInputMask(buttonMapping.inputNumber);
+  }
+  return selectedButtonInputsMask;
+}
+
+constexpr std::uint32_t allGamepadButtonInputsMask = createAllGamepadButtonInputsMask();
 
 /*
  * Splits a 32-bit number into the four bytes expected by the gamepad.
@@ -118,14 +132,6 @@ std::uint32_t decodeBigEndianBytesAsUint32(const std::vector<std::uint8_t> &bigE
   return (static_cast<std::uint32_t>(bigEndianBytes[0]) << 24U) |
          (static_cast<std::uint32_t>(bigEndianBytes[1]) << 16U) |
          (static_cast<std::uint32_t>(bigEndianBytes[2]) << 8U) | static_cast<std::uint32_t>(bigEndianBytes[3]);
-}
-
-void markButtonPressedIfInputIsLow(std::uint32_t buttonInputLevels, int buttonInputNumber, GamepadButton gamepadButton,
-                                   std::uint32_t &pressedButtonsMask) {
-  // The buttons are active-low, so a zero bit means pressed.
-  if ((buttonInputLevels & createButtonInputMask(buttonInputNumber)) == 0U) {
-    pressedButtonsMask |= static_cast<std::uint32_t>(gamepadButton);
-  }
 }
 
 } // namespace
@@ -280,12 +286,12 @@ JoystickPosition AdafruitMiniI2cGamepad::readJoystickPosition() {
 std::uint32_t AdafruitMiniI2cGamepad::readPressedButtonMask() {
   const std::uint32_t buttonInputLevels  = readButtonInputLevels(allGamepadButtonInputsMask);
   std::uint32_t       pressedButtonsMask = 0;
-  markButtonPressedIfInputIsLow(buttonInputLevels, buttonXInputNumber, GamepadButton::X, pressedButtonsMask);
-  markButtonPressedIfInputIsLow(buttonInputLevels, buttonYInputNumber, GamepadButton::Y, pressedButtonsMask);
-  markButtonPressedIfInputIsLow(buttonInputLevels, buttonAInputNumber, GamepadButton::A, pressedButtonsMask);
-  markButtonPressedIfInputIsLow(buttonInputLevels, buttonBInputNumber, GamepadButton::B, pressedButtonsMask);
-  markButtonPressedIfInputIsLow(buttonInputLevels, buttonSelectInputNumber, GamepadButton::Select, pressedButtonsMask);
-  markButtonPressedIfInputIsLow(buttonInputLevels, buttonStartInputNumber, GamepadButton::Start, pressedButtonsMask);
+  for (const auto &buttonMapping : gamepadButtonInputMappings) {
+    // The buttons are active-low, so a zero input bit means pressed.
+    if ((buttonInputLevels & createButtonInputMask(buttonMapping.inputNumber)) == 0U) {
+      pressedButtonsMask |= static_cast<std::uint32_t>(buttonMapping.gamepadButton);
+    }
+  }
   return pressedButtonsMask;
 }
 

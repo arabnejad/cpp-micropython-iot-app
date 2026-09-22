@@ -5,6 +5,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <array>
 #include <memory>
 #include <vector>
 
@@ -111,6 +112,35 @@ TEST_F(AdafruitMiniI2cGamepadDriverTest, RefreshesPressedButtonsAndReversedJoyst
   EXPECT_TRUE(m_gamepad.buttons().isPressed(GamepadButton::Start));
   EXPECT_EQ(m_gamepad.joystick().position().x, 923);
   EXPECT_EQ(m_gamepad.joystick().position().y, 123);
+}
+
+TEST_F(AdafruitMiniI2cGamepadDriverTest, MapsEachPhysicalInputToItsNamedButton) {
+  expectSuccessfulConnection();
+  m_gamepad.connect();
+
+  struct ExpectedButtonInput {
+    int           inputNumber;
+    GamepadButton gamepadButton;
+  };
+  const std::array<ExpectedButtonInput, 6> expectedButtonInputs{{
+      {6, GamepadButton::X},
+      {2, GamepadButton::Y},
+      {5, GamepadButton::A},
+      {1, GamepadButton::B},
+      {0, GamepadButton::Select},
+      {16, GamepadButton::Start},
+  }};
+
+  for (const auto &pressedButton : expectedButtonInputs) {
+    const std::uint32_t buttonInputLevels = ~(1U << pressedButton.inputNumber);
+    expectInputState(buttonInputLevels);
+    m_gamepad.refreshInputState();
+
+    for (const auto &checkedButton : expectedButtonInputs) {
+      EXPECT_EQ(m_gamepad.buttons().isPressed(checkedButton.gamepadButton),
+                checkedButton.gamepadButton == pressedButton.gamepadButton);
+    }
+  }
 }
 
 TEST_F(AdafruitMiniI2cGamepadDriverTest, RejectsAJoystickCalibrationWithNoSamples) {

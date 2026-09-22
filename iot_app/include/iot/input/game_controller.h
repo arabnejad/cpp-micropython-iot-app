@@ -13,9 +13,9 @@ namespace input {
  * Each value is a bit in the application's pressed-button mask. These are not
  * the physical input numbers wired on a particular board.
  *
- * For example, buttonAInputNumber = 5 means the Adafruit board's A button is
- * physically connected to input 5. GamepadButton::A = 1U << 2U means the
- * application stores the A button in bit 2 of its pressed-button mask.
+ * For example, the Adafruit board's A button is connected to physical input 5.
+ * GamepadButton::A = 1U << 2U means the application stores that button in bit 2
+ * of its pressed-button mask.
  */
 enum class GamepadButton : std::uint32_t {
   X      = 1U << 0U,

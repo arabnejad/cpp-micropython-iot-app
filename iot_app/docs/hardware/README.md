@@ -122,9 +122,10 @@ Combining these values creates `allGamepadButtonInputsMask`:
 ```
 
 This fixed mask identifies inputs 0, 1, 2, 5, 6, and 16.
-`createButtonInputMask()` creates the bit for each input, and the `|` operators
-join the six bits into one mask. Because the values are `constexpr`, this work
-is completed while the C++ program is compiled.
+The driver keeps each physical input number beside its `GamepadButton` value
+in `gamepadButtonInputMappings`. `createAllGamepadButtonInputsMask()` loops
+through that table, creates a bit for each input, and joins them into this
+mask. The mask is calculated while the C++ program is compiled.
 
 ### What happens during connection
 
@@ -142,8 +143,8 @@ When `connect()` runs:
 When `refreshInputState()` runs:
 
 1. `readButtonInputLevels()` reads all six inputs over I2C.
-2. `markButtonPressedIfInputIsLow()` checks each input. The inputs are
-   active-low, so zero means the button is pressed.
+2. A loop uses `gamepadButtonInputMappings` to check each input. The inputs
+   are active-low, so zero means the button is pressed.
 3. The driver adds the corresponding `GamepadButton` value directly to the
    pressed-button mask.
 4. `updateButtons()` stores the completed application-level button state.

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "iot/hardware/i2c_device.h"
+#include "iot/hardware/ii2c_device.h"
 #include "iot/input/game_controller.h"
 
 #include <cstddef>
