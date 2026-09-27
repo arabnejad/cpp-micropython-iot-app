@@ -38,10 +38,12 @@ recovery use one authoritative copy.
 | `scheduled_callback_failure` | Shows the emergency screen when a scheduled callback fails | 100 ms | None |
 | `traceback_failure` | Raises an import error during startup and displays its traceback | None | None |
 | `joystick_visualizer` | Shows live joystick movement with text bars | 50 ms | Adafruit I2C gamepad |
+| `seengreat_controls` | Shows the SeenGreat joystick direction and real button names | 50 ms | SeenGreat 1.3-inch OLED HAT |
 
-The gamepad examples expect the Adafruit Mini I2C STEMMA QT Gamepad on I2C bus
-1 at address `0x50`. Those values are explicit constants near the top of each
-`main.py`; change them before sending when the hardware configuration differs.
+The Adafruit examples use the configured I2C bus 1 and address `0x50`.
+`seengreat_controls` uses the SeenGreat HAT's K1, K2, K3, and joystick Press
+names. Connection settings live in `iot_app/src/input/controller_hardware_settings.h`;
+change that file and rebuild IoT App if your wiring differs.
 
 ## Select an application
 

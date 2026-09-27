@@ -27,12 +27,14 @@ add_executable(iot_unit_tests
   test_display_manager.cpp
   scoped_linux_i2c_system_calls.cpp
   fake_mosquitto_library.cpp
-  test_game_controller.cpp
+  test_input_controller_base.cpp
   test_i2c_device.cpp
   test_http_file_downloader.cpp
   test_jpeg_image_loader.cpp
   test_libjpeg_turbo_jpeg_image_decoder.cpp
   test_adafruit_mini_i2c_gamepad.cpp
+  test_seengreat_input_mapping.cpp
+  test_seengreat_status_display.cpp
   test_hardware_construction.cpp
   test_input_cpp_bridge.cpp
   test_lvgl_framebuffer_render_backend.cpp

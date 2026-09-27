@@ -986,7 +986,7 @@ seconds and updates the existing Network panel. Resource and device panels
 remain startup snapshots, so the dashboard does not repeatedly scan every
 Linux value.
 
-The dashboard does not create a gamepad or scan I2C addresses. User hardware
+The dashboard does not create a controller or scan I2C addresses. User hardware
 belongs to the application that knows its bus and address.
 
 ## 13. MicroPython subsystem
@@ -1092,8 +1092,8 @@ MicroPythonApplicationContext
   └── ISystemInformationProvider for live system reads
 ```
 
-The input bridge does not use this context. Each Python gamepad object has its
-own C++ gamepad handle, so its bridge functions can use that handle directly.
+The input bridge does not use this context. Each Python controller object has
+its own C++ controller handle, so its bridge functions use that handle directly.
 
 The display, network, and system bridges use one shared function to find the
 active application context. The four C modules also share the function that
@@ -1315,7 +1315,7 @@ C++ call throws an exception
 ```
 
 Display, input, network, and system calls use the same error helper. Each bridge
-provides its own fallback text, such as `Unknown C++ gamepad error`, so an
+provides its own fallback text, such as `Unknown C++ controller error`, so an
 unexpected exception still identifies the module that failed.
 
 The helper copies the error into a 1 KiB fixed buffer in thread-local storage.
@@ -1409,14 +1409,21 @@ values can change while a screen is running.
 
 ### 14.5 `iot.input`
 
-The input binding currently exposes the Adafruit Mini I2C STEMMA QT Gamepad.
-Python owns a C++ gamepad object through an opaque handle. Joystick and button
-view objects keep their Python gamepad owner alive.
+The input binding offers `Controller()` to detect Adafruit first, then
+SeenGreat, at the configured connections. An app can instead name the board it
+needs with `AdafruitMiniI2cGamepad()` or `SeenGreatOledHatController()`.
+Explicit board objects need a `connect()` call; `Controller()` connects during
+construction. Python owns the C++ controller through an opaque handle, and
+joystick and button views keep that Python object alive.
 
-The binding requires the I2C bus and address. The default
-dashboard does not guess an address or probe every I2C device.
-`gamepad.connection_information()` returns the selected bus, address, and
-Linux device path for diagnostics without contacting the hardware again.
+Bus numbers, addresses, and SeenGreat GPIO pins are set in
+`src/input/controller_hardware_settings.h`, not passed by Python apps.
+`connection_information()` reports the Adafruit I2C connection for diagnostics.
+At startup, `main.cpp` checks only for the SeenGreat OLED status display.
+It does not select a Python controller; each app does that when it starts.
+The OLED shows the IP address and application name, with CPU temperature on
+the left and local time on the right of its bottom row. If a reading is not
+available, that part of the row shows dashes until the next update.
 
 ## 15. Python scheduler and application updates
 
@@ -1786,7 +1793,7 @@ The I2C count reports interfaces such as `/dev/i2c-1`. It does not scan bus
 addresses. Blind I2C scanning can send unsafe commands to unknown devices, so
 the system summary avoids it.
 
-## 19. I2C and gamepad subsystem
+## 19. Controller input and I2C
 
 ### 19.1 Linux I2C transport
 
@@ -1815,14 +1822,14 @@ Transfer sizes are checked against the Linux 16-bit I2C message length.
 
 ### 19.2 Hardware-independent controller model
 
-`GameController` defines the common behavior expected from future controller
-drivers. It stores a `GamepadJoystick` and `GamepadButtons` state independent of
-whether the hardware uses I2C, USB, or another transport.
+`InputControllerBase` defines the common behavior expected from future controller
+drivers. It stores `ControllerJoystick` and `ControllerButtons` state without
+depending on whether the hardware uses I2C, USB, or another transport.
 
-The current `AdafruitMiniI2cGamepad` implements that interface. It talks to the
-bus through `II2cDevice`; the real application supplies `I2cDevice`. A future
-vendor driver can implement the same controller contract without changing
-application concepts such as direction and pressed buttons.
+`AdafruitMiniI2cGamepad` and `SeenGreatOledHatController` both implement this
+interface. Adafruit reads its buttons over I2C. SeenGreat reads its buttons
+from GPIO, while its separate OLED display uses I2C. They share joystick
+direction names, but each reports its real button names.
 
 ### 19.3 Adafruit gamepad flow
 
@@ -1965,7 +1972,7 @@ src/ui/
   ScreenManager and LVGL framebuffer backend
 
 src/input/
-  common controller state and Adafruit gamepad protocol
+  common controller state, Adafruit gamepad, and SeenGreat HAT input
 
 src/python/
   application loading, interpreter ownership, supervision, and failure handling

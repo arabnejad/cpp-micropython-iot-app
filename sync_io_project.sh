@@ -3,7 +3,8 @@
 set -Eeuo pipefail
 
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-readonly REMOTE_HOST="hamid@192.168.0.67"
+# readonly REMOTE_HOST="hamid@192.168.0.67"
+readonly REMOTE_HOST="hamid@192.168.0.69"
 readonly REMOTE_DIR="/home/hamid/IOT_project"
 
 if ! command -v rsync >/dev/null 2>&1; then

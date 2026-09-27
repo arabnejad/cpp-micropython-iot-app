@@ -83,8 +83,8 @@ TEST_F(AdafruitMiniI2cGamepadDriverTest, ConnectsAndReadsItsIdentityAndInitialIn
   EXPECT_EQ(m_gamepad.firmwareDateCode(), 0x7a97U);
   EXPECT_EQ(m_gamepad.joystick().position().x, 511);
   EXPECT_EQ(m_gamepad.joystick().position().y, 510);
-  EXPECT_TRUE(m_gamepad.buttons().isPressed(GamepadButton::A));
-  EXPECT_FALSE(m_gamepad.buttons().isPressed(GamepadButton::B));
+  EXPECT_TRUE(m_gamepad.buttons().isPressed(ControllerButton::A));
+  EXPECT_FALSE(m_gamepad.buttons().isPressed(ControllerButton::B));
 }
 
 TEST_F(AdafruitMiniI2cGamepadDriverTest, RequiresAConnectionBeforeReadingOrCalibrating) {
@@ -108,8 +108,8 @@ TEST_F(AdafruitMiniI2cGamepadDriverTest, RefreshesPressedButtonsAndReversedJoyst
   expectInputState(0xfffeffbfU, 100U, 900U);
   m_gamepad.refreshInputState();
 
-  EXPECT_TRUE(m_gamepad.buttons().isPressed(GamepadButton::X));
-  EXPECT_TRUE(m_gamepad.buttons().isPressed(GamepadButton::Start));
+  EXPECT_TRUE(m_gamepad.buttons().isPressed(ControllerButton::X));
+  EXPECT_TRUE(m_gamepad.buttons().isPressed(ControllerButton::Start));
   EXPECT_EQ(m_gamepad.joystick().position().x, 923);
   EXPECT_EQ(m_gamepad.joystick().position().y, 123);
 }
@@ -119,16 +119,16 @@ TEST_F(AdafruitMiniI2cGamepadDriverTest, MapsEachPhysicalInputToItsNamedButton) 
   m_gamepad.connect();
 
   struct ExpectedButtonInput {
-    int           inputNumber;
-    GamepadButton gamepadButton;
+    int              inputNumber;
+    ControllerButton gamepadButton;
   };
   const std::array<ExpectedButtonInput, 6> expectedButtonInputs{{
-      {6, GamepadButton::X},
-      {2, GamepadButton::Y},
-      {5, GamepadButton::A},
-      {1, GamepadButton::B},
-      {0, GamepadButton::Select},
-      {16, GamepadButton::Start},
+      {6, ControllerButton::X},
+      {2, ControllerButton::Y},
+      {5, ControllerButton::A},
+      {1, ControllerButton::B},
+      {0, ControllerButton::Select},
+      {16, ControllerButton::Start},
   }};
 
   for (const auto &pressedButton : expectedButtonInputs) {

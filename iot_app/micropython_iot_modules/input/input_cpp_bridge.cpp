@@ -2,19 +2,26 @@
 
 #include "native_bridge_error_handler.h"
 #include "iot/input/adafruit_mini_i2c_gamepad.h"
+#include "iot/input/seengreat_oled_hat.h"
 
 #include <stdexcept>
 
 namespace {
 
-/* Gamepad failures become RuntimeError messages in mod_iot_input.c. */
-thread_local iot::python::internal::NativeBridgeErrorHandler nativeBridgeErrorHandler{"Unknown C++ gamepad error"};
+/* Controller failures become RuntimeError messages in mod_iot_input.c. */
+thread_local iot::python::internal::NativeBridgeErrorHandler nativeBridgeErrorHandler{"Unknown C++ controller error"};
 
-iot::input::AdafruitMiniI2cGamepad &gamepad(void *handle) {
+/*
+ * The MicroPython module is C, so it keeps the C++ controller as a void *.
+ * It points to an object made by iot_adafruit_controller_create() or
+ * iot_seengreat_controller_create(); this function does not create another one.
+ * Check for a closed controller, then return a reference to that same object.
+ */
+iot::input::InputControllerBase &inputControllerFromHandle(void *handle) {
   if (handle == nullptr) {
-    throw std::logic_error("The gamepad is closed");
+    throw std::logic_error("The controller is closed");
   }
-  return *static_cast<iot::input::AdafruitMiniI2cGamepad *>(handle);
+  return *static_cast<iot::input::InputControllerBase *>(handle);
 }
 
 /* Converts a C++ direction into the text returned to Python. */
@@ -44,56 +51,76 @@ const char *joystickDirectionName(iot::input::JoystickDirection direction) noexc
 
 } // namespace
 
-extern "C" iot_native_pointer_result_t iot_gamepad_create(int i2c_bus_number, uint8_t i2c_address) {
-  void      *createdGamepad = nullptr;
-  const auto creationResult = nativeBridgeErrorHandler.runSafely(
-      [&] { createdGamepad = new iot::input::AdafruitMiniI2cGamepad(i2c_bus_number, i2c_address); });
-  return {createdGamepad, creationResult.error_message};
+extern "C" iot_native_pointer_result_t iot_adafruit_controller_create(void) {
+  void      *createdAdafruitController = nullptr;
+  const auto creationResult =
+      nativeBridgeErrorHandler.runSafely([&] { createdAdafruitController = new iot::input::AdafruitMiniI2cGamepad(); });
+  return {createdAdafruitController, creationResult.error_message};
 }
 
-extern "C" void iot_gamepad_destroy(void *gamepad_handle) {
-  delete static_cast<iot::input::AdafruitMiniI2cGamepad *>(gamepad_handle);
+extern "C" iot_native_pointer_result_t iot_seengreat_controller_create(void) {
+  void      *createdSeenGreatController = nullptr;
+  const auto creationResult             = nativeBridgeErrorHandler.runSafely(
+      [&] { createdSeenGreatController = new iot::input::SeenGreatOledHatController(); });
+  return {createdSeenGreatController, creationResult.error_message};
 }
 
-extern "C" iot_native_result_t iot_gamepad_model_name(void *gamepad_handle, const char **model_name) {
+extern "C" void iot_controller_destroy(void *controller_handle) {
+  delete static_cast<iot::input::InputControllerBase *>(controller_handle);
+}
+
+extern "C" iot_native_result_t iot_controller_model_name(void *controller_handle, const char **model_name) {
   return nativeBridgeErrorHandler.runSafely([=] {
     if (model_name == nullptr) {
-      throw std::invalid_argument("Gamepad model-name output is missing");
+      throw std::invalid_argument("Controller model-name output is missing");
     }
-    *model_name = gamepad(gamepad_handle).modelName();
+    *model_name = inputControllerFromHandle(controller_handle).modelName();
   });
 }
 
-extern "C" iot_native_result_t iot_gamepad_connect(void *gamepad_handle) {
-  return nativeBridgeErrorHandler.runSafely([=] { gamepad(gamepad_handle).connect(); });
+extern "C" iot_native_result_t iot_controller_board_type(void *controller_handle, const char **board_type) {
+  return nativeBridgeErrorHandler.runSafely([=] {
+    if (board_type == nullptr) {
+      throw std::invalid_argument("Controller board-type output is missing");
+    }
+    *board_type = inputControllerFromHandle(controller_handle).boardType();
+  });
 }
 
-extern "C" iot_native_result_t iot_gamepad_calibrate_joystick(void *gamepad_handle, size_t number_of_samples,
-                                                              int dead_zone) {
-  return nativeBridgeErrorHandler.runSafely(
-      [=] { gamepad(gamepad_handle).calibrateJoystick(number_of_samples, dead_zone); });
+extern "C" iot_native_result_t iot_controller_connect(void *controller_handle) {
+  return nativeBridgeErrorHandler.runSafely([=] { inputControllerFromHandle(controller_handle).connect(); });
 }
 
-extern "C" iot_native_result_t iot_gamepad_refresh_input_state(void *gamepad_handle) {
-  return nativeBridgeErrorHandler.runSafely([=] { gamepad(gamepad_handle).refreshInputState(); });
+extern "C" iot_native_result_t iot_adafruit_controller_calibrate_joystick(void  *controller_handle,
+                                                                          size_t number_of_samples, int dead_zone) {
+  return nativeBridgeErrorHandler.runSafely([=] {
+    auto *adafruit = dynamic_cast<iot::input::AdafruitMiniI2cGamepad *>(&inputControllerFromHandle(controller_handle));
+    if (!adafruit)
+      throw std::logic_error("Joystick calibration is only available for the Adafruit gamepad");
+    adafruit->calibrateJoystick(number_of_samples, dead_zone);
+  });
 }
 
-extern "C" iot_native_result_t iot_gamepad_is_connected(void *gamepad_handle, int *is_connected) {
+extern "C" iot_native_result_t iot_controller_refresh_input_state(void *controller_handle) {
+  return nativeBridgeErrorHandler.runSafely([=] { inputControllerFromHandle(controller_handle).refreshInputState(); });
+}
+
+extern "C" iot_native_result_t iot_controller_is_connected(void *controller_handle, int *is_connected) {
   return nativeBridgeErrorHandler.runSafely([=] {
     if (is_connected == nullptr) {
-      throw std::invalid_argument("Gamepad connection-state output is missing");
+      throw std::invalid_argument("Controller connection-state output is missing");
     }
-    *is_connected = gamepad(gamepad_handle).isConnected() ? 1 : 0;
+    *is_connected = inputControllerFromHandle(controller_handle).isConnected() ? 1 : 0;
   });
 }
 
-extern "C" iot_native_result_t iot_gamepad_read_state(void *gamepad_handle, iot_gamepad_state_t *state) {
+extern "C" iot_native_result_t iot_controller_read_state(void *controller_handle, iot_controller_state_t *state) {
   return nativeBridgeErrorHandler.runSafely([=] {
     if (state == nullptr) {
-      throw std::invalid_argument("Gamepad state output is missing");
+      throw std::invalid_argument("Controller state output is missing");
     }
 
-    auto      &controller = gamepad(gamepad_handle);
+    auto      &controller = inputControllerFromHandle(controller_handle);
     const auto position   = controller.joystick().position();
     const auto centre     = controller.joystick().centre();
 
@@ -111,41 +138,47 @@ extern "C" iot_native_result_t iot_gamepad_read_state(void *gamepad_handle, iot_
   });
 }
 
-extern "C" iot_native_result_t iot_gamepad_joystick_direction(void *gamepad_handle, const char **direction) {
+extern "C" iot_native_result_t iot_controller_joystick_direction(void *controller_handle, const char **direction) {
   return nativeBridgeErrorHandler.runSafely([=] {
     if (direction == nullptr) {
-      throw std::invalid_argument("Gamepad joystick-direction output is missing");
+      throw std::invalid_argument("Controller joystick-direction output is missing");
     }
-    *direction = joystickDirectionName(gamepad(gamepad_handle).joystick().direction());
+    *direction = joystickDirectionName(inputControllerFromHandle(controller_handle).joystick().direction());
+  });
+}
+
+extern "C" iot_native_result_t iot_adafruit_controller_read_connection_information(
+    void *controller_handle, iot_adafruit_controller_connection_information_t *connection_information) {
+  return nativeBridgeErrorHandler.runSafely([=] {
+    if (connection_information == nullptr) {
+      throw std::invalid_argument("Adafruit I2C connection-information output is missing");
+    }
+
+    const auto *adafruit =
+        dynamic_cast<const iot::input::AdafruitMiniI2cGamepad *>(&inputControllerFromHandle(controller_handle));
+    if (!adafruit)
+      throw std::logic_error("I2C connection information is only available for the Adafruit gamepad");
+    connection_information->bus_number  = adafruit->i2cBusNumber();
+    connection_information->address     = adafruit->i2cAddress();
+    connection_information->device_path = adafruit->i2cDevicePath().c_str();
   });
 }
 
 extern "C" iot_native_result_t
-iot_gamepad_read_connection_information(void                                 *gamepad_handle,
-                                        iot_gamepad_connection_information_t *connection_information) {
-  return nativeBridgeErrorHandler.runSafely([=] {
-    if (connection_information == nullptr) {
-      throw std::invalid_argument("Gamepad connection-information output is missing");
-    }
-
-    const auto &controller              = gamepad(gamepad_handle);
-    connection_information->bus_number  = controller.i2cBusNumber();
-    connection_information->address     = controller.i2cAddress();
-    connection_information->device_path = controller.i2cDevicePath().c_str();
-  });
-}
-
-extern "C" iot_native_result_t iot_gamepad_read_diagnostics(void                             *gamepad_handle,
-                                                            iot_gamepad_device_information_t *diagnostics) {
+iot_adafruit_controller_read_diagnostics(void                                         *controller_handle,
+                                         iot_adafruit_controller_device_information_t *diagnostics) {
   return nativeBridgeErrorHandler.runSafely([=] {
     if (diagnostics == nullptr) {
-      throw std::invalid_argument("Gamepad diagnostics output is missing");
+      throw std::invalid_argument("Adafruit diagnostics output is missing");
     }
 
-    const auto &controller                                  = gamepad(gamepad_handle);
-    diagnostics->processor_hardware_id                      = controller.processorHardwareId();
-    diagnostics->combined_product_id_and_firmware_date_code = controller.productIdAndFirmwareDateCode();
-    diagnostics->firmware_product_id                        = controller.firmwareProductId();
-    diagnostics->firmware_date_code                         = controller.firmwareDateCode();
+    const auto *adafruit =
+        dynamic_cast<const iot::input::AdafruitMiniI2cGamepad *>(&inputControllerFromHandle(controller_handle));
+    if (!adafruit)
+      throw std::logic_error("Firmware diagnostics are only available for the Adafruit gamepad");
+    diagnostics->processor_hardware_id                      = adafruit->processorHardwareId();
+    diagnostics->combined_product_id_and_firmware_date_code = adafruit->productIdAndFirmwareDateCode();
+    diagnostics->firmware_product_id                        = adafruit->firmwareProductId();
+    diagnostics->firmware_date_code                         = adafruit->firmwareDateCode();
   });
 }

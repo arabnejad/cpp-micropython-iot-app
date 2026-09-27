@@ -90,7 +90,7 @@ tests/                      C++ unit tests and embedded MicroPython tests
 include/iot/                Public C++ headers
 micropython_config/         Embedded-port configuration and generation wrapper
 micropython_iot_modules/    Native IoT modules compiled into MicroPython
-src/input/                  Gamepad protocol and input state
+src/input/                  Controller drivers and input state
 src/messaging/              MQTT transport, validation, installation, and deployment control
 src/network/                Bounded HTTP and HTTPS file downloads
 src/platform/linux/         Linux display, I2C, and system-information support

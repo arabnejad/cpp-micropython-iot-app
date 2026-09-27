@@ -17,35 +17,43 @@ PythonApplication createInputModuleTestApplication(std::string sourceCode) {
   return pythonApplication;
 }
 
-TEST(MicroPythonInputModuleTest, ValidatesGamepadConstructorArgumentsBeforeOpeningAnI2cDevice) {
+TEST(MicroPythonInputModuleTest, RejectsConnectionArgumentsBeforeOpeningEitherBoard) {
   MicroPythonRuntime          microPythonRuntime(256U * 1024U);
   const PythonExecutionResult applicationExecutionResult = microPythonRuntime.executeApplication(
       createInputModuleTestApplication("import iot\n"
                                        "try:\n"
-                                       "    iot.input.AdafruitMiniI2cGamepad(i2c_bus_number=1, i2c_address=128)\n"
+                                       "    iot.input.AdafruitMiniI2cGamepad(i2c_bus_number=1)\n"
                                        "    assert False\n"
-                                       "except ValueError:\n"
+                                       "except TypeError:\n"
                                        "    pass\n"
                                        "try:\n"
-                                       "    iot.input.AdafruitMiniI2cGamepad(i2c_bus_number=256, i2c_address=0x50)\n"
-                                       "    assert False\n"
-                                       "except RuntimeError:\n"
-                                       "    pass\n"));
-
-  EXPECT_TRUE(applicationExecutionResult.succeeded) << applicationExecutionResult.traceback;
-}
-
-TEST(MicroPythonInputModuleTest, ExposesTheGamepadClassThroughThePublicIotModule) {
-  MicroPythonRuntime          microPythonRuntime(256U * 1024U);
-  const PythonExecutionResult applicationExecutionResult = microPythonRuntime.executeApplication(
-      createInputModuleTestApplication("import iot\n"
-                                       "assert iot.input.AdafruitMiniI2cGamepad is not None\n"
-                                       "try:\n"
-                                       "    iot.input.AdafruitMiniI2cGamepad()\n"
+                                       "    iot.input.SeenGreatOledHatController(1)\n"
                                        "    assert False\n"
                                        "except TypeError:\n"
                                        "    pass\n"));
 
+  // The << applicationExecutionResult.traceback part adds the Python traceback to
+  // the test failure message only if the check fails. It does not print
+  // the traceback when the test passes or change the result being checked.
+  EXPECT_TRUE(applicationExecutionResult.succeeded) << applicationExecutionResult.traceback;
+}
+
+TEST(MicroPythonInputModuleTest, ExposesControllerAndBoardClassesThroughThePublicIotModule) {
+  MicroPythonRuntime          microPythonRuntime(256U * 1024U);
+  const PythonExecutionResult applicationExecutionResult =
+      microPythonRuntime.executeApplication(createInputModuleTestApplication(
+          "import iot\n"
+          "assert iot.input.AdafruitMiniI2cGamepad is not None\n"
+          "assert iot.input.SeenGreatOledHatController is not None\n"
+          "assert hasattr(iot.input.AdafruitMiniI2cGamepad, 'calibrate_joystick')\n"
+          "assert not hasattr(iot.input.SeenGreatOledHatController, 'calibrate_joystick')\n"
+          "assert not hasattr(iot.input, 'Controller')\n"
+          "assert iot.input.ControllerJoystick is not None\n"
+          "assert iot.input.ControllerButtons is not None\n"));
+
+  // The << applicationExecutionResult.traceback part adds the Python traceback to
+  // the test failure message only if the check fails. It does not print
+  // the traceback when the test passes or change the result being checked.
   EXPECT_TRUE(applicationExecutionResult.succeeded) << applicationExecutionResult.traceback;
 }
 
@@ -55,39 +63,44 @@ TEST(MicroPythonInputModuleTest, LetsPythonUseEveryGamepadMethodWithASimulatedGa
   tests::UseSimulatedGamepadI2cBoard useSimulatedGamepadBoard(simulatedGamepadBoard);
 
   MicroPythonRuntime          microPythonRuntime(256U * 1024U);
-  const PythonExecutionResult applicationExecutionResult =
-      microPythonRuntime.executeApplication(createInputModuleTestApplication(
-          "import iot\n"
-          "gamepad = iot.input.AdafruitMiniI2cGamepad(i2c_bus_number=1, i2c_address=0x50)\n"
-          "assert gamepad.model_name() == 'Adafruit Mini I2C STEMMA QT Gamepad'\n"
-          "assert gamepad.connection_information() == {\n"
-          "    'bus_number': 1,\n"
-          "    'address': 0x50,\n"
-          "    'device_path': '/dev/i2c-1',\n"
-          "}\n"
-          "assert gamepad.is_connected() is False\n"
-          "gamepad.connect()\n"
-          "assert gamepad.is_connected() is True\n"
-          "joystick = gamepad.joystick()\n"
-          "gamepad_buttons = gamepad.buttons()\n"
-          "assert joystick.position() == (511, 510)\n"
-          "assert joystick.centre() == (512, 512)\n"
-          "assert joystick.dead_zone() == 100\n"
-          "assert joystick.direction() == 'center'\n"
-          "assert gamepad_buttons.pressed() == ('A',)\n"
-          "assert gamepad_buttons.is_pressed('A') is True\n"
-          "assert gamepad_buttons.is_pressed('B') is False\n"
-          "assert gamepad.processor_hardware_id() == 0x55\n"
-          "assert gamepad.firmware_product_id() == 5743\n"
-          "assert gamepad.firmware_date_code() == 0x7a97\n"
-          "assert gamepad.combined_product_id_and_firmware_date_code() == 0x166f7a97\n"
-          "gamepad.close()\n"
-          "try:\n"
-          "    gamepad.is_connected()\n"
-          "    assert False\n"
-          "except ValueError:\n"
-          "    pass\n"));
+  const PythonExecutionResult applicationExecutionResult = microPythonRuntime.executeApplication(
+      createInputModuleTestApplication("import iot\n"
+                                       "gamepad = iot.input.AdafruitMiniI2cGamepad()\n"
+                                       "assert gamepad.model_name() == 'Adafruit Mini I2C STEMMA QT Gamepad'\n"
+                                       "assert gamepad.board_type() == 'adafruit_mini_i2c_gamepad'\n"
+                                       "assert gamepad.connection_information() == {\n"
+                                       "    'bus_number': 1,\n"
+                                       "    'address': 0x50,\n"
+                                       "    'device_path': '/dev/i2c-1',\n"
+                                       "}\n"
+                                       "assert gamepad.is_connected() is False\n"
+                                       "gamepad.connect()\n"
+                                       "assert gamepad.is_connected() is True\n"
+                                       "joystick = gamepad.joystick()\n"
+                                       "gamepad_buttons = gamepad.buttons()\n"
+                                       "assert type(joystick) is iot.input.ControllerJoystick\n"
+                                       "assert type(gamepad_buttons) is iot.input.ControllerButtons\n"
+                                       "assert joystick.position() == (511, 510)\n"
+                                       "assert joystick.centre() == (512, 512)\n"
+                                       "assert joystick.dead_zone() == 100\n"
+                                       "assert joystick.direction() == 'center'\n"
+                                       "assert gamepad_buttons.pressed() == ('A',)\n"
+                                       "assert gamepad_buttons.is_pressed('A') is True\n"
+                                       "assert gamepad_buttons.is_pressed('B') is False\n"
+                                       "assert gamepad.processor_hardware_id() == 0x55\n"
+                                       "assert gamepad.firmware_product_id() == 5743\n"
+                                       "assert gamepad.firmware_date_code() == 0x7a97\n"
+                                       "assert gamepad.combined_product_id_and_firmware_date_code() == 0x166f7a97\n"
+                                       "gamepad.close()\n"
+                                       "try:\n"
+                                       "    gamepad.is_connected()\n"
+                                       "    assert False\n"
+                                       "except ValueError:\n"
+                                       "    pass\n"));
 
+  // The << applicationExecutionResult.traceback part adds the Python traceback to
+  // the test failure message only if the check fails. It does not print
+  // the traceback when the test passes or change the result being checked.
   EXPECT_TRUE(applicationExecutionResult.succeeded) << applicationExecutionResult.traceback;
 }
 
@@ -99,7 +112,7 @@ TEST(MicroPythonInputModuleTest, ReportsErrorsForInvalidCalibrationUnknownButton
   MicroPythonRuntime          microPythonRuntime(256U * 1024U);
   const PythonExecutionResult applicationExecutionResult = microPythonRuntime.executeApplication(
       createInputModuleTestApplication("import iot\n"
-                                       "gamepad = iot.input.AdafruitMiniI2cGamepad(1, 0x50)\n"
+                                       "gamepad = iot.input.AdafruitMiniI2cGamepad()\n"
                                        "gamepad.connect()\n"
                                        "gamepad_buttons = gamepad.buttons()\n"
                                        "joystick = gamepad.joystick()\n"
@@ -126,6 +139,9 @@ TEST(MicroPythonInputModuleTest, ReportsErrorsForInvalidCalibrationUnknownButton
                                        "    except ValueError:\n"
                                        "        pass\n"));
 
+  // The << applicationExecutionResult.traceback part adds the Python traceback to
+  // the test failure message only if the check fails. It does not print
+  // the traceback when the test passes or change the result being checked.
   EXPECT_TRUE(applicationExecutionResult.succeeded) << applicationExecutionResult.traceback;
 }
 
@@ -144,7 +160,7 @@ TEST(MicroPythonInputModuleTest, RefreshesTheStateAndChecksEveryPublicButtonName
   MicroPythonRuntime          microPythonRuntime(256U * 1024U);
   const PythonExecutionResult applicationExecutionResult = microPythonRuntime.executeApplication(
       createInputModuleTestApplication("import iot\n"
-                                       "gamepad = iot.input.AdafruitMiniI2cGamepad(1, 0x50)\n"
+                                       "gamepad = iot.input.AdafruitMiniI2cGamepad()\n"
                                        "gamepad.connect()\n"
                                        "gamepad.calibrate_joystick(number_of_samples=1, dead_zone=20)\n"
                                        "gamepad.refresh_input_state()\n"
@@ -153,6 +169,9 @@ TEST(MicroPythonInputModuleTest, RefreshesTheStateAndChecksEveryPublicButtonName
                                        "for button_name in ('X', 'Y', 'A', 'B', 'Select', 'Start'):\n"
                                        "    assert gamepad_buttons.is_pressed(button_name) is True\n"));
 
+  // The << applicationExecutionResult.traceback part adds the Python traceback to
+  // the test failure message only if the check fails. It does not print
+  // the traceback when the test passes or change the result being checked.
   EXPECT_TRUE(applicationExecutionResult.succeeded) << applicationExecutionResult.traceback;
 }
 

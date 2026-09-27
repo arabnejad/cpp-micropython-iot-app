@@ -1,7 +1,7 @@
 #pragma once
 
 #include "iot/hardware/ii2c_device.h"
-#include "iot/input/game_controller.h"
+#include "iot/input/input_controller_base.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -16,12 +16,12 @@ namespace input {
  * Driver for the Adafruit Mini I2C STEMMA QT Gamepad (product 5743).
  *
  * This driver contains the Seesaw registers and input mapping for this board.
- * Code that only needs buttons and joystick directions can use GameController.
+ * Code that only needs buttons and joystick directions can use InputControllerBase.
  */
-class AdafruitMiniI2cGamepad : public GameController {
+class AdafruitMiniI2cGamepad : public InputControllerBase {
 public:
-  /* Production code uses this constructor to open the real gamepad through Linux I2C. */
-  AdafruitMiniI2cGamepad(int i2cBusNumber, std::uint8_t i2cAddress);
+  /* Opens the gamepad at the I2C connection configured for this image. */
+  AdafruitMiniI2cGamepad();
 
   /* Unit tests use this constructor to supply a fake I2C device. */
   AdafruitMiniI2cGamepad(std::unique_ptr<hardware::II2cDevice> gamepadI2cDevice);
@@ -34,6 +34,7 @@ public:
   AdafruitMiniI2cGamepad &operator=(AdafruitMiniI2cGamepad &&)      = delete;
 
   const char *modelName() const noexcept override;
+  const char *boardType() const noexcept override;
 
   /*
    * Resets the board, checks that it is product 5743, and prepares its buttons.
@@ -41,7 +42,7 @@ public:
   void connect() override;
 
   /* Measures the joystick centre while the user leaves it untouched. */
-  void calibrateJoystick(std::size_t numberOfCalibrationSamples = 20U, int joystickDeadZone = 100) override;
+  void calibrateJoystick(std::size_t numberOfCalibrationSamples = 20U, int joystickDeadZone = 100);
 
   /* Reads the joystick and buttons and stores their latest values. */
   void refreshInputState() override;

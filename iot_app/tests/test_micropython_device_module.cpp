@@ -21,6 +21,9 @@ TEST(MicroPythonDeviceModuleTest, PublicIotModuleExposesEveryNativeSubsystem) {
   MicroPythonRuntime          microPythonRuntime(256U * 1024U);
   const PythonExecutionResult applicationExecutionResult = microPythonRuntime.executeApplication(pythonApplication);
 
+  // The << applicationExecutionResult.traceback part adds the Python traceback to
+  // the test failure message only if the check fails. It does not print
+  // the traceback when the test passes or change the result being checked.
   EXPECT_TRUE(applicationExecutionResult.succeeded) << applicationExecutionResult.traceback;
 }
 

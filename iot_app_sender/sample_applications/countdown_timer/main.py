@@ -3,16 +3,11 @@
 from iot import display, input, scheduler
 
 
-I2C_BUS_NUMBER = 1
-I2C_ADDRESS = 0x50
 INPUT_REFRESH_MILLISECONDS = 50
 DEFAULT_COUNTDOWN_SECONDS = 60
 
 
-gamepad = input.AdafruitMiniI2cGamepad(
-    i2c_bus_number=I2C_BUS_NUMBER,
-    i2c_address=I2C_ADDRESS,
-)
+gamepad = input.AdafruitMiniI2cGamepad()
 gamepad.connect()
 buttons = gamepad.buttons()
 

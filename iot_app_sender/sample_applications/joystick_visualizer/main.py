@@ -3,20 +3,14 @@
 from iot import display, input, scheduler
 
 
-I2C_BUS_NUMBER = 1
-I2C_ADDRESS = 0x50
 JOYSTICK_MINIMUM_VALUE = 0
 JOYSTICK_MAXIMUM_VALUE = 1023
 BAR_CHARACTER_COUNT = 33
 
 
-gamepad = input.AdafruitMiniI2cGamepad(
-    i2c_bus_number=I2C_BUS_NUMBER,
-    i2c_address=I2C_ADDRESS,
-)
+gamepad = input.AdafruitMiniI2cGamepad()
 gamepad.connect()
 gamepad.calibrate_joystick(number_of_samples=20, dead_zone=100)
-gamepad.refresh_input_state()
 joystick = gamepad.joystick()
 
 screen_width, screen_height = display.size()

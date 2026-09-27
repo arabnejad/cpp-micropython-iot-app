@@ -10,8 +10,9 @@ MicroPython and the project-owned Python modules are compiled into the C++
 application.
 
 The runtime draws directly to the Linux framebuffer with LVGL, reads Linux
-system information, supports an Adafruit I2C gamepad, downloads files over
-HTTP or HTTPS, displays JPEG images, plays full-screen video through libmpv,
+system information, supports the Adafruit I2C gamepad and SeenGreat OLED HAT,
+downloads files over HTTP or HTTPS, displays JPEG images, plays full-screen
+video through libmpv,
 and receives replacement Python applications over MQTT. A new Python
 application can replace the current one without restarting the C++ process.
 If a Python application fails, the C++ runtime stops it and shows an emergency
@@ -78,7 +79,7 @@ native `iot` modules supplied by the runtime.
 |---|---|
 | [`iot_app/`](iot_app/) | C++ runtime, embedded MicroPython modules, default dashboard, tests, and image integration |
 | [`iot_app_sender/`](iot_app_sender/) | Ubuntu command-line tool that sends Python applications over MQTT |
-| [`iot_app_sender/sample_applications/`](iot_app_sender/sample_applications/) | Runnable examples for displays, timers, system information, and the I2C gamepad |
+| [`iot_app_sender/sample_applications/`](iot_app_sender/sample_applications/) | Runnable examples for displays, timers, system information, and both supported controllers |
 | [`meta-iot-app/`](meta-iot-app/) | Project-owned Yocto layer, image recipe, services, and Raspberry Pi configuration |
 | [`scripts/build/`](scripts/build/) | Small scripts used by the root Makefile to prepare Buildroot and Yocto builds |
 | `micropython/` | Pinned upstream MicroPython submodule |
@@ -280,7 +281,7 @@ API, deployment, hardware, Buildroot, or Yocto.
 | [System design](iot_app/docs/system-design/README.md) | Component responsibilities, threads, application lifetime, rendering, and MQTT deployment |
 | [LVGL guide](iot_app/docs/lvgl/README.md) | Introduction to LVGL and the project's framebuffer, widget, and render-thread design |
 | [MicroPython API](iot_app/docs/micropython-api/README.md) | Native `iot` modules, required and optional arguments, return values, and examples |
-| [Hardware](iot_app/docs/hardware/README.md) | Adafruit gamepad button wiring and mask conversion |
+| [Hardware](iot_app/docs/hardware/README.md) | Adafruit wiring, controller settings, and hardware checks |
 | [Device image](iot_app/docs/device-image/README.md) | Shared Wi-Fi, SSH, mDNS, services, device checks, and troubleshooting |
 | [Buildroot tutorial](iot_app/docs/buildroot-tutorial/README.md) | How Buildroot configurations, packages, overlays, startup scripts, and image assembly work in this project |
 | [Buildroot](iot_app/docs/buildroot/README.md) | Buildroot preparation, image build, flashing, package updates, and Buildroot-specific problems |

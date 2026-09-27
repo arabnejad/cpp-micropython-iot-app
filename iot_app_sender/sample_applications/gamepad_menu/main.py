@@ -3,8 +3,6 @@
 from iot import display, input, scheduler, system
 
 
-I2C_BUS_NUMBER = 1
-I2C_ADDRESS = 0x50
 INPUT_REFRESH_MILLISECONDS = 50
 MENU_ITEMS = (
     "System information",
@@ -14,15 +12,12 @@ MENU_ITEMS = (
 )
 
 
-gamepad = input.AdafruitMiniI2cGamepad(
-    i2c_bus_number=I2C_BUS_NUMBER,
-    i2c_address=I2C_ADDRESS,
-)
+gamepad = input.AdafruitMiniI2cGamepad()
 gamepad.connect()
+gamepad_connection = gamepad.connection_information()
 
 # The measured centre and dead zone decide when an up/down movement is real.
 gamepad.calibrate_joystick(number_of_samples=20, dead_zone=100)
-gamepad.refresh_input_state()
 
 joystick = gamepad.joystick()
 buttons = gamepad.buttons()
@@ -73,8 +68,8 @@ def details_for_selected_item():
     return "%s\nProduct ID: %d\nI2C bus %d at 0x%02X" % (
         gamepad.model_name(),
         gamepad.firmware_product_id(),
-        I2C_BUS_NUMBER,
-        I2C_ADDRESS,
+        gamepad_connection["bus_number"],
+        gamepad_connection["address"],
     )
 
 

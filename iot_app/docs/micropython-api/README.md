@@ -19,7 +19,7 @@ The public modules are:
 | Module | What it provides |
 |---|---|
 | `iot.display` | Screen size, monitor details, text boxes, filled areas, JPEG images, and full-screen video |
-| `iot.input` | The Adafruit Mini I2C STEMMA QT Gamepad driver |
+| `iot.input` | Controller input from the Adafruit gamepad or SeenGreat OLED HAT |
 | `iot.network` | HTTP and HTTPS downloads with size, timeout, and optional SHA-256 checks |
 | `iot.scheduler` | Repeating callbacks for live applications |
 | `iot.system` | Linux, resource, network, device, and runtime information |
@@ -47,7 +47,8 @@ components use integers from `0` to `255`.
 
 The display module draws through the screen service owned by IoT App. Drawing
 commands are sent to the LVGL render thread; Python code does not call LVGL
-directly.
+directly. In the traces below, `ScreenManager::runRenderLoop()` takes each
+queued command and calls the named LVGL backend method.
 
 ### `display.clear()`
 
@@ -68,6 +69,25 @@ even if the render thread has not cleared the screen yet.
 | `color` | No, default `(0, 0, 0)` | `(red, green, blue)` background colour; each value is from 0 to 255 |
 
 The colour arguments are keyword-only.
+
+```text
+Python: display.clear()
+ │
+ v
+MicroPython module table maps "clear" to display_clear_object [mod_iot_display.c]
+ │
+ v
+display_clear() checks the colour values [mod_iot_display.c]
+ │
+ v
+iot_display_clear() passes the colour across the C/C++ boundary [display_cpp_bridge.cpp]
+ │
+ v
+ScreenManager::clear() replaces pending commands with a screen-clear command [screen_manager.cpp]
+ │
+ v
+LvglFramebufferRenderBackend::clear() clears the LVGL screen [lvgl_framebuffer_render_backend.cpp]
+```
 
 ### `display.draw_text_box()`
 
@@ -130,6 +150,25 @@ one of those fonts:
 
 The API does not currently accept a font-family name.
 
+```text
+Python: display.draw_text_box()
+ │
+ v
+MicroPython module table maps "draw_text_box" to display_draw_text_box_object [mod_iot_display.c]
+ │
+ v
+display_draw_text_box() parses and checks the Python arguments [mod_iot_display.c]
+ │
+ v
+iot_display_draw_text_box() builds a TextBoxSpec from the C values [display_cpp_bridge.cpp]
+ │
+ v
+ScreenManager::drawTextBox() gives the box an ID and queues it [screen_manager.cpp]
+ │
+ v
+LvglFramebufferRenderBackend::createTextBox() creates the box and label [lvgl_framebuffer_render_backend.cpp]
+```
+
 ### `display.update_text_box()`
 
 ```python
@@ -152,6 +191,25 @@ Changes the text in an existing text box and returns `None`.
 |---|---|---|
 | `widget_id` | Yes | Positive ID returned by `draw_text_box()` |
 | `text` | Yes | Replacement text |
+
+```text
+Python: display.update_text_box()
+ │
+ v
+MicroPython module table maps "update_text_box" to display_update_text_box_object [mod_iot_display.c]
+ │
+ v
+display_update_text_box() checks the ID and text arguments [mod_iot_display.c]
+ │
+ v
+iot_display_update_text_box() passes the ID and text into C++ [display_cpp_bridge.cpp]
+ │
+ v
+ScreenManager::updateTextBox() checks the ID and queues the text change [screen_manager.cpp]
+ │
+ v
+LvglFramebufferRenderBackend::updateTextBox() changes the LVGL label [lvgl_framebuffer_render_backend.cpp]
+```
 
 ### `display.move_text_box()`
 
@@ -178,6 +236,25 @@ size and text do not change.
 | `x` | Yes | New horizontal position of the left edge |
 | `y` | Yes | New vertical position of the top edge |
 
+```text
+Python: display.move_text_box()
+ │
+ v
+MicroPython module table maps "move_text_box" to display_move_text_box_object [mod_iot_display.c]
+ │
+ v
+display_move_text_box() checks the ID and coordinates [mod_iot_display.c]
+ │
+ v
+iot_display_move_text_box() passes the new position into C++ [display_cpp_bridge.cpp]
+ │
+ v
+ScreenManager::moveTextBox() checks the ID and queues the new position [screen_manager.cpp]
+ │
+ v
+LvglFramebufferRenderBackend::moveTextBox() moves the LVGL box [lvgl_framebuffer_render_backend.cpp]
+```
+
 ### `display.delete_text_box()`
 
 ```python
@@ -202,6 +279,25 @@ has not been scheduled for deletion and its ID remains valid.
 | Parameter | Required? | Meaning |
 |---|---|---|
 | `widget_id` | Yes | Positive ID returned by `draw_text_box()` |
+
+```text
+Python: display.delete_text_box()
+ │
+ v
+MicroPython module table maps "delete_text_box" to display_delete_text_box_object [mod_iot_display.c]
+ │
+ v
+display_delete_text_box() checks the ID argument [mod_iot_display.c]
+ │
+ v
+iot_display_delete_text_box() passes the ID into C++ [display_cpp_bridge.cpp]
+ │
+ v
+ScreenManager::deleteTextBox() checks the ID and queues deletion [screen_manager.cpp]
+ │
+ v
+LvglFramebufferRenderBackend::deleteTextBox() removes the LVGL box [lvgl_framebuffer_render_backend.cpp]
+```
 
 ### Text-box errors
 
@@ -303,6 +399,25 @@ image comes from a URL.
 | `y` | Yes | Vertical position of the image's top edge |
 | `scale_percent` | No, default `100` | Largest allowed size, from 13 to 100 percent |
 
+```text
+Python: display.draw_image()
+ │
+ v
+MicroPython module table maps "draw_image" to display_draw_image_object [mod_iot_display.c]
+ │
+ v
+display_draw_image() checks the path, position, and scale arguments [mod_iot_display.c]
+ │
+ v
+iot_display_draw_image() turns the C values into a JPEG drawing request [display_cpp_bridge.cpp]
+ │
+ v
+ScreenManager::drawJpegImage() loads or reuses pixels, then queues the image [screen_manager.cpp]
+ │
+ v
+LvglFramebufferRenderBackend::createJpegImage() creates the image widget [lvgl_framebuffer_render_backend.cpp]
+```
+
 ### Changing a normal image
 
 ```python
@@ -324,6 +439,85 @@ display.delete_image(image_id)
 | `display.move_image(image_id, x, y)` | Moves the image without decoding it again |
 | `display.set_image_scale(image_id, scale_percent)` | Decodes the current JPEG at a new 13-to-100 percent limit |
 | `display.delete_image(image_id)` | Removes the image; its ID must not be used again |
+
+The four image changes follow the same C binding and bridge pattern, but end
+at different ScreenManager methods:
+
+```text
+Python: display.update_image(image_id, path)
+ │
+ v
+MicroPython module table maps "update_image" to display_update_image_object [mod_iot_display.c]
+ │
+ v
+display_update_image() checks the ID and path arguments [mod_iot_display.c]
+ │
+ v
+iot_display_update_image() passes the ID and path into C++ [display_cpp_bridge.cpp]
+ │
+ v
+ScreenManager::replaceJpegImage() loads the new JPEG and queues the update [screen_manager.cpp]
+ │
+ v
+LvglFramebufferRenderBackend::replaceJpegImage() changes the widget's pixels [lvgl_framebuffer_render_backend.cpp]
+```
+
+```text
+Python: display.move_image(image_id, x, y)
+ │
+ v
+MicroPython module table maps "move_image" to display_move_image_object [mod_iot_display.c]
+ │
+ v
+display_move_image() checks the ID and coordinates [mod_iot_display.c]
+ │
+ v
+iot_display_move_image() passes the ID and position into C++ [display_cpp_bridge.cpp]
+ │
+ v
+ScreenManager::moveJpegImage() queues the position without decoding again [screen_manager.cpp]
+ │
+ v
+LvglFramebufferRenderBackend::moveJpegImage() moves the image widget [lvgl_framebuffer_render_backend.cpp]
+```
+
+```text
+Python: display.set_image_scale(image_id, scale_percent)
+ │
+ v
+MicroPython module table maps "set_image_scale" to display_set_image_scale_object [mod_iot_display.c]
+ │
+ v
+display_set_image_scale() checks the ID and scale percentage [mod_iot_display.c]
+ │
+ v
+iot_display_set_image_scale() passes the ID and scale into C++ [display_cpp_bridge.cpp]
+ │
+ v
+ScreenManager::setJpegImageScale() loads pixels at the new scale and queues them [screen_manager.cpp]
+ │
+ v
+LvglFramebufferRenderBackend::replaceJpegImage() shows the newly scaled pixels [lvgl_framebuffer_render_backend.cpp]
+```
+
+```text
+Python: display.delete_image(image_id)
+ │
+ v
+MicroPython module table maps "delete_image" to display_delete_image_object [mod_iot_display.c]
+ │
+ v
+display_delete_image() checks the ID argument [mod_iot_display.c]
+ │
+ v
+iot_display_delete_image() passes the ID into C++ [display_cpp_bridge.cpp]
+ │
+ v
+ScreenManager::deleteJpegImage() checks the ID and queues deletion [screen_manager.cpp]
+ │
+ v
+LvglFramebufferRenderBackend::deleteJpegImage() removes the image widget [lvgl_framebuffer_render_backend.cpp]
+```
 
 ### `display.set_background_image()`
 
@@ -359,6 +553,44 @@ The modes work as follows:
 
 `display.clear_background_image()` removes only the background image. Other
 widgets remain on screen.
+
+```text
+Python: display.set_background_image()
+ │
+ v
+MicroPython module table maps "set_background_image" to display_set_background_image_object [mod_iot_display.c]
+ │
+ v
+display_set_background_image() checks the path, mode, and scale [mod_iot_display.c]
+ │
+ v
+iot_display_set_background_image() converts the mode into a C++ value [display_cpp_bridge.cpp]
+ │
+ v
+ScreenManager::setBackgroundJpegImage() loads the JPEG and queues it [screen_manager.cpp]
+ │
+ v
+LvglFramebufferRenderBackend::setBackgroundJpegImage() shows the background [lvgl_framebuffer_render_backend.cpp]
+```
+
+```text
+Python: display.clear_background_image()
+ │
+ v
+MicroPython module table maps "clear_background_image" to display_clear_background_image_object [mod_iot_display.c]
+ │
+ v
+display_clear_background_image() forwards the request [mod_iot_display.c]
+ │
+ v
+iot_display_clear_background_image() crosses into C++ [display_cpp_bridge.cpp]
+ │
+ v
+ScreenManager::clearBackgroundJpegImage() queues removal of the background [screen_manager.cpp]
+ │
+ v
+LvglFramebufferRenderBackend::clearBackgroundJpegImage() removes the background widget [lvgl_framebuffer_render_backend.cpp]
+```
 
 ### `display.play_video()`
 
@@ -408,6 +640,28 @@ which mpv cannot read. Python may catch the error and draw another screen. An
 unhandled error follows the normal application-failure path and shows the
 emergency screen.
 
+```text
+Python: display.play_video(path)
+ │
+ v
+MicroPython module table maps "play_video" to display_play_video_object [mod_iot_display.c]
+ │
+ v
+display_play_video() converts the Python path to text [mod_iot_display.c]
+ │
+ v
+iot_display_play_video() passes the path into C++ and handles errors [display_cpp_bridge.cpp]
+ │
+ v
+ScreenManager::playExclusiveVideoAndWait() releases the framebuffer [screen_manager.cpp]
+ │
+ v
+MpvExclusiveVideoPlayer::playVideoAndWait() uses libmpv for full-screen playback [mpv_exclusive_video_player.cpp]
+ │
+ v
+ScreenManager::start() restores framebuffer rendering after playback [screen_manager.cpp]
+```
+
 ### `display.fill_area()`
 
 ```python
@@ -436,6 +690,25 @@ have an ID and cannot be moved, updated, or deleted separately. Use
 
 The colour arguments are keyword-only.
 
+```text
+Python: display.fill_area()
+ │
+ v
+MicroPython module table maps "fill_area" to display_fill_area_object [mod_iot_display.c]
+ │
+ v
+display_fill_area() checks the rectangle and colour arguments [mod_iot_display.c]
+ │
+ v
+iot_display_fill_area() builds a FilledAreaSpec [display_cpp_bridge.cpp]
+ │
+ v
+ScreenManager::fillArea() queues the rectangle for the render thread [screen_manager.cpp]
+ │
+ v
+LvglFramebufferRenderBackend::fillArea() creates the filled LVGL area [lvgl_framebuffer_render_backend.cpp]
+```
+
 ### `display.size()`
 
 ```python
@@ -447,6 +720,19 @@ width, height = display.size()
 Takes no arguments and returns the active display size as a `(width, height)`
 tuple. IoT App uses the Linux display mode that was already active; this
 function does not change the resolution.
+
+```text
+Python: display.size()
+ │
+ v
+MicroPython module table maps "size" to display_size_object [mod_iot_display.c]
+ │
+ v
+display_size() builds a Python tuple for the width and height [mod_iot_display.c]
+ │
+ v
+iot_display_size() reads the startup display width and height from the active context [display_cpp_bridge.cpp]
+```
 
 ### `display.monitors()`
 
@@ -511,6 +797,25 @@ monitor selected for its mode and for video playback; it does not route
 [LVGL guide](../lvgl/README.md#21-display) for why HDMI-A-2 still works when it
 is the only connected monitor.
 
+```text
+Python: display.monitors()
+ │
+ v
+MicroPython module table maps "monitors" to display_monitors_object [mod_iot_display.c]
+ │
+ v
+display_monitors() builds one dictionary per monitor [mod_iot_display.c]
+ │
+ v
+iot_display_monitor_count() reads the number of monitors in the startup list [display_cpp_bridge.cpp]
+ │
+ v
+iot_display_monitor_information() supplies each monitor's details [display_cpp_bridge.cpp]
+ │
+ v
+iot_display_supported_mode_information() supplies each monitor's mode list [display_cpp_bridge.cpp]
+```
+
 ### `display.active_monitor()`
 
 ```python
@@ -526,6 +831,22 @@ print(current_mode["width"], current_mode["height"])
 Takes no arguments and returns the monitor dictionary marked as active in
 `display.monitors()`. IoT App always has an active monitor while a Python
 application is running, so `current_mode` is available in this result.
+
+```text
+Python: display.active_monitor()
+ │
+ v
+MicroPython module table maps "active_monitor" to display_active_monitor_object [mod_iot_display.c]
+ │
+ v
+display_active_monitor() searches the startup list for its active entry [mod_iot_display.c]
+ │
+ v
+iot_display_monitor_information() marks the monitor selected at startup [display_cpp_bridge.cpp]
+ │
+ v
+monitor_dictionary() builds the result, including its current and supported modes [mod_iot_display.c]
+```
 
 ### Display example
 
@@ -658,6 +979,22 @@ A known-hash cache hit can succeed even when that allowance is full.
 The downloader can store any file that fits its limits. The display module
 still accepts only JPEG image data.
 
+```text
+Python: network.download_file(url, expected_sha256)
+ │
+ v
+MicroPython module table maps "download_file" to network_download_file_object [mod_iot_network.c]
+ │
+ v
+network_download_file() checks the arguments and builds the result dictionary [mod_iot_network.c]
+ │
+ v
+iot_network_download_file() gets the current application's downloader [network_cpp_bridge.cpp]
+ │
+ v
+HttpFileDownloader::downloadFile() checks the cache or downloads and verifies the file [http_file_downloader.cpp]
+```
+
 ### Download and show a JPEG
 
 ```python
@@ -723,6 +1060,22 @@ time rather than starting a new one-second wait.
 Callbacks should finish quickly. They may add or cancel timers, but they should
 not sleep for a long time or run forever.
 
+```text
+Python: scheduler.every(milliseconds, callback)
+ │
+ v
+MicroPython module table maps "every" to scheduler_every_object [mod_iot_scheduler.c]
+ │
+ v
+scheduler_every() validates the interval and callback, then stores a timer in MicroPython's task list [mod_iot_scheduler.c]
+ │
+ v
+MicroPythonRuntime::runScheduledCallbacks() checks elapsed time on the main thread [micropython_runtime.cpp]
+ │
+ v
+iot_scheduler_run_due_callbacks() invokes the Python callback when its timer is due [mod_iot_scheduler.c]
+```
+
 ### `scheduler.cancel()`
 
 ```python
@@ -746,6 +1099,16 @@ Cancels one timer. It returns `True` when the task existed and was removed, or
 |---|---|---|
 | `task_id` | Yes | ID returned by `scheduler.every()` |
 
+```text
+Python: scheduler.cancel(task_id)
+ │
+ v
+MicroPython module table maps "cancel" to scheduler_cancel_object [mod_iot_scheduler.c]
+ │
+ v
+scheduler_cancel() finds the ID and removes that timer from MicroPython's task list [mod_iot_scheduler.c]
+```
+
 ### `scheduler.clear()`
 
 ```python
@@ -759,6 +1122,16 @@ and returns `None`.
 
 IoT App also removes all tasks automatically when it stops the current Python
 application. Timer IDs belong only to the interpreter that created them.
+
+```text
+Python: scheduler.clear()
+ │
+ v
+MicroPython module table maps "clear" to scheduler_clear_object [mod_iot_scheduler.c]
+ │
+ v
+scheduler_clear() removes the current application's whole task list [mod_iot_scheduler.c]
+```
 
 ### Scheduler example
 
@@ -843,6 +1216,19 @@ The `uptime_seconds` value in this dictionary is the startup snapshot. Use
 The `kernel_version` value already starts with `Linux`, so applications do not
 need to add that word themselves.
 
+```text
+Python: system.information()
+ │
+ v
+MicroPython module table maps "information" to system_information_object [mod_iot_system.c]
+ │
+ v
+system_information() builds a dictionary from the stored system snapshot [mod_iot_system.c]
+ │
+ v
+iot_system_read_information() copies the current application's startup snapshot [system_cpp_bridge.cpp]
+```
+
 ### `system.current_time()`
 
 ```python
@@ -854,6 +1240,22 @@ local_time = system.current_time()
 Takes no arguments and returns the current Linux local time as a string in
 `YYYY-MM-DD HH:MM:SS` format, for example `2000-01-01 00:00:00`.
 
+```text
+Python: system.current_time()
+ │
+ v
+MicroPython module table maps "current_time" to system_current_time_object [mod_iot_system.c]
+ │
+ v
+system_current_time() converts the returned time to a Python string [mod_iot_system.c]
+ │
+ v
+iot_system_current_time() asks the active context for local time [system_cpp_bridge.cpp]
+ │
+ v
+LinuxSystemInformationProvider::readCurrentLocalTime() reads and formats the time [system_information.cpp]
+```
+
 ### `system.uptime_seconds()`
 
 ```python
@@ -864,6 +1266,22 @@ uptime = system.uptime_seconds()
 
 Takes no arguments and performs a live read of Linux uptime. It returns the
 number of seconds since the system booted.
+
+```text
+Python: system.uptime_seconds()
+ │
+ v
+MicroPython module table maps "uptime_seconds" to system_uptime_seconds_object [mod_iot_system.c]
+ │
+ v
+system_uptime_seconds() converts the returned uptime to a Python integer [mod_iot_system.c]
+ │
+ v
+iot_system_uptime_seconds() asks the active context for uptime [system_cpp_bridge.cpp]
+ │
+ v
+LinuxSystemInformationProvider::readUptimeSeconds() reads the live Linux value [system_information.cpp]
+```
 
 ### `system.resources()`
 
@@ -889,6 +1307,19 @@ Takes no arguments and returns the resource snapshot:
 
 `cpu_temperature_celsius` and `one_minute_load_average` are `None` when Linux
 does not provide those values. Byte counts are integers.
+
+```text
+Python: system.resources()
+ │
+ v
+MicroPython module table maps "resources" to system_resources_object [mod_iot_system.c]
+ │
+ v
+system_resources() selects resource fields from the startup snapshot [mod_iot_system.c]
+ │
+ v
+iot_system_read_information() copies the current application's startup snapshot [system_cpp_bridge.cpp]
+```
 
 ### `system.network_interfaces()`
 
@@ -916,6 +1347,25 @@ containing interfaces that can connect to another device, such as `eth0` and
 `ipv4_address` is an empty string when no IPv4 address was found. Link speed is
 `None` when Linux does not report it. Call this function again to detect a
 later connection, disconnection, or address change.
+
+```text
+Python: system.network_interfaces()
+ │
+ v
+MicroPython module table maps "network_interfaces" to system_network_interfaces_object [mod_iot_system.c]
+ │
+ v
+system_network_interfaces() builds one dictionary per current interface [mod_iot_system.c]
+ │
+ v
+iot_system_network_interface_count() requests a fresh reading from the active context [system_cpp_bridge.cpp]
+ │
+ v
+LinuxSystemInformationProvider::readNetworkInterfaces() reads current Linux interfaces [system_information.cpp]
+ │
+ v
+iot_system_read_network_interface() supplies each result to the C binding [system_cpp_bridge.cpp]
+```
 
 ### `system.interfaces()`
 
@@ -955,6 +1405,19 @@ Therefore, `"i2c": 1` means Linux exposes one I2C bus device file. It does not
 mean that one I2C peripheral was found or that the application has permission
 to open the bus.
 
+```text
+Python: system.interfaces()
+ │
+ v
+MicroPython module table maps "interfaces" to system_interfaces_object [mod_iot_system.c]
+ │
+ v
+system_interfaces() selects interface counts from the startup snapshot [mod_iot_system.c]
+ │
+ v
+iot_system_read_information() copies the current application's startup snapshot [system_cpp_bridge.cpp]
+```
+
 ### `system.devices()`
 
 ```python
@@ -971,6 +1434,19 @@ Takes no arguments and returns device counts from the startup snapshot:
     "input": 3,
     "block": 2,
 }
+```
+
+```text
+Python: system.devices()
+ │
+ v
+MicroPython module table maps "devices" to system_devices_object [mod_iot_system.c]
+ │
+ v
+system_devices() selects device counts from the startup snapshot [mod_iot_system.c]
+ │
+ v
+iot_system_read_information() copies the current application's startup snapshot [system_cpp_bridge.cpp]
 ```
 
 ### `system.app_information()`
@@ -995,6 +1471,19 @@ and current Python application:
 
 `application_name` comes from the current package's `app.json`. `app_version`
 is the version of the C++ IoT App executable; it is not read from `app.json`.
+
+```text
+Python: system.app_information()
+ │
+ v
+MicroPython module table maps "app_information" to system_app_information_object [mod_iot_system.c]
+ │
+ v
+system_app_information() selects the application and version fields [mod_iot_system.c]
+ │
+ v
+iot_system_read_information() adds the current app name and compiled versions [system_cpp_bridge.cpp]
+```
 
 ### System example
 
@@ -1048,11 +1537,34 @@ display.draw_text_box(
 
 ## `iot.input`
 
-The input module currently provides one hardware driver:
-`input.AdafruitMiniI2cGamepad`. It supports the Adafruit Mini I2C STEMMA QT
-Gamepad with seesaw.
+Choose the class for the board connected to the device:
+`input.AdafruitMiniI2cGamepad()` or `input.SeenGreatOledHatController()`.
+Call `connect()` after constructing it. Neither class searches for the other
+board. A missing board or an access problem raises `RuntimeError`.
 
-`GamepadJoystick` and `GamepadButtons` are view types returned by a gamepad.
+None of these constructors takes a bus number or address. The Raspberry Pi 4
+connections are set in `iot_app/src/input/controller_hardware_settings.h`:
+Adafruit uses I2C bus 1 and address `0x50`; the SeenGreat OLED uses bus 1 and
+address `0x3c`. SeenGreat's buttons use GPIO pins, also listed there. To use
+different wiring, change those values and rebuild IoT App. Moving the same
+device to another host does not normally change the device's own I2C address,
+but the host's bus number or GPIO lines can differ.
+
+The common methods are `model_name()`, `board_type()`, `is_connected()`, `joystick()`,
+`buttons()`, `refresh_input_state()`, and `close()`. Only the Adafruit gamepad
+has `calibrate_joystick()` because its joystick uses analogue values.
+Directions are available through `joystick().direction()`. Both boards support
+the same direction names, but their physical buttons have different names.
+Adafruit reports `"X"`, `"Y"`, `"A"`, `"B"`, `"Select"`, and `"Start"`. SeenGreat
+reports `"K1"`, `"K2"`, `"K3"`, and `"Press"` (the joystick's centre press).
+SeenGreat's directional keys are exposed as a virtual joystick.
+Its position has discrete values rather than the Adafruit joystick's analogue
+values. An app written for one board can still use `direction()` without
+checking raw joystick values.
+
+Only `input.AdafruitMiniI2cGamepad` provides the firmware-diagnostic methods.
+
+`ControllerJoystick` and `ControllerButtons` are view types returned by a controller.
 Applications should not try to construct these view types directly.
 
 ### `input.AdafruitMiniI2cGamepad()`
@@ -1060,37 +1572,22 @@ Applications should not try to construct these view types directly.
 ```python
 from iot import input
 
-gamepad = input.AdafruitMiniI2cGamepad(
-    i2c_bus_number=1,
-    i2c_address=0x50,
-)
+gamepad = input.AdafruitMiniI2cGamepad()
+gamepad.connect()
 ```
 
-Creates the Python and C++ gamepad objects. The constructor immediately opens
-the selected Linux I2C device, such as `/dev/i2c-1`, and selects the requested
-address. The values must be within the ranges below. A missing bus or a
-permission problem raises `RuntimeError` here.
+The constructor opens the configured Linux I2C device, `/dev/i2c-1`, and
+selects address `0x50`. A missing bus or permission problem raises
+`RuntimeError` here.
 
 The constructor only opens the Linux I²C device. The application must then call
 `connect()` to reset the gamepad, verify its product ID, configure its inputs,
 and read its first state.
 
-| Parameter | Required? | Meaning |
-|---|---|---|
-| `i2c_bus_number` | Yes | Linux I2C bus number from 0 to 255; `1` uses `/dev/i2c-1` |
-| `i2c_address` | Yes | Normal seven-bit device address from `0x03` to `0x77`; this gamepad normally uses `0x50` |
-
-These arguments have no defaults. The application must
-state which Linux bus and address its hardware uses.
-
 ```python
 from iot import input
 
-# Construction opens /dev/i2c-1 and selects address 0x50.
-gamepad = input.AdafruitMiniI2cGamepad(
-    i2c_bus_number=1,
-    i2c_address=0x50,
-)
+gamepad = input.AdafruitMiniI2cGamepad()
 
 # Connection now communicates with the gamepad and prepares it for use.
 gamepad.connect()
@@ -1098,31 +1595,102 @@ gamepad.connect()
 print(gamepad.is_connected())  # True
 ```
 
-### Gamepad methods
+```text
+Python: input.AdafruitMiniI2cGamepad()
+ │
+ v
+MicroPython module table maps "AdafruitMiniI2cGamepad" to iot_adafruit_controller_type [mod_iot_input.c]
+ │
+ v
+adafruit_controller_make_new() allocates the Python wrapper [mod_iot_input.c]
+ │
+ v
+iot_adafruit_controller_create() constructs the C++ board object [input_cpp_bridge.cpp]
+ │
+ v
+AdafruitMiniI2cGamepad::AdafruitMiniI2cGamepad() opens the configured I2C device [adafruit_mini_i2c_gamepad.cpp]
+```
 
-#### `gamepad.connect()`
-
-Communicates with the selected I2C device, resets its processor, checks that it
-reports the expected product ID, configures its button inputs, and reads an
-initial state. It takes no arguments and returns `None`. A missing gamepad,
-wrong device, or I2C transfer problem raises `RuntimeError`.
-
-#### `gamepad.calibrate_joystick()`
+### `input.SeenGreatOledHatController()`
 
 ```python
 from iot import input
 
-gamepad = input.AdafruitMiniI2cGamepad(
-    i2c_bus_number=1,
-    i2c_address=0x50,
-)
+controller = input.SeenGreatOledHatController()
+controller.connect()
+print(controller.joystick().direction())
+print(controller.buttons().pressed())  # For example: ("K1", "Press")
+```
+
+The constructor opens the configured SeenGreat OLED and its reset and D/C
+GPIO lines. `connect()` opens the joystick and button GPIO lines. The OLED
+uses I2C, but the controls do not. Its joystick centre is fixed at `(512, 512)`
+with a dead zone of `100`; there is no calibration step. This class has the
+common methods listed above, not the Adafruit calibration or firmware-diagnostic
+methods. A missing HAT or a GPIO permission problem raises `RuntimeError`.
+
+```text
+Python: input.SeenGreatOledHatController()
+ │
+ v
+MicroPython module table maps "SeenGreatOledHatController" to iot_seengreat_controller_type [mod_iot_input.c]
+ │
+ v
+seengreat_controller_make_new() allocates the Python wrapper [mod_iot_input.c]
+ │
+ v
+iot_seengreat_controller_create() constructs the C++ board object [input_cpp_bridge.cpp]
+ │
+ v
+SeenGreatOledHatController::SeenGreatOledHatController() obtains the shared OLED HAT [seengreat_oled_hat.cpp]
+```
+
+### Controller methods
+
+Both board classes provide the methods below unless a method is marked
+Adafruit-only.
+
+#### `connect()`
+
+Prepares the selected board and reads its first input state. On Adafruit, this
+resets the I2C gamepad, checks its product ID, and configures its buttons. On
+SeenGreat, it opens the GPIO lines for the joystick and buttons. It takes no
+arguments and returns `None`. Missing hardware or an access problem raises
+`RuntimeError`.
+
+Here is how the Python call reaches the C++ driver:
+
+```text
+Python: controller.connect()
+ │
+ v
+MicroPython method table maps "connect" to controller_connect_object [mod_iot_input.c]
+ │
+ v
+controller_connect() gets the native handle from the Python object [mod_iot_input.c]
+ │
+ v
+iot_controller_connect() resolves the handle and enters C++ safely [input_cpp_bridge.cpp]
+ │
+ v
+InputControllerBase::connect() is virtual, so C++ selects the matching board:
+ ├── AdafruitMiniI2cGamepad::connect() [adafruit_mini_i2c_gamepad.cpp]
+ └── SeenGreatOledHatController::connect() [seengreat_oled_hat.cpp]
+```
+
+#### `calibrate_joystick()` (Adafruit only)
+
+```python
+from iot import input
+
+gamepad = input.AdafruitMiniI2cGamepad()
 gamepad.connect()
 
 gamepad.calibrate_joystick(number_of_samples=20, dead_zone=100)
 ```
 
-Measures the resting joystick centre. Keep the stick untouched while this runs.
-Both arguments are optional and keyword-only.
+This measures the Adafruit joystick's resting centre. Keep the stick untouched
+while it runs. Both arguments are optional and keyword-only.
 
 | Parameter | Required? | Meaning |
 |---|---|---|
@@ -1131,9 +1699,9 @@ Both arguments are optional and keyword-only.
 
 Call `connect()` first.
 
-`number_of_samples` controls how the centre is measured. The driver reads both
-joystick axes several times and uses their average as the centre. More samples
-can reduce small changes caused by electrical noise, but calibration takes
+`number_of_samples` controls how the centre is measured. The
+driver reads both joystick axes several times and averages the readings.
+More samples can reduce small changes caused by electrical noise, but calibration takes
 longer. Keep the joystick still and near its natural centre until calibration
 finishes. The default of 20 is normally enough.
 
@@ -1144,41 +1712,57 @@ can report right, and a value below 410 can report left. The same rule is used
 for the Y axis. The dead zone only affects `direction()`; it does not change
 the values returned by `position()`.
 
-#### `gamepad.refresh_input_state()`
+```text
+Python: gamepad.calibrate_joystick()
+ │
+ v
+MicroPython method table maps "calibrate_joystick" to adafruit_controller_calibrate_joystick_object [mod_iot_input.c]
+ │
+ v
+adafruit_controller_calibrate_joystick() checks the sample count and dead zone [mod_iot_input.c]
+ │
+ v
+iot_adafruit_controller_calibrate_joystick() checks that the handle belongs to Adafruit [input_cpp_bridge.cpp]
+ │
+ v
+AdafruitMiniI2cGamepad::calibrateJoystick() averages readings and stores the centre and dead zone [adafruit_mini_i2c_gamepad.cpp]
+```
+
+#### `refresh_input_state()`
 
 Reads the current joystick and buttons from the physical device and remembers
-the result. It takes no arguments and returns `None`.
+the result. It takes no arguments and returns `None`. `connect()` already takes
+the first reading, so you do not need to refresh immediately after connecting.
 
 Call this once at the start of each input update. After that, read everything
-you need from `joystick` and `gamepad_buttons`. All those values then belong to
+you need from `joystick` and `controller_buttons`. All those values then belong to
 the same refresh cycle:
 
 ```python
 from iot import input
 
-gamepad = input.AdafruitMiniI2cGamepad(
-    i2c_bus_number=1,
-    i2c_address=0x50,
-)
+gamepad = input.AdafruitMiniI2cGamepad()
 gamepad.connect()
 gamepad.calibrate_joystick(number_of_samples=20, dead_zone=100)
 
 joystick = gamepad.joystick()
-gamepad_buttons = gamepad.buttons()
+controller_buttons = gamepad.buttons()
 
-gamepad.refresh_input_state()
-
-current_direction = joystick.direction()
-pressed_buttons = gamepad_buttons.pressed()
+def read_input_update():
+    gamepad.refresh_input_state()
+    current_direction = joystick.direction()
+    pressed_buttons = controller_buttons.pressed()
+    return current_direction, pressed_buttons
 ```
 
 `gamepad.joystick()` and `gamepad.buttons()` create view objects for reading the
 state stored by `gamepad`. Create these views once and reuse them during later
 input updates.
 
-Methods such as `joystick.direction()` and `gamepad_buttons.pressed()` only
-return the state remembered by the most recent `refresh_input_state()` call.
-They do not contact the I2C gamepad again. Call `refresh_input_state()` later
+Methods such as `joystick.direction()` and `controller_buttons.pressed()` only
+return the state remembered by `connect()` or the most recent
+`refresh_input_state()` call.
+They do not contact the hardware again. Call `refresh_input_state()` later
 when you want new values from the hardware.
 
 `current_direction` is only needed when the application uses the joystick. For
@@ -1187,10 +1771,7 @@ example, this application moves a text box with the joystick:
 ```python
 from iot import display, input, scheduler
 
-gamepad = input.AdafruitMiniI2cGamepad(
-    i2c_bus_number=1,
-    i2c_address=0x50,
-)
+gamepad = input.AdafruitMiniI2cGamepad()
 gamepad.connect()
 gamepad.calibrate_joystick(number_of_samples=20, dead_zone=100)
 
@@ -1232,26 +1813,93 @@ scheduler.every(milliseconds=50, callback=move_text_box_with_joystick)
 `joystick.direction()` applies the calibrated centre and dead zone. The
 application does not need to compare the raw X and Y values itself.
 
-#### `gamepad.is_connected()`
+```text
+Python: controller.refresh_input_state()
+ │
+ v
+MicroPython method table maps "refresh_input_state" to controller_refresh_input_state_object [mod_iot_input.c]
+ │
+ v
+controller_refresh_input_state() gets the native handle [mod_iot_input.c]
+ │
+ v
+iot_controller_refresh_input_state() resolves the handle and dispatches the virtual method [input_cpp_bridge.cpp]
+ │
+ v
+The matching board reads and saves its latest joystick and button state:
+ ├── AdafruitMiniI2cGamepad::refreshInputState() [adafruit_mini_i2c_gamepad.cpp]
+ └── SeenGreatOledHatController::refreshInputState() [seengreat_oled_hat.cpp]
+```
+
+#### `is_connected()`
 
 Takes no arguments and returns `True` after `connect()` succeeds. It reports
 the driver's state and does not send a new probe transaction.
 
-#### `gamepad.model_name()`
+```text
+Python: controller.is_connected()
+ │
+ v
+MicroPython method table maps "is_connected" to controller_is_connected_object [mod_iot_input.c]
+ │
+ v
+controller_is_connected() converts the driver's result to a Python boolean [mod_iot_input.c]
+ │
+ v
+iot_controller_is_connected() reads the driver's connection state [input_cpp_bridge.cpp]
+ ├── AdafruitMiniI2cGamepad::isConnected() [adafruit_mini_i2c_gamepad.cpp]
+ └── SeenGreatOledHatController::isConnected() [seengreat_oled_hat.cpp]
+```
 
-Takes no arguments and returns `"Adafruit Mini I2C STEMMA QT Gamepad"`.
+#### `model_name()`
 
-#### `gamepad.connection_information()`
+Takes no arguments and returns `"Adafruit Mini I2C STEMMA QT Gamepad"` or
+`"SeenGreat 1.3 inch OLED HAT"`, depending on the selected board.
 
-Returns the Linux I2C connection selected when the gamepad was created:
+```text
+Python: controller.model_name()
+ │
+ v
+MicroPython method table maps "model_name" to controller_model_name_object [mod_iot_input.c]
+ │
+ v
+controller_model_name() converts the result to a Python string [mod_iot_input.c]
+ │
+ v
+iot_controller_model_name() reads the driver's display name [input_cpp_bridge.cpp]
+ ├── AdafruitMiniI2cGamepad::modelName() [adafruit_mini_i2c_gamepad.cpp]
+ └── SeenGreatOledHatController::modelName() [seengreat_oled_hat.cpp]
+```
+
+#### `board_type()`
+
+Returns `"adafruit_mini_i2c_gamepad"` for Adafruit or `"seengreat_oled_hat"`
+for SeenGreat. The readable `model_name()` is for display; use `board_type()`
+when code needs a stable value.
+
+```text
+Python: controller.board_type()
+ │
+ v
+MicroPython method table maps "board_type" to controller_board_type_object [mod_iot_input.c]
+ │
+ v
+controller_board_type() converts the result to a Python string [mod_iot_input.c]
+ │
+ v
+iot_controller_board_type() reads the driver's stable board name [input_cpp_bridge.cpp]
+ ├── AdafruitMiniI2cGamepad::boardType() [adafruit_mini_i2c_gamepad.cpp]
+ └── SeenGreatOledHatController::boardType() [seengreat_oled_hat.cpp]
+```
+
+#### `connection_information()` (Adafruit only)
+
+Returns the Adafruit board's configured Linux I2C connection:
 
 ```python
 from iot import input
 
-gamepad = input.AdafruitMiniI2cGamepad(
-    i2c_bus_number=1,
-    i2c_address=0x50,
-)
+gamepad = input.AdafruitMiniI2cGamepad()
 
 connection = gamepad.connection_information()
 
@@ -1262,24 +1910,63 @@ print(connection["device_path"])  # /dev/i2c-1
 
 | Dictionary field | Meaning |
 |---|---|
-| `bus_number` | Linux I2C bus number passed to the constructor |
-| `address` | Seven-bit I2C address passed to the constructor, returned as an integer |
+| `bus_number` | Configured Linux I2C bus number |
+| `address` | Configured seven-bit I2C address, returned as an integer |
 | `device_path` | Linux device opened for that bus, such as `/dev/i2c-1` |
 
 This method does not contact the gamepad, so `connect()` is not required. It is
 mainly useful in logs and hardware diagnostic screens.
 
-#### `gamepad.joystick()`
+```text
+Python: gamepad.connection_information()
+ │
+ v
+MicroPython method table maps "connection_information" to adafruit_controller_connection_information_object [mod_iot_input.c]
+ │
+ v
+adafruit_controller_connection_information() builds a Python dictionary [mod_iot_input.c]
+ │
+ v
+iot_adafruit_controller_read_connection_information() reads the stored I2C settings [input_cpp_bridge.cpp]
+```
 
-Takes no arguments and returns a `GamepadJoystick` view connected to this
-gamepad. Keep the gamepad open while using the view.
+#### `joystick()`
 
-#### `gamepad.buttons()`
+Takes no arguments and returns a `ControllerJoystick` view connected to this
+controller. Keep the controller open while using the view.
 
-Takes no arguments and returns a `GamepadButtons` view connected to this
-gamepad. Keep the gamepad open while using the view.
+```text
+Python: controller.joystick()
+ │
+ v
+MicroPython method table maps "joystick" to controller_joystick_object [mod_iot_input.c]
+ │
+ v
+controller_joystick() creates a joystick view [mod_iot_input.c]
+ │
+ v
+create_state_view() keeps the controller alive; no hardware read happens here [mod_iot_input.c]
+```
 
-#### Diagnostic methods
+#### `buttons()`
+
+Takes no arguments and returns a `ControllerButtons` view connected to this
+controller. Keep the controller open while using the view.
+
+```text
+Python: controller.buttons()
+ │
+ v
+MicroPython method table maps "buttons" to controller_buttons_object [mod_iot_input.c]
+ │
+ v
+controller_buttons() creates a button view [mod_iot_input.c]
+ │
+ v
+create_state_view() keeps the controller alive; no hardware read happens here [mod_iot_input.c]
+```
+
+#### Adafruit-only diagnostic methods
 
 These methods take no arguments and return integer values read during
 `connect()`:
@@ -1298,10 +1985,7 @@ have been read yet.
 ```python
 from iot import input
 
-gamepad = input.AdafruitMiniI2cGamepad(
-    i2c_bus_number=1,
-    i2c_address=0x50,
-)
+gamepad = input.AdafruitMiniI2cGamepad()
 gamepad.connect()
 
 print("Processor hardware ID:", gamepad.processor_hardware_id())
@@ -1316,21 +2000,118 @@ print(
 `connect()` already checks that the product ID is 5743. These methods are
 mainly useful for logs and hardware diagnostics.
 
-#### `gamepad.close()`
+All four methods read values saved by `connect()`; they do not contact the
+gamepad again:
 
-Releases the native gamepad and closes its I2C connection. It takes no
+```text
+Python: gamepad.processor_hardware_id()
+ │
+ v
+MicroPython method table maps "processor_hardware_id" to adafruit_controller_processor_hardware_id_object [mod_iot_input.c]
+ │
+ v
+adafruit_controller_processor_hardware_id() selects the hardware ID [mod_iot_input.c]
+ │
+ v
+read_diagnostics() gathers the board's stored diagnostic values [mod_iot_input.c]
+ │
+ v
+iot_adafruit_controller_read_diagnostics() copies the saved values into a C structure [input_cpp_bridge.cpp]
+ │
+ v
+AdafruitMiniI2cGamepad::processorHardwareId() returns the saved ID [adafruit_mini_i2c_gamepad.cpp]
+```
+
+```text
+Python: gamepad.firmware_product_id()
+ │
+ v
+MicroPython method table maps "firmware_product_id" to adafruit_controller_firmware_product_id_object [mod_iot_input.c]
+ │
+ v
+adafruit_controller_firmware_product_id() selects the product ID [mod_iot_input.c]
+ │
+ v
+read_diagnostics() gathers the board's stored diagnostic values [mod_iot_input.c]
+ │
+ v
+iot_adafruit_controller_read_diagnostics() copies the saved values into a C structure [input_cpp_bridge.cpp]
+ │
+ v
+AdafruitMiniI2cGamepad::firmwareProductId() returns the saved product ID [adafruit_mini_i2c_gamepad.cpp]
+```
+
+```text
+Python: gamepad.firmware_date_code()
+ │
+ v
+MicroPython method table maps "firmware_date_code" to adafruit_controller_firmware_date_code_object [mod_iot_input.c]
+ │
+ v
+adafruit_controller_firmware_date_code() selects the date code [mod_iot_input.c]
+ │
+ v
+read_diagnostics() gathers the board's stored diagnostic values [mod_iot_input.c]
+ │
+ v
+iot_adafruit_controller_read_diagnostics() copies the saved values into a C structure [input_cpp_bridge.cpp]
+ │
+ v
+AdafruitMiniI2cGamepad::firmwareDateCode() returns the saved date code [adafruit_mini_i2c_gamepad.cpp]
+```
+
+```text
+Python: gamepad.combined_product_id_and_firmware_date_code()
+ │
+ v
+MicroPython method table maps "combined_product_id_and_firmware_date_code" to adafruit_controller_combined_product_id_and_firmware_date_code_object [mod_iot_input.c]
+ │
+ v
+adafruit_controller_combined_product_id_and_firmware_date_code() selects the combined value [mod_iot_input.c]
+ │
+ v
+read_diagnostics() gathers the board's stored diagnostic values [mod_iot_input.c]
+ │
+ v
+iot_adafruit_controller_read_diagnostics() copies the saved values into a C structure [input_cpp_bridge.cpp]
+ │
+ v
+AdafruitMiniI2cGamepad::productIdAndFirmwareDateCode() returns the saved value [adafruit_mini_i2c_gamepad.cpp]
+```
+
+#### `close()`
+
+Releases the native controller and its I2C or GPIO connection. It takes no
 arguments, returns `None`, and is safe to call more than once. Any later method
-call on the gamepad or one of its views raises `ValueError`. MicroPython also
+call on the controller or one of its views raises `ValueError`. MicroPython also
 releases the object during garbage collection, but explicit `close()` is useful
 when the device is no longer needed.
 
-### `GamepadJoystick` methods
+```text
+Python: controller.close()
+ │
+ v
+MicroPython method table maps "close" to controller_close_object [mod_iot_input.c]
+ │
+ v
+controller_close() clears the native handle after releasing the object [mod_iot_input.c]
+ │
+ v
+iot_controller_destroy() deletes the board object through InputControllerBase [input_cpp_bridge.cpp]
+ │
+ v
+The matching board releases the resources it owns:
+ ├── AdafruitMiniI2cGamepad::~AdafruitMiniI2cGamepad() releases the owned I2C device [adafruit_mini_i2c_gamepad.h]
+ └── SeenGreatOledHatController::~SeenGreatOledHatController() closes its input GPIO lines [seengreat_oled_hat.cpp]
+```
+
+### `ControllerJoystick` methods
 
 | Method | Return value |
 |---|---|
-| `position()` | Returns the latest `(x, y)` values remembered by `refresh_input_state()`. Each value is normally from 0 to 1023. X increases towards the right and Y increases upwards. |
-| `centre()` | Returns the `(x, y)` resting centre measured by the latest `calibrate_joystick()` call. It does not change during normal input refreshes. |
-| `dead_zone()` | Returns the dead-zone value supplied during calibration. Movement inside this distance from the centre is ignored by `direction()`. |
+| `position()` | Returns the latest `(x, y)` values remembered by `connect()` or `refresh_input_state()`. Each value is normally from 0 to 1023. X increases towards the right and Y increases upwards. |
+| `centre()` | Returns the resting centre. Adafruit measures it during `calibrate_joystick()`; SeenGreat uses the fixed centre `(512, 512)`. It does not change during normal input refreshes. |
+| `dead_zone()` | Returns the distance around the centre ignored by `direction()`. Adafruit sets it during calibration; SeenGreat uses a fixed value of `100`. |
 | `direction()` | Compares the latest position with the centre and dead zone, then returns a simple direction name such as `"left"`, `"up_right"`, or `"center"`. |
 
 `direction()` returns one of:
@@ -1342,50 +2123,126 @@ up_left, up_right, down_left, down_right
 
 Larger X values mean right and larger Y values mean up.
 
-### `GamepadButtons` methods
+These methods read the state saved by `connect()` or `refresh_input_state()`:
 
-#### `gamepad_buttons.pressed()`
+```text
+Python: joystick.position()
+ │
+ v
+MicroPython method table maps "position" to joystick_position_object [mod_iot_input.c]
+ │
+ v
+joystick_position() returns the saved X and Y values as a Python tuple [mod_iot_input.c]
+ │
+ v
+iot_controller_read_state() copies the saved controller state into a C structure [input_cpp_bridge.cpp]
+ │
+ v
+ControllerJoystick::position() returns the saved X and Y values [input_controller_base.cpp]
+```
+
+```text
+Python: joystick.centre()
+ │
+ v
+MicroPython method table maps "centre" to joystick_centre_object [mod_iot_input.c]
+ │
+ v
+joystick_centre() returns the resting centre as a Python tuple [mod_iot_input.c]
+ │
+ v
+iot_controller_read_state() copies the saved controller state into a C structure [input_cpp_bridge.cpp]
+ │
+ v
+ControllerJoystick::centre() returns the saved resting centre [input_controller_base.cpp]
+```
+
+```text
+Python: joystick.dead_zone()
+ │
+ v
+MicroPython method table maps "dead_zone" to joystick_dead_zone_object [mod_iot_input.c]
+ │
+ v
+joystick_dead_zone() returns the stored dead zone as a Python integer [mod_iot_input.c]
+ │
+ v
+iot_controller_read_state() copies the saved controller state into a C structure [input_cpp_bridge.cpp]
+ │
+ v
+ControllerJoystick::deadZone() returns the saved dead zone [input_controller_base.cpp]
+```
+
+```text
+Python: joystick.direction()
+ │
+ v
+MicroPython method table maps "direction" to joystick_direction_object [mod_iot_input.c]
+ │
+ v
+joystick_direction() returns the direction as a Python string [mod_iot_input.c]
+ │
+ v
+iot_controller_joystick_direction() converts the C++ direction to text [input_cpp_bridge.cpp]
+ │
+ v
+ControllerJoystick::direction() compares the saved position with the centre and dead zone [input_controller_base.cpp]
+```
+
+### `ControllerButtons` methods
+
+#### `pressed()`
 
 Takes no arguments and returns a tuple containing every button that is held
-down. An empty tuple means no buttons are pressed. Names are returned in this
-order:
+down. An empty tuple means no buttons are pressed. An Adafruit gamepad returns
+names in this order:
 
 ```text
 X, Y, A, B, Select, Start
 ```
+
+The SeenGreat controller returns `K1, K2, K3, Press` in that order.
 
 Use `pressed()` when you need the complete button state, for example:
 
 ```python
 from iot import input
 
-gamepad = input.AdafruitMiniI2cGamepad(
-    i2c_bus_number=1,
-    i2c_address=0x50,
-)
+gamepad = input.AdafruitMiniI2cGamepad()
 gamepad.connect()
 
-gamepad_buttons = gamepad.buttons()
+controller_buttons = gamepad.buttons()
 
-gamepad.refresh_input_state()
-print(gamepad_buttons.pressed())  # For example: ("A", "Start")
+print(controller_buttons.pressed())  # For example: ("A", "Start")
 ```
 
-#### `gamepad_buttons.is_pressed()`
+```text
+Python: controller_buttons.pressed()
+ │
+ v
+MicroPython method table maps "pressed" to buttons_pressed_object [mod_iot_input.c]
+ │
+ v
+buttons_pressed() converts the saved pressed-button mask to names [mod_iot_input.c]
+ │
+ v
+iot_controller_read_state() copies the saved controller state into a C structure [input_cpp_bridge.cpp]
+ │
+ v
+ControllerButtons::pressed() returns the saved pressed buttons [input_controller_base.cpp]
+```
+
+#### `is_pressed()`
 
 ```python
 from iot import input
 
-gamepad = input.AdafruitMiniI2cGamepad(
-    i2c_bus_number=1,
-    i2c_address=0x50,
-)
+gamepad = input.AdafruitMiniI2cGamepad()
 gamepad.connect()
 
-gamepad_buttons = gamepad.buttons()
-gamepad.refresh_input_state()
+controller_buttons = gamepad.buttons()
 
-is_down = gamepad_buttons.is_pressed("A")
+is_down = controller_buttons.is_pressed("A")
 if is_down:
     print("A is held down")
 ```
@@ -1394,49 +2251,68 @@ Returns `True` when one named button is held down.
 
 | Parameter | Required? | Meaning |
 |---|---|---|
-| `button_name` | Yes | One of `"X"`, `"Y"`, `"A"`, `"B"`, `"Select"`, or `"Start"` |
+| `button_name` | Yes | Adafruit: `"X"`, `"Y"`, `"A"`, `"B"`, `"Select"`, `"Start"`; SeenGreat: `"K1"`, `"K2"`, `"K3"`, `"Press"` |
 
 Button names are case-sensitive. An unknown name raises `ValueError`.
+
+```text
+Python: controller_buttons.is_pressed("A")
+ │
+ v
+MicroPython method table maps "is_pressed" to buttons_is_pressed_object [mod_iot_input.c]
+ │
+ v
+buttons_is_pressed() finds the button name and tests its saved bit [mod_iot_input.c]
+ │
+ v
+iot_controller_read_state() returns the saved pressed-button mask [input_cpp_bridge.cpp]
+ │
+ v
+buttons_is_pressed() tests that button's bit in the mask [mod_iot_input.c]
+```
 
 Use `is_pressed()` when you only care about one button, as shown by the
 `is_down` condition above.
 
-Both methods use the state saved by the latest `refresh_input_state()` call.
+Both methods use the state saved by `connect()` or the latest
+`refresh_input_state()` call.
 They report whether a button is currently held down; they do not report a
 separate one-time "button was just pressed" event.
 
-### Input example
+`pressed()` returns the actual names for the connected board. An Adafruit
+button name does not stand for a SeenGreat button. Since the app constructs
+the board-specific class, it knows which button names to expect.
+
+### Adafruit input example
 
 ```python
 from iot import display, input, scheduler
 
-gamepad = input.AdafruitMiniI2cGamepad(
-    i2c_bus_number=1,
-    i2c_address=0x50,
-)
+gamepad = input.AdafruitMiniI2cGamepad()
 gamepad.connect()
 
-# Do not touch the joystick while its resting centre is measured.
+# Leave the joystick still while its centre is measured.
 gamepad.calibrate_joystick(number_of_samples=20, dead_zone=100)
 
 joystick = gamepad.joystick()
-gamepad_buttons = gamepad.buttons()
+controller_buttons = gamepad.buttons()
 
 status_box = display.draw_text_box(
     x=40,
     y=40,
     width=800,
     height=180,
-    text="Waiting for gamepad input",
+    text="Waiting for input: %s" % gamepad.model_name(),
 )
 
 def refresh_gamepad():
     gamepad.refresh_input_state()
-    pressed_buttons = gamepad_buttons.pressed()
+    pressed_buttons = controller_buttons.pressed()
     pressed_buttons_text = ", ".join(pressed_buttons) if pressed_buttons else "none"
     display.update_text_box(
         status_box,
-        "Direction: %s\nButtons: %s" % (
+        "Controller: %s\nDirection: %s\nButtons: %s" % (
+            gamepad.model_name(),
             joystick.direction(),
             pressed_buttons_text,
         ),
@@ -1444,6 +2320,11 @@ def refresh_gamepad():
 
 scheduler.every(milliseconds=50, callback=refresh_gamepad)
 ```
+
+The [SeenGreat controls sample](../../../iot_app_sender/sample_applications/seengreat_controls/README.md)
+creates that board's controller directly. The
+[Adafruit joystick visualizer](../../../iot_app_sender/sample_applications/joystick_visualizer/README.md)
+uses the Adafruit-specific class.
 
 ## Errors
 

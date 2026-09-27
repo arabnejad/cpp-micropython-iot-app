@@ -53,6 +53,10 @@ SUBSYSTEM=="video4linux", KERNEL=="video[0-9]*", GROUP="video", MODE="0660"
 # applications use these files to communicate with an I2C gamepad.
 SUBSYSTEM=="i2c-dev", KERNEL=="i2c-[0-9]*", GROUP="i2c", MODE="0660"
 
+# The SeenGreat HAT uses /dev/gpiochip* for its reset, D/C, and button lines.
+# The runtime user already belongs to the input group.
+SUBSYSTEM=="gpio", KERNEL=="gpiochip[0-9]*", GROUP="input", MODE="0660"
+
 # Linux input events appear as /dev/input/event0 and similar names. The input
 # group allows present or future native input drivers to read those events.
 SUBSYSTEM=="input", KERNEL=="event[0-9]*", GROUP="input", MODE="0660"

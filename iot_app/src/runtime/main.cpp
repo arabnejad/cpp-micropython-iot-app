@@ -1,12 +1,14 @@
 #include "runtime_config.h"
 
 #include "iot/display/display_manager.h"
+#include "iot/input/seengreat_oled_hat.h"
 #include "iot/logging/logger.h"
 #include "iot/messaging/application_deployment_service.h"
 #include "iot/network/http_file_downloader.h"
 #include "iot/python/python_application_manager.h"
 #include "iot/python/python_application_loader.h"
 #include "iot/system/system_information.h"
+#include "iot/status/seengreat_status_display.h"
 #include "iot/ui/render_backend.h"
 #include "iot/ui/screen_manager.h"
 #include "iot/video/iexclusive_video_player.h"
@@ -17,6 +19,7 @@
 #include <chrono>
 #include <csignal>
 #include <exception>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -73,6 +76,13 @@ int main(int argc, char **argv) {
 
     iot::display::DisplayManager                displayManager;
     iot::system::LinuxSystemInformationProvider systemInformationProvider;
+    std::unique_ptr<iot::status::SeenGreatStatusDisplay> statusDisplay;
+    try {
+      statusDisplay = std::make_unique<iot::status::SeenGreatStatusDisplay>(iot::input::SeenGreatOledHat::open());
+      IOT_LOG_INFO(applicationLogger, "SeenGreat OLED HAT detected");
+    } catch (const std::exception &error) {
+      IOT_LOG_INFO(applicationLogger, "SeenGreat OLED is not available: ", error.what());
+    }
     auto                                        connectedDisplays = displayManager.connectedDisplays();
     const auto                                 *selectedDisplay   = choosePreferredDisplay(connectedDisplays);
     if (selectedDisplay == nullptr) {
@@ -122,6 +132,8 @@ int main(int argc, char **argv) {
     IOT_LOG_INFO(applicationLogger, "Running Python app '", pythonApplicationManager.activeScreenName(),
                  "'. Press Ctrl+C to stop");
 
+    auto lastOledUpdate = std::chrono::steady_clock::now() - std::chrono::seconds(1);
+
     iot::messaging::MqttApplicationReceiverSettings mqttSettings;
     mqttSettings.deviceId                  = runtimeConfig.deviceId;
     mqttSettings.brokerHost                = runtimeConfig.mqttBrokerHost;
@@ -156,8 +168,18 @@ int main(int argc, char **argv) {
       applicationDeploymentService.waitForAndProcessOneMessage(waitDuration);
 
       pythonApplicationManager.runScheduledCallbacks();
+      if (statusDisplay && std::chrono::steady_clock::now() - lastOledUpdate >= std::chrono::seconds(1)) {
+        try {
+          statusDisplay->show(systemInformationProvider, pythonApplicationManager.activeScreenName());
+          lastOledUpdate = std::chrono::steady_clock::now();
+        } catch (const std::exception &error) {
+          IOT_LOG_WARNING(applicationLogger, "OLED update failed: ", error.what());
+          statusDisplay.reset();
+        }
+      }
     }
 
+    statusDisplay.reset(); // Turn off the OLED while its I2C and GPIO handles are held.
     applicationDeploymentService.stop();
     pythonApplicationManager.stop();
     screenManager.stop();

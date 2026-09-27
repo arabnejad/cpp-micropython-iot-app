@@ -1,4 +1,5 @@
 #include "iot/input/adafruit_mini_i2c_gamepad.h"
+#include "controller_hardware_settings.h"
 
 #include "iot/hardware/i2c_device.h"
 
@@ -69,22 +70,22 @@ constexpr int          joystickAxisMaximumValue       = 1023; // Maximum 10-bit 
 
 // These numbers come from the board wiring. The buttons are active-low, which
 // means zero is pressed. The driver converts those input bits into the button
-// bits defined by GamepadButton. The full mapping is explained in
+// bits defined by ControllerButton. The full mapping is explained in
 // iot_app/docs/hardware/README.md.
 // Adafruit calls these input numbers "pins" in its examples:
 // https://learn.adafruit.com/gamepad-qt/circuitpython-and-python
-struct GamepadButtonInputMapping {
-  int           inputNumber;
-  GamepadButton gamepadButton;
+struct AdafruitButtonInputMapping {
+  int              inputNumber;
+  ControllerButton gamepadButton;
 };
 
-constexpr std::array<GamepadButtonInputMapping, 6> gamepadButtonInputMappings{{
-    {6, GamepadButton::X},      // BUTTON_X
-    {2, GamepadButton::Y},      // BUTTON_Y
-    {5, GamepadButton::A},      // BUTTON_A
-    {1, GamepadButton::B},      // BUTTON_B
-    {0, GamepadButton::Select}, // BUTTON_SELECT
-    {16, GamepadButton::Start}, // BUTTON_START
+constexpr std::array<AdafruitButtonInputMapping, 6> gamepadButtonInputMappings{{
+    {6, ControllerButton::X},      // BUTTON_X
+    {2, ControllerButton::Y},      // BUTTON_Y
+    {5, ControllerButton::A},      // BUTTON_A
+    {1, ControllerButton::B},      // BUTTON_B
+    {0, ControllerButton::Select}, // BUTTON_SELECT
+    {16, ControllerButton::Start}, // BUTTON_START
 }};
 
 /* Makes the bit used to select one numbered button input. */
@@ -136,8 +137,9 @@ std::uint32_t decodeBigEndianBytesAsUint32(const std::vector<std::uint8_t> &bigE
 
 } // namespace
 
-AdafruitMiniI2cGamepad::AdafruitMiniI2cGamepad(int i2cBusNumber, std::uint8_t i2cAddress)
-    : AdafruitMiniI2cGamepad(std::make_unique<hardware::I2cDevice>(i2cBusNumber, i2cAddress)) {}
+AdafruitMiniI2cGamepad::AdafruitMiniI2cGamepad()
+    : AdafruitMiniI2cGamepad(std::make_unique<hardware::I2cDevice>(hardwareSettings::adafruitI2cBusNumber,
+                                                                   hardwareSettings::adafruitI2cAddress)) {}
 
 AdafruitMiniI2cGamepad::AdafruitMiniI2cGamepad(std::unique_ptr<hardware::II2cDevice> gamepadI2cDevice)
     : m_gamepadI2cDevice(std::move(gamepadI2cDevice)) {
@@ -148,6 +150,10 @@ AdafruitMiniI2cGamepad::AdafruitMiniI2cGamepad(std::unique_ptr<hardware::II2cDev
 
 const char *AdafruitMiniI2cGamepad::modelName() const noexcept {
   return "Adafruit Mini I2C STEMMA QT Gamepad";
+}
+
+const char *AdafruitMiniI2cGamepad::boardType() const noexcept {
+  return "adafruit_mini_i2c_gamepad";
 }
 
 void AdafruitMiniI2cGamepad::connect() {
@@ -200,7 +206,7 @@ void AdafruitMiniI2cGamepad::calibrateJoystick(std::size_t numberOfCalibrationSa
       static_cast<int>(sumOfXAxisSamples / static_cast<std::int64_t>(numberOfCalibrationSamples)),
       static_cast<int>(sumOfYAxisSamples / static_cast<std::int64_t>(numberOfCalibrationSamples)),
   };
-  setJoystickCalibration(measuredJoystickCentre, joystickDeadZone);
+  setJoystickCentreAndDeadZone(measuredJoystickCentre, joystickDeadZone);
   updateJoystick(measuredJoystickCentre);
 }
 

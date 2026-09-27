@@ -137,7 +137,7 @@ servers contacted in the past.
 ## 4. First boot
 
 Insert the microSD card, connect HDMI, and power on the Raspberry Pi. Connect
-the I2C gamepad before boot when it is needed for the test. Both images perform
+the controller before boot when it is needed for the test. Both images perform
 the same main jobs:
 
 ```text

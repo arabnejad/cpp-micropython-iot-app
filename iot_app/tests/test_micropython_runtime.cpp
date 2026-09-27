@@ -57,6 +57,10 @@ TEST(MicroPythonRuntimeTest, RunsAScheduledCallbackAndReportsItsFailure) {
                               "def fail_later():\n"
                               "    raise ValueError('scheduled failure')\n"
                               "iot.scheduler.every(milliseconds=10, callback=fail_later)\n"));
+
+  // The << applicationExecutionResult.traceback part adds the Python traceback to
+  // the test failure message only if the check fails. It does not print
+  // the traceback when the test passes or change the result being checked.
   ASSERT_TRUE(applicationStartupResult.succeeded) << applicationStartupResult.traceback;
 
   const auto timeUntilScheduledCallback = microPythonRuntime.timeUntilNextScheduledCallback();
@@ -84,6 +88,10 @@ TEST(MicroPythonRuntimeTest, IncludesElapsedTimeWhenReportingTheNextCallbackDela
   const PythonExecutionResult applicationStartupResult = microPythonRuntime.executeApplication(
       createPythonApplication("import iot\n"
                               "iot.scheduler.every(milliseconds=200, callback=lambda: None)\n"));
+
+  // The << applicationExecutionResult.traceback part adds the Python traceback to
+  // the test failure message only if the check fails. It does not print
+  // the traceback when the test passes or change the result being checked.
   ASSERT_TRUE(applicationStartupResult.succeeded) << applicationStartupResult.traceback;
 
   std::this_thread::sleep_for(std::chrono::milliseconds(40));
@@ -107,6 +115,9 @@ TEST(MicroPythonRuntimeTest, LetsAnApplicationCancelAndClearItsOwnTimers) {
                               "assert iot.scheduler.cancel(first) is False\n"
                               "iot.scheduler.clear()\n"));
 
+  // The << applicationExecutionResult.traceback part adds the Python traceback to
+  // the test failure message only if the check fails. It does not print
+  // the traceback when the test passes or change the result being checked.
   ASSERT_TRUE(applicationStartupResult.succeeded) << applicationStartupResult.traceback;
   EXPECT_FALSE(microPythonRuntime.timeUntilNextScheduledCallback().has_value());
 }
@@ -133,6 +144,9 @@ TEST(MicroPythonRuntimeTest, RejectsInvalidAndExcessiveTimerRequestsInPython) {
                               "except RuntimeError:\n"
                               "    pass\n"));
 
+  // The << applicationExecutionResult.traceback part adds the Python traceback to
+  // the test failure message only if the check fails. It does not print
+  // the traceback when the test passes or change the result being checked.
   EXPECT_TRUE(applicationExecutionResult.succeeded) << applicationExecutionResult.traceback;
 }
 

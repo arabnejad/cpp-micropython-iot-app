@@ -50,7 +50,11 @@ set(BUILD_SHARED_LIBS "${IOT_PARENT_BUILD_SHARED_LIBS}"
 
 add_library(iot_platform STATIC
   src/input/adafruit_mini_i2c_gamepad.cpp
-  src/input/game_controller.cpp
+  src/input/input_controller_base.cpp
+  src/input/seengreat_input_mapping.cpp
+  src/input/seengreat_oled_hat.cpp
+  src/status/font16.c
+  src/status/seengreat_status_display.cpp
   src/logging/logger.cpp
   src/ui/jpeg_image_loader.cpp
   src/ui/libjpeg_turbo_jpeg_image_decoder.cpp

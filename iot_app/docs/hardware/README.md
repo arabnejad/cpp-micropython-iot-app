@@ -122,7 +122,7 @@ Combining these values creates `allGamepadButtonInputsMask`:
 ```
 
 This fixed mask identifies inputs 0, 1, 2, 5, 6, and 16.
-The driver keeps each physical input number beside its `GamepadButton` value
+The driver keeps each physical input number beside its `ControllerButton` value
 in `gamepadButtonInputMappings`. `createAllGamepadButtonInputsMask()` loops
 through that table, creates a bit for each input, and joins them into this
 mask. The mask is calculated while the C++ program is compiled.
@@ -145,27 +145,31 @@ When `refreshInputState()` runs:
 1. `readButtonInputLevels()` reads all six inputs over I2C.
 2. A loop uses `gamepadButtonInputMappings` to check each input. The inputs
    are active-low, so zero means the button is pressed.
-3. The driver adds the corresponding `GamepadButton` value directly to the
+3. The driver adds the corresponding `ControllerButton` value directly to the
    pressed-button mask.
 4. `updateButtons()` stores the completed application-level button state.
 
 Application code can use either an `AdafruitMiniI2cGamepad` object or a
-`GameController` reference to read the gamepad without depending on its
+`InputControllerBase` reference to read the gamepad without depending on its
 hardware details:
 
 ```cpp
-iot::input::AdafruitMiniI2cGamepad gamepad{1, 0x50};
+iot::input::AdafruitMiniI2cGamepad gamepad;
 gamepad.connect();
 gamepad.calibrateJoystick();
 gamepad.refreshInputState();
 
 const auto direction = gamepad.joystick().direction();
 const bool aIsPressed =
-    gamepad.buttons().isPressed(iot::input::GamepadButton::A);
+    gamepad.buttons().isPressed(iot::input::ControllerButton::A);
 ```
 
 The application does not need to know that this gamepad wires A to processor
 input 5.
+
+The I2C bus, Adafruit address, SeenGreat OLED address, and SeenGreat GPIO pins
+are kept in `iot_app/src/input/controller_hardware_settings.h`. Python apps do
+not pass these values. Update that file and rebuild if the wiring changes.
 
 This is the native C++ API. In a MicroPython application, the equivalent code
 uses Python naming:
@@ -190,21 +194,21 @@ A input value: 0x00000020 = 0b00000000 00000000 00000000 00100000
 After A press: 0x00010047 = 0b00000000 00000001 00000000 01000111
 ```
 
-The driver sees that physical input 5 is low and adds `GamepadButton::A` to the
+The driver sees that physical input 5 is low and adds `ControllerButton::A` to the
 pressed-button mask. Each enum value is already the mask for that button:
 
 ```text
 X = 1, Y = 2, A = 4, B = 8, Select = 16, Start = 32
 ```
 
-`GamepadButton::A` is `1U << 2U`, which is bit 2:
+`ControllerButton::A` is `1U << 2U`, which is bit 2:
 
 ```text
 Logical A: 0x00000004 = 0b00000000 00000000 00000000 00000100
 ```
 
 The physical input mask describes this gamepad's fixed internal wiring. The
-logical mask uses `GamepadButton` and describes which named buttons the user is
+logical mask uses `ControllerButton` and describes which named buttons the user is
 currently pressing.
 
 ## Seesaw protocol values

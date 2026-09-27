@@ -1,5 +1,5 @@
 SUMMARY = "C++ runtime for embedded MicroPython IoT applications"
-DESCRIPTION = "IoT App runs one embedded MicroPython application and exposes native display, download, system, scheduling, and gamepad services."
+DESCRIPTION = "IoT App runs one embedded MicroPython application and exposes native display, download, system, scheduling, and controller input services."
 HOMEPAGE = "https://github.com/arabnejad/cpp-micropython-iot-app"
 LICENSE = "PolyForm-Noncommercial-1.0.0"
 

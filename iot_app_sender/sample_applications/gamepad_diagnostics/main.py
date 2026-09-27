@@ -3,8 +3,6 @@
 from iot import display, input, scheduler
 
 
-I2C_BUS_NUMBER = 1
-I2C_ADDRESS = 0x50
 INPUT_REFRESH_MILLISECONDS = 50
 
 BACKGROUND = (8, 13, 22)
@@ -13,15 +11,11 @@ TEXT = (226, 232, 240)
 GREEN = (74, 222, 128)
 
 
-gamepad = input.AdafruitMiniI2cGamepad(
-    i2c_bus_number=I2C_BUS_NUMBER,
-    i2c_address=I2C_ADDRESS,
-)
+gamepad = input.AdafruitMiniI2cGamepad()
 gamepad.connect()
 
 # Leave the joystick untouched while these startup samples measure its centre.
 gamepad.calibrate_joystick(number_of_samples=20, dead_zone=100)
-gamepad.refresh_input_state()
 
 joystick = gamepad.joystick()
 buttons = gamepad.buttons()
@@ -30,6 +24,7 @@ model_name = gamepad.model_name()
 processor_hardware_id = gamepad.processor_hardware_id()
 firmware_product_id = gamepad.firmware_product_id()
 firmware_date_code = gamepad.firmware_date_code()
+connection = gamepad.connection_information()
 
 screen_width, screen_height = display.size()
 margin = max(20, screen_width // 20)
@@ -53,8 +48,8 @@ def create_status_text():
     ) % (
         model_name,
         "Connected" if gamepad.is_connected() else "Disconnected",
-        I2C_BUS_NUMBER,
-        I2C_ADDRESS,
+        connection["bus_number"],
+        connection["address"],
         joystick.direction(),
         pressed_text,
         processor_hardware_id,

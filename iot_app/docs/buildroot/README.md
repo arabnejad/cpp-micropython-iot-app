@@ -779,7 +779,7 @@ After selecting a new MicroPython revision:
    headers.
 4. Check that traceback capture and C/C++ bridge error handling still work.
 5. Test the default application, scheduler timers, display module, system
-   module, gamepad module, external deployment, startup failure, and scheduled
+   module, controller input, external deployment, startup failure, and scheduled
    callback failure.
 6. Update current-version examples in the documentation and dashboard.
 7. Perform a clean CMake build and a clean Buildroot image build.
