@@ -42,6 +42,20 @@ TEST(EdidParserTest, ReadsManufacturerModelAndTextSerialFromAValidBaseBlock) {
   EXPECT_EQ(parsedEdidInformation.serial, "SERIAL-42");
 }
 
+TEST(EdidParserTest, TrimsNullPaddingFromModelAndTextSerialDescriptors) {
+  auto edidBytes = createEdidBlockWithValidHeader();
+  edidBytes[57U] = 0xfcU;
+  std::memcpy(edidBytes.data() + 59U, "ABC", 3U);
+  edidBytes[75U] = 0xffU;
+  std::memcpy(edidBytes.data() + 77U, "SERIAL-42", 9U);
+  updateEdidChecksum(edidBytes);
+
+  const EdidInfo parsedEdidInformation = parseEdidBytes(edidBytes.data(), edidBytes.size());
+
+  EXPECT_EQ(parsedEdidInformation.model, "ABC");
+  EXPECT_EQ(parsedEdidInformation.serial, "SERIAL-42");
+}
+
 TEST(EdidParserTest, ReturnsEmptyInformationForAnInvalidHeader) {
   std::array<std::uint8_t, 128U> bytesWithoutValidHeader{};
 

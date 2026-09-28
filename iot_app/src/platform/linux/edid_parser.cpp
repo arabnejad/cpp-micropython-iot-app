@@ -31,7 +31,7 @@ constexpr std::size_t edidBaseBlockSizeInBytes = 128U;
  */
 std::string trimDescriptor(const std::uint8_t *bytes, std::size_t length) {
   std::string value(reinterpret_cast<const char *>(bytes), length);
-  const auto  end = value.find_first_of("\n\r\0");
+  const auto  end = value.find_first_of("\n\r\0", 0, 3);
   if (end != std::string::npos) {
     value.resize(end);
   }
