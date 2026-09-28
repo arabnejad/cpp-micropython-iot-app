@@ -88,6 +88,30 @@ TEST(SeenGreatStatusDisplayTest, RendersInverseTitleNetworkAppTemperatureAndTime
   EXPECT_TRUE(std::any_of(transfers[11].begin() + 1, transfers[11].end(), [](auto byte) { return byte != 0; }));
 }
 
+TEST(SeenGreatStatusDisplayTest, RendersEveryLetterAndDigitInApplicationNames) {
+  iot::tests::MockI2cDevice              device;
+  FixedSystemInformation                 info;
+  std::vector<std::vector<std::uint8_t>> transfers;
+  EXPECT_CALL(device, write(testing::_)).WillRepeatedly([&](const std::vector<std::uint8_t> &bytes) {
+    transfers.push_back(bytes);
+  });
+
+  iot::status::SeenGreatStatusDisplay display(device);
+  transfers.clear();
+  display.show(info, "");
+  const auto emptyNameFrame = transfers;
+
+  const std::string characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-?";
+  for (const char character : characters) {
+    SCOPED_TRACE(character);
+    transfers.clear();
+    display.show(info, std::string(1U, character));
+
+    ASSERT_EQ(transfers.size(), 16U);
+    EXPECT_NE(transfers, emptyNameFrame);
+  }
+}
+
 TEST(SeenGreatStatusDisplayTest, ShowsUnavailableTemperatureWithoutChangingTheClock) {
   iot::tests::MockI2cDevice              device;
   FixedSystemInformation                 measured;

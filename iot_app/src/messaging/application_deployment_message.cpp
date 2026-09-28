@@ -18,15 +18,14 @@
 
 namespace iot {
 namespace messaging {
-namespace {
 
-constexpr std::size_t maximumIdentifierLength = 128U;
-
-bool isSafeIdentifier(std::string_view identifier) {
-  if (identifier.empty() || identifier.size() > maximumIdentifierLength) {
+bool isSafeDeploymentTransferId(std::string_view transferId) noexcept {
+  constexpr std::size_t maximumIdentifierLength = 128U;
+  if (transferId.empty() || transferId.size() > maximumIdentifierLength || transferId == "." || transferId == ".." ||
+      transferId.find(".staging-") == 0U) {
     return false;
   }
-  for (const char character : identifier) {
+  for (const char character : transferId) {
     const bool isLetter = (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z');
     const bool isNumber = character >= '0' && character <= '9';
     if (!isLetter && !isNumber && character != '.' && character != '-' && character != '_') {
@@ -35,6 +34,8 @@ bool isSafeIdentifier(std::string_view identifier) {
   }
   return true;
 }
+
+namespace {
 
 const cJSON *requireObjectField(const cJSON *jsonObject, const char *fieldName) {
   const cJSON *field = iot::internal::findUniqueJsonField(jsonObject, fieldName, "Deployment message");
@@ -132,8 +133,8 @@ ApplicationDeploymentRequest ApplicationDeploymentMessageParser::parse(const std
   ApplicationDeploymentRequest deploymentRequest;
   deploymentRequest.transferId       = requireStringField(jsonObject.get(), "transfer_id");
   const std::string receivedDeviceId = requireStringField(jsonObject.get(), "device_id");
-  if (!isSafeIdentifier(deploymentRequest.transferId)) {
-    throw std::runtime_error("Deployment transfer_id contains unsupported characters");
+  if (!isSafeDeploymentTransferId(deploymentRequest.transferId)) {
+    throw std::runtime_error("Deployment transfer_id is not a safe directory name");
   }
   if (receivedDeviceId != expectedDeviceId) {
     throw std::runtime_error("Deployment message is intended for a different device");
@@ -174,7 +175,7 @@ ApplicationDeploymentMessageParser::tryReadTransferId(const std::string &message
   try {
     const auto        jsonObject = iot::internal::parseCompleteJsonObject(messagePayload, "Deployment message");
     const std::string transferId = requireStringField(jsonObject.get(), "transfer_id");
-    if (isSafeIdentifier(transferId)) {
+    if (isSafeDeploymentTransferId(transferId)) {
       return transferId;
     }
   } catch (...) {

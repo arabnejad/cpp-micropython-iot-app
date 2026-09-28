@@ -101,9 +101,10 @@ TemporaryPythonApplicationInstaller::TemporaryPythonApplicationInstaller(std::fi
 
 python::PythonApplication
 TemporaryPythonApplicationInstaller::installApplication(const ApplicationDeploymentRequest &deploymentRequest) {
-  const std::filesystem::path transferDirectoryName(deploymentRequest.transferId);
+  if (!isSafeDeploymentTransferId(deploymentRequest.transferId)) {
+    throw std::runtime_error("Deployment transfer ID is not a safe directory name");
+  }
   const std::filesystem::path entryPointPath(deploymentRequest.entryPoint);
-  throwIfPathIsUnsafe(transferDirectoryName, "Deployment transfer ID");
   throwIfPathIsUnsafe(entryPointPath, "Application entry point");
 
   const auto stagingDirectory   = m_temporaryRootDirectory / (".staging-" + deploymentRequest.transferId);
@@ -169,8 +170,9 @@ TemporaryPythonApplicationInstaller::installApplication(const ApplicationDeploym
 void TemporaryPythonApplicationInstaller::removeInstalledApplication(
     const std::filesystem::path &applicationDirectory) noexcept {
   const auto relativePath = applicationDirectory.lexically_relative(m_temporaryRootDirectory);
-  if (!python::isSafeRelativePath(relativePath) || relativePath.has_parent_path()) {
-    IOT_LOG_WARNING(m_logger, "Refused to remove application directory outside the temporary root; directory=",
+  if (!isSafeDeploymentTransferId(relativePath.string())) {
+    IOT_LOG_WARNING(m_logger,
+                    "Refused to remove a directory that is not an application under the temporary root; directory=",
                     applicationDirectory, ", temporaryRoot=", m_temporaryRootDirectory);
     return;
   }

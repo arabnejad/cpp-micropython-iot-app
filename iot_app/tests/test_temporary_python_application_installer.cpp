@@ -47,6 +47,39 @@ TEST(TemporaryPythonApplicationInstallerTest, RefusesAnUnsafeTransferIdBeforeWri
   EXPECT_THROW(temporaryApplicationInstaller.installApplication(deploymentRequest), std::runtime_error);
 }
 
+TEST(TemporaryPythonApplicationInstallerTest, RejectsUnsafeTransferIdsWithoutChangingExistingApplications) {
+  tests::TemporaryDirectory           temporaryDirectory;
+  TemporaryPythonApplicationInstaller temporaryApplicationInstaller(temporaryDirectory.path());
+  const auto existingApplication = temporaryApplicationInstaller.installApplication(createValidDeploymentRequest());
+
+  for (const std::string &transferId :
+       {std::string{}, std::string{"."}, std::string{".."}, std::string{".staging-transfer-42"},
+        std::string{"nested/transfer"}, std::string(129U, 'a')}) {
+    SCOPED_TRACE(transferId);
+    auto deploymentRequest       = createValidDeploymentRequest();
+    deploymentRequest.transferId = transferId;
+
+    EXPECT_THROW(temporaryApplicationInstaller.installApplication(deploymentRequest), std::runtime_error);
+    ASSERT_TRUE(std::filesystem::is_regular_file(existingApplication.entryPointPath));
+    std::ifstream sourceFile(existingApplication.entryPointPath);
+    std::string   firstLine;
+    std::getline(sourceFile, firstLine);
+    EXPECT_EQ(firstLine, "print('clock')");
+  }
+}
+
+TEST(TemporaryPythonApplicationInstallerTest, RefusesToRemoveTheApplicationRoot) {
+  tests::TemporaryDirectory           temporaryDirectory;
+  TemporaryPythonApplicationInstaller temporaryApplicationInstaller(temporaryDirectory.path());
+  const auto existingApplication = temporaryApplicationInstaller.installApplication(createValidDeploymentRequest());
+
+  temporaryApplicationInstaller.removeInstalledApplication(temporaryDirectory.path() / ".");
+  ASSERT_TRUE(std::filesystem::is_regular_file(existingApplication.entryPointPath));
+
+  temporaryApplicationInstaller.removeInstalledApplication(temporaryDirectory.path());
+  EXPECT_TRUE(std::filesystem::is_regular_file(existingApplication.entryPointPath));
+}
+
 TEST(TemporaryPythonApplicationInstallerTest, RequiresANormalNonEmptyTemporaryRootDirectory) {
   EXPECT_THROW(TemporaryPythonApplicationInstaller{std::filesystem::path{}}, std::invalid_argument);
 

@@ -4,9 +4,13 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 
 namespace iot {
 namespace messaging {
+
+/* Transfer IDs name one application directory; .staging- names are reserved. */
+bool isSafeDeploymentTransferId(std::string_view transferId) noexcept;
 
 /* Validated application details kept after an MQTT install message is parsed. */
 struct ApplicationDeploymentRequest {

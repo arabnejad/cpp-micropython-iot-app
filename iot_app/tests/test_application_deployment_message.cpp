@@ -32,6 +32,33 @@ TEST(ApplicationDeploymentMessageParserTest, RejectsAMessageForAnotherDevice) {
   EXPECT_THROW(deploymentMessageParser.parse(validDeploymentMessageJson, "another-device"), std::runtime_error);
 }
 
+TEST(ApplicationDeploymentMessageParserTest, RejectsTransferIdsThatCannotNameAnApplicationDirectory) {
+  const ApplicationDeploymentMessageParser deploymentMessageParser(1024U);
+
+  for (const std::string &transferId :
+       {std::string{}, std::string{"."}, std::string{".."}, std::string{".staging-transfer-42"},
+        std::string{"nested/transfer"}, std::string(129U, 'a')}) {
+    SCOPED_TRACE(transferId);
+    std::string message(validDeploymentMessageJson);
+    message.replace(message.find("transfer-42"), 11U, transferId);
+
+    EXPECT_THROW(deploymentMessageParser.parse(message, "raspberrypi-01"), std::runtime_error);
+    EXPECT_FALSE(deploymentMessageParser.tryReadTransferId(message).has_value());
+  }
+}
+
+TEST(ApplicationDeploymentMessageParserTest, AcceptsTransferIdsWithDotsAndAtTheLengthLimit) {
+  const ApplicationDeploymentMessageParser deploymentMessageParser(1024U);
+
+  for (const std::string &transferId : {std::string{"release.v2"}, std::string(128U, 'a')}) {
+    SCOPED_TRACE(transferId);
+    std::string message(validDeploymentMessageJson);
+    message.replace(message.find("transfer-42"), 11U, transferId);
+
+    EXPECT_EQ(deploymentMessageParser.parse(message, "raspberrypi-01").transferId, transferId);
+  }
+}
+
 TEST(ApplicationDeploymentMessageParserTest, RejectsASourceWithTheWrongHash) {
   const ApplicationDeploymentMessageParser deploymentMessageParser(1024U);
   std::string                              tamperedDeploymentMessageJson(validDeploymentMessageJson);

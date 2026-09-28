@@ -3,6 +3,7 @@
 #include "fake_mosquitto_library.h"
 
 #include <gtest/gtest.h>
+#include <mqtt_protocol.h>
 
 #include <array>
 #include <chrono>

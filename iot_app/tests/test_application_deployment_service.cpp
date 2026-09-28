@@ -18,7 +18,8 @@ namespace {
 class ApplicationDeploymentServiceTest : public ::testing::Test {
 protected:
   ApplicationDeploymentServiceTest()
-      : m_screenManager(tests::testActiveDisplay(), std::make_unique<tests::RecordingRenderBackend>(), 16U),
+      : m_screenManager(tests::testActiveDisplay(), std::make_unique<tests::RecordingRenderBackend>(), 16U,
+                        std::make_unique<tests::RecordingExclusiveVideoPlayer>()),
         m_pythonApplicationManager(m_screenManager, tests::testActiveDisplay(), tests::testConnectedDisplays(),
                                    m_systemInformationProvider, m_fileDownloader, 256U * 1024U) {}
 
