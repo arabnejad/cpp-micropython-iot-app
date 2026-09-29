@@ -27,6 +27,14 @@ TEST(ApplicationMetadataTest, RejectsAnApplicationIdWithUnsafeCharacters) {
   EXPECT_THROW(validateApplicationMetadata(applicationMetadata), std::runtime_error);
 }
 
+TEST(ApplicationMetadataTest, Accepts128CharacterIdsAndRejects129CharacterIds) {
+  const ApplicationMetadata metadataAtLimit{std::string(128U, 'a'), "Clock", "main.py"};
+  const ApplicationMetadata metadataOverLimit{std::string(129U, 'a'), "Clock", "main.py"};
+
+  EXPECT_NO_THROW(validateApplicationMetadata(metadataAtLimit));
+  EXPECT_THROW(validateApplicationMetadata(metadataOverLimit), std::runtime_error);
+}
+
 TEST(ApplicationMetadataTest, RejectsDuplicateRequiredFields) {
   EXPECT_THROW(parseApplicationMetadata(R"json({"id":"one","id":"two","name":"Clock","entry_point":"main.py"})json"),
                std::runtime_error);

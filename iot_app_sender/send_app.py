@@ -26,6 +26,7 @@ MQTT_CONNECTION_TIMEOUT_SECONDS = 10
 DEVICE_ACKNOWLEDGEMENT_TIMEOUT_SECONDS = 30
 MAXIMUM_PYTHON_SOURCE_SIZE_BYTES = 512 * 1024
 MAXIMUM_DEPLOYMENT_MESSAGE_SIZE_BYTES = 1_000_000
+MAXIMUM_APPLICATION_ID_LENGTH = 128
 
 FINAL_DEVICE_STATUSES = {
     "accepted",
@@ -192,6 +193,10 @@ def load_and_validate_application_metadata(
     }
     if not APPLICATION_ID_PATTERN.fullmatch(validated_metadata["id"]):
         raise SenderError("application id may contain only letters, numbers, '.', '-', and '_'")
+    if len(validated_metadata["id"]) > MAXIMUM_APPLICATION_ID_LENGTH:
+        raise SenderError(
+            f"application id must be at most {MAXIMUM_APPLICATION_ID_LENGTH} characters"
+        )
 
     entry_point = PurePosixPath(validated_metadata["entry_point"])
     if entry_point.is_absolute() or ".." in entry_point.parts:

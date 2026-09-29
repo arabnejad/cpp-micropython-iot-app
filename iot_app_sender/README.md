@@ -55,6 +55,10 @@ Each application keeps its metadata in `app.json`:
 }
 ```
 
+The application `id` must be 1 to 128 characters long. Use only ASCII letters
+(`A-Z`, `a-z`), digits (`0-9`), dots, hyphens, and underscores. Both the sender
+and the device enforce this rule.
+
 Connection settings and the local application directory belong in a separate
 `sender_config.json`:
 
@@ -168,6 +172,17 @@ python send_app.py ../my-apps/demo-sender.json
 `paho-mqtt` uses its current callback API and waits for the QoS 1 publish
 acknowledgement as described by the
 [Eclipse Paho client documentation](https://eclipse.dev/paho/files/paho.mqtt.python/html/client.html).
+
+## Run sender tests
+
+After activating the sender environment, run this command from `iot_app_sender`:
+
+```bash
+python -m unittest -v test_send_app
+```
+
+The tests check application IDs at the 128-character limit without connecting
+to an MQTT broker.
 
 ## Development Mosquitto broker on Raspberry Pi OS
 
