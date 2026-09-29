@@ -146,6 +146,10 @@ def load_sender_configuration(config_path: Path) -> SenderConfiguration:
     try:
         resolved_config_path = config_path.expanduser().resolve(strict=True)
         raw_configuration = json.loads(resolved_config_path.read_text(encoding="utf-8"))
+    except UnicodeDecodeError as error:
+        raise SenderError(
+            f"Sender configuration {config_path} must be valid UTF-8 text"
+        ) from error
     except (OSError, json.JSONDecodeError) as error:
         raise SenderError(f"Could not read sender configuration {config_path}: {error}") from error
 
@@ -181,6 +185,10 @@ def load_and_validate_application_metadata(
     metadata_path = application_directory / "app.json"
     try:
         raw_metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    except UnicodeDecodeError as error:
+        raise SenderError(
+            f"Application metadata {metadata_path} must be valid UTF-8 text"
+        ) from error
     except (OSError, json.JSONDecodeError) as error:
         raise SenderError(
             f"Could not read application metadata {metadata_path}: {error}"
@@ -322,6 +330,9 @@ def create_mqtt_client(configuration: SenderConfiguration, state: DeploymentStat
             if not isinstance(response, dict) or response.get("transfer_id") != state.transfer_id:
                 return
             status = response.get("status")
+            if not isinstance(status, str):
+                print("Warning: ignored an invalid deployment status message", file=sys.stderr)
+                return
             print(f"Device status: {status}: {response.get('message', '')}".rstrip())
             if status in FINAL_DEVICE_STATUSES:
                 state.final_response = response

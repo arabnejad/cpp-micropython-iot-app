@@ -181,8 +181,8 @@ After activating the sender environment, run this command from `iot_app_sender`:
 python -m unittest -v test_send_app
 ```
 
-The tests check application IDs at the 128-character limit without connecting
-to an MQTT broker.
+The tests check application IDs at the 128-character limit, invalid UTF-8 files,
+and device status responses without connecting to an MQTT broker.
 
 ## Development Mosquitto broker on Raspberry Pi OS
 
