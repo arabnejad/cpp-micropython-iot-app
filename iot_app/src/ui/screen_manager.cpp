@@ -17,6 +17,9 @@ namespace {
 /* Give LVGL time to refresh even when drawing commands keep arriving. */
 constexpr std::size_t maximumRenderCommandsPerBatch = 16U;
 
+// Filled areas stay on the screen until it is cleared.
+constexpr std::size_t maximumFilledAreasPerScreen = 128U;
+
 std::string textPreviewForLog(std::string text) {
   constexpr std::size_t maximumPreviewSize = 120U;
   for (char &character : text) {
@@ -166,12 +169,16 @@ WidgetId ScreenManager::drawTextBox(const TextBoxSpec &textBoxSpec) {
 
 void ScreenManager::fillArea(const FilledAreaSpec &filledAreaSpec) {
   validateDrawableBounds(filledAreaSpec.bounds);
+  if (m_filledAreaCount >= maximumFilledAreasPerScreen) {
+    throw std::runtime_error("Screen already has 128 filled areas; clear the screen before adding more");
+  }
   IOT_LOG_DEBUG(m_logger, "Queueing filled area bounds={x=", filledAreaSpec.bounds.x, ", y=", filledAreaSpec.bounds.y,
                 ", width=", filledAreaSpec.bounds.width, ", height=", filledAreaSpec.bounds.height, "}, color=rgb(",
                 static_cast<unsigned int>(filledAreaSpec.color.red), ',',
                 static_cast<unsigned int>(filledAreaSpec.color.green), ',',
                 static_cast<unsigned int>(filledAreaSpec.color.blue), ')');
   enqueueRenderCommand([filledAreaSpec](IRenderBackend &backend) { backend.fillArea(filledAreaSpec); });
+  ++m_filledAreaCount;
 }
 
 void ScreenManager::showErrorScreen(const TextBoxSpec &errorBoxSpec) {
@@ -331,6 +338,7 @@ void ScreenManager::clear(Color screenBackgroundColor) {
 }
 
 void ScreenManager::clearApplicationVisualState() noexcept {
+  m_filledAreaCount = 0U;
   m_textBoxIds.clear();
   m_jpegImageSourceStatesById.clear();
   m_jpegImageLoader->clearCache();

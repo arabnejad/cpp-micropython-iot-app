@@ -286,6 +286,7 @@ public:
     throwIfNotInitialized();
     validateBounds(filledAreaSpec.bounds);
 
+    // Each call adds an object. ScreenManager limits these until the screen is cleared.
     lv_obj_t *filledAreaObject = lv_obj_create(lv_screen_active());
     lv_obj_set_pos(filledAreaObject, filledAreaSpec.bounds.x, filledAreaSpec.bounds.y);
     lv_obj_set_size(filledAreaObject, filledAreaSpec.bounds.width, filledAreaSpec.bounds.height);

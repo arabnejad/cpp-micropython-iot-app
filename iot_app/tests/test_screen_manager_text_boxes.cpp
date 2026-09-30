@@ -15,6 +15,91 @@ bool waitForTextBox(tests::RecordingRenderBackend &recordingRenderBackend, Widge
   });
 }
 
+bool waitForDrawnAreas(tests::RecordingRenderBackend &recordingRenderBackend, std::size_t count) {
+  return tests::waitUntil([&recordingRenderBackend, count] {
+    std::lock_guard<std::mutex> lock(recordingRenderBackend.renderStateMutex);
+    return recordingRenderBackend.drawnAreas.size() == count;
+  });
+}
+
+TEST(ScreenManagerFilledAreaTest, LimitsRenderedAreasAndResetsOnClearEmergencyScreenAndRestart) {
+  auto          backend     = std::make_unique<tests::RecordingRenderBackend>();
+  auto         *backendView = backend.get();
+  ScreenManager screenManager(tests::testActiveDisplay(), std::move(backend), 256U,
+                              std::make_unique<tests::RecordingExclusiveVideoPlayer>());
+  screenManager.start();
+
+  for (std::size_t round = 0U; round < 3U; ++round) {
+    for (std::size_t area = 0U; area < 128U; ++area) {
+      ASSERT_NO_THROW(screenManager.fillArea({{0, 0, 10, 10}, {1, 2, 3}}));
+    }
+    ASSERT_TRUE(waitForDrawnAreas(*backendView, (round + 1U) * 128U));
+    // An empty queue must not allow more rectangles on the same screen.
+    EXPECT_THROW(screenManager.fillArea({{0, 0, 10, 10}, {1, 2, 3}}), std::runtime_error);
+    EXPECT_NO_THROW(screenManager.throwIfRenderThreadFailed());
+
+    if (round == 0U) {
+      screenManager.clear({0, 0, 0});
+    } else if (round == 1U) {
+      screenManager.showErrorScreen({{0, 0, 100, 40}, "Test error"});
+    } else {
+      screenManager.stop();
+      screenManager.start();
+    }
+  }
+
+  EXPECT_NO_THROW(screenManager.fillArea({{0, 0, 10, 10}, {1, 2, 3}}));
+  EXPECT_TRUE(waitForDrawnAreas(*backendView, 385U));
+}
+
+TEST(ScreenManagerFilledAreaTest, CountsQueuedAreasAndReleasesThemWhenClearDiscardsTheQueue) {
+  auto          backend     = std::make_unique<tests::PausedRecordingRenderBackend>();
+  auto         *backendView = backend.get();
+  ScreenManager screenManager(tests::testActiveDisplay(), std::move(backend), 256U,
+                              std::make_unique<tests::RecordingExclusiveVideoPlayer>());
+  screenManager.start();
+  const bool rendererPaused = backendView->waitUntilRenderThreadIsPaused();
+
+  for (std::size_t round = 0U; round < 2U; ++round) {
+    for (std::size_t area = 0U; area < 128U; ++area) {
+      EXPECT_NO_THROW(screenManager.fillArea({{0, 0, 10, 10}, {1, 2, 3}}));
+    }
+    EXPECT_THROW(screenManager.fillArea({{0, 0, 10, 10}, {1, 2, 3}}), std::runtime_error);
+    if (round == 0U) {
+      EXPECT_NO_THROW(screenManager.clear({0, 0, 0}));
+    }
+  }
+
+  // Resume before assertions that could return, so stop() can join the thread.
+  backendView->letRenderThreadContinue();
+  ASSERT_TRUE(rendererPaused);
+  EXPECT_TRUE(waitForDrawnAreas(*backendView, 128U));
+  EXPECT_NO_THROW(screenManager.throwIfRenderThreadFailed());
+}
+
+TEST(ScreenManagerFilledAreaTest, RequestsRejectedByAFullQueueDoNotUseTheAreaLimit) {
+  auto          backend     = std::make_unique<tests::PausedRecordingRenderBackend>();
+  auto         *backendView = backend.get();
+  ScreenManager screenManager(tests::testActiveDisplay(), std::move(backend), 1U,
+                              std::make_unique<tests::RecordingExclusiveVideoPlayer>());
+  screenManager.start();
+  const bool rendererPaused = backendView->waitUntilRenderThreadIsPaused();
+
+  EXPECT_NO_THROW(screenManager.fillArea({{0, 0, 10, 10}, {1, 2, 3}}));
+  for (std::size_t attempt = 0U; attempt < 128U; ++attempt) {
+    EXPECT_THROW(screenManager.fillArea({{0, 0, 10, 10}, {1, 2, 3}}), std::runtime_error);
+  }
+
+  backendView->letRenderThreadContinue();
+  ASSERT_TRUE(rendererPaused);
+  ASSERT_TRUE(waitForDrawnAreas(*backendView, 1U));
+  for (std::size_t count = 2U; count <= 128U; ++count) {
+    ASSERT_NO_THROW(screenManager.fillArea({{0, 0, 10, 10}, {1, 2, 3}}));
+    ASSERT_TRUE(waitForDrawnAreas(*backendView, count));
+  }
+  EXPECT_THROW(screenManager.fillArea({{0, 0, 10, 10}, {1, 2, 3}}), std::runtime_error);
+}
+
 TEST(ScreenManagerTextBoxTest, SendsTextBoxCreationAndUpdatesToTheRenderThread) {
   auto          recordingRenderBackend     = std::make_unique<tests::RecordingRenderBackend>();
   auto         *recordingRenderBackendView = recordingRenderBackend.get();

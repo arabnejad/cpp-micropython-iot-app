@@ -680,6 +680,17 @@ Draws a solid rectangle and returns `None`. A filled area does not currently
 have an ID and cannot be moved, updated, or deleted separately. Use
 `display.clear()` to remove it.
 
+Each call adds a new rectangle, even when it covers the same position as an
+earlier one. A screen can have at most 128 filled rectangles, including those
+still waiting to be drawn. Further calls raise `RuntimeError` until the screen
+is cleared. Invalid requests and requests rejected by a full drawing queue do
+not count toward this limit.
+
+Use filled areas for shapes drawn once when setting up a screen. For changes
+from a timer, update or move an existing text box or image. If you need to
+rebuild the whole screen, call `display.clear()` first; this also removes all
+text boxes and images.
+
 | Parameter | Required? | Meaning |
 |---|---|---|
 | `x` | Yes | Horizontal position of the left edge |

@@ -219,6 +219,9 @@ The queue is bounded so a Python application cannot consume all memory by
 creating drawing requests faster than the renderer can process them. If the
 queue becomes full, the drawing request returns an error.
 
+This queue limit covers requests waiting to run. Widgets already drawn stay
+in memory until they are deleted or the screen is cleared.
+
 `ScreenManager` checks text-box IDs and positive drawable sizes before
 queuing requests. Unknown or deleted text-box IDs therefore produce an error
 in the Python call, not an exception later on the render thread. Python can
@@ -408,6 +411,17 @@ and square corners. It is useful for coloured blocks and simple shapes.
 The function currently returns no widget ID. A filled area remains until the
 screen is cleared, and it cannot be moved, updated, or deleted on its own
 through the public API.
+
+Every call adds another rectangle, including calls with the same bounds.
+`ScreenManager` allows up to 128 filled areas per screen and counts queued
+areas too. It rejects further requests before they reach the render thread,
+so Python can catch the error. A request that fails validation or cannot be
+queued does not use a slot. Clearing the screen, showing the emergency screen,
+or stopping the renderer resets the count.
+
+Draw these shapes once when building a screen. For repeated changes, update
+or move existing text boxes and images. Clear the whole screen before
+rebuilding it instead of drawing new rectangles over the old ones.
 
 ### 6.8 Clear the screen
 

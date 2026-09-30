@@ -1903,6 +1903,7 @@ The default runtime limits are:
 | Queued deployment messages | 4 |
 | Remembered deployment results | 64 |
 | Pending render commands | 256 |
+| Filled rectangles per screen, including queued rectangles | 128 |
 | Active Python timers | 128 |
 | Captured Python traceback | 8 KiB |
 | Application metadata in `app.json` | 64 KiB |
@@ -1914,8 +1915,9 @@ The default runtime limits are:
 | One decoded JPEG | 32 MiB |
 | Decoded JPEG cache | 32 MiB; images still used by widgets or queued commands are not evicted |
 
-These limits stop a fast producer or broken application from growing the main
-queues and heaps without control.
+These limits bound the listed resources. They do not set a total process
+memory limit. Applications should update existing widgets and delete widgets
+they no longer need.
 
 ## 21. Security model
 

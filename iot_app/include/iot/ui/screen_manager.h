@@ -47,7 +47,8 @@ class JpegImageLoader;
  * The queue has a fixed maximum size. If the application sends drawing
  * requests faster than the render thread can process them, the queue becomes
  * full and ScreenManager rejects the next request with an error. This prevents
- * drawing requests from using more and more memory.
+ * pending drawing requests from using more and more memory. Widgets already
+ * drawn remain until they are deleted or the screen is cleared.
  *
  * The render thread handles commands in small batches. After each batch, it
  * gives LVGL time to refresh the display and run its timers. If more commands
@@ -86,7 +87,7 @@ public:
   /* Decodes a JPEG and places it behind the other widgets. */
   void setBackgroundJpegImage(const BackgroundJpegImageSpec &backgroundJpegImageSpec);
   void clearBackgroundJpegImage();
-  /* Queues a solid rectangle. */
+  /* Adds a rectangle; up to 128 are allowed until the screen is cleared. */
   void fillArea(const FilledAreaSpec &filledAreaSpec);
   /* Removes application widgets and shows the emergency screen. */
   void showErrorScreen(const TextBoxSpec &errorBoxSpec);
@@ -137,6 +138,8 @@ private:
   std::unique_ptr<video::IExclusiveVideoPlayer> m_exclusiveVideoPlayer;
   // Widget creation is requested only by the main/MicroPython thread.
   WidgetId m_nextWidgetId{1U};
+  // Includes queued rectangles. Only the main/MicroPython thread changes it.
+  std::size_t m_filledAreaCount{0U};
   // Includes queued text boxes. Deletion or clearing invalidates IDs immediately.
   std::unordered_set<WidgetId>                       m_textBoxIds;
   std::unordered_map<WidgetId, JpegImageSourceState> m_jpegImageSourceStatesById;
