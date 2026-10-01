@@ -14,6 +14,16 @@ constexpr const char *validDeploymentMessageJson = R"json({
   "source":{"encoding":"base64","size_bytes":15,"sha256":"03e693d9f2f687e0f40e36a8df7fcb4d1c22974012b7c2a55c000eb30f305824","content":"cHJpbnQoJ2hlbGxvJykK"}
 })json";
 
+void expectParsingError(const ApplicationDeploymentMessageParser &parser, const std::string &message,
+                        const char *expectedError) {
+  try {
+    parser.parse(message, "raspberrypi-01");
+    FAIL() << "Expected parsing to fail: " << expectedError;
+  } catch (const std::runtime_error &error) {
+    EXPECT_STREQ(error.what(), expectedError);
+  }
+}
+
 TEST(ApplicationDeploymentMessageParserTest, ParsesACompleteMessageForTheExpectedDevice) {
   const ApplicationDeploymentMessageParser deploymentMessageParser(1024U);
 
@@ -109,29 +119,64 @@ TEST(ApplicationDeploymentMessageParserTest, RejectsTextAfterTheJsonObject) {
                std::runtime_error);
 }
 
-TEST(ApplicationDeploymentMessageParserTest,
-     RejectsUnsafeTransferIdsInvalidEncodingInvalidBase64WrongSourceSizeAndZeroLimit) {
-  const ApplicationDeploymentMessageParser deploymentMessageParser(14U);
-
-  std::string unsafeTransferId(validDeploymentMessageJson);
+TEST(ApplicationDeploymentMessageParserTest, RejectsUnsafeTransferIdsWhenParsingAndRecoveringMessages) {
+  const ApplicationDeploymentMessageParser deploymentMessageParser(1024U);
+  std::string                              unsafeTransferId(validDeploymentMessageJson);
   unsafeTransferId.replace(unsafeTransferId.find("transfer-42"), 11U, "../unsafe");
-  EXPECT_THROW(deploymentMessageParser.parse(unsafeTransferId, "raspberrypi-01"), std::runtime_error);
-
-  std::string wrongEncoding(validDeploymentMessageJson);
-  wrongEncoding.replace(wrongEncoding.find("base64"), 6U, "text");
-  EXPECT_THROW(deploymentMessageParser.parse(wrongEncoding, "raspberrypi-01"), std::runtime_error);
-
-  std::string invalidBase64(validDeploymentMessageJson);
-  invalidBase64.replace(invalidBase64.find("cHJpbnQoJ2hlbGxvJykK"), 20U, "bad!base64========");
-  EXPECT_THROW(deploymentMessageParser.parse(invalidBase64, "raspberrypi-01"), std::runtime_error);
-
-  std::string wrongDeclaredSize(validDeploymentMessageJson);
-  wrongDeclaredSize.replace(wrongDeclaredSize.find("\"size_bytes\":15"), 15U, "\"size_bytes\":14");
-  EXPECT_THROW(deploymentMessageParser.parse(wrongDeclaredSize, "raspberrypi-01"), std::runtime_error);
+  expectParsingError(deploymentMessageParser, unsafeTransferId, "Deployment transfer_id is not a safe directory name");
 
   EXPECT_FALSE(deploymentMessageParser.tryReadTransferId(R"json({"transfer_id":"../../unsafe"})json").has_value());
   EXPECT_FALSE(
       deploymentMessageParser.tryReadTransferId("{\"transfer_id\":\"" + std::string(129U, 'a') + "\"}").has_value());
+}
+
+TEST(ApplicationDeploymentMessageParserTest, RejectsUnsupportedSourceEncoding) {
+  const ApplicationDeploymentMessageParser deploymentMessageParser(1024U);
+  std::string                              wrongEncoding(validDeploymentMessageJson);
+  wrongEncoding.replace(wrongEncoding.find("base64"), 6U, "text");
+  expectParsingError(deploymentMessageParser, wrongEncoding, "Deployment source encoding is not supported");
+}
+
+TEST(ApplicationDeploymentMessageParserTest, RejectsInvalidBase64LengthAndCharacters) {
+  const ApplicationDeploymentMessageParser deploymentMessageParser(1024U);
+  std::string                              invalidBase64(validDeploymentMessageJson);
+  invalidBase64.replace(invalidBase64.find("cHJpbnQoJ2hlbGxvJykK"), 20U, "bad!base64========");
+  expectParsingError(deploymentMessageParser, invalidBase64, "Deployment source is not valid Base64 text");
+
+  // Keep the original length so the parser reaches the character check.
+  std::string invalidCharacter(validDeploymentMessageJson);
+  invalidCharacter[invalidCharacter.find("cHJpbnQoJ2hlbGxvJykK")] = '!';
+  expectParsingError(deploymentMessageParser, invalidCharacter,
+                     "Deployment source contains an invalid Base64 character");
+}
+
+TEST(ApplicationDeploymentMessageParserTest, RejectsDeclaredSizeThatDoesNotMatchDecodedSource) {
+  const ApplicationDeploymentMessageParser deploymentMessageParser(1024U);
+  std::string                              wrongDeclaredSize(validDeploymentMessageJson);
+  wrongDeclaredSize.replace(wrongDeclaredSize.find("\"size_bytes\":15"), 15U, "\"size_bytes\":14");
+  expectParsingError(deploymentMessageParser, wrongDeclaredSize,
+                     "Decoded Python source size does not match size_bytes");
+}
+
+TEST(ApplicationDeploymentMessageParserTest, AcceptsSourceAtTheLimitAndRejectsLargerDeclaredSize) {
+  const ApplicationDeploymentMessageParser parserAtLimit(15U);
+  EXPECT_EQ(parserAtLimit.parse(validDeploymentMessageJson, "raspberrypi-01").sourceCode, "print('hello')\n");
+
+  const ApplicationDeploymentMessageParser parserBelowLimit(14U);
+  expectParsingError(parserBelowLimit, validDeploymentMessageJson,
+                     "Deployment field 'size_bytes' has an invalid byte count");
+}
+
+TEST(ApplicationDeploymentMessageParserTest, RejectsDecodedSourceOverTheLimitEvenWhenDeclaredSizeFits) {
+  const ApplicationDeploymentMessageParser deploymentMessageParser(14U);
+  std::string                              wrongDeclaredSize(validDeploymentMessageJson);
+  wrongDeclaredSize.replace(wrongDeclaredSize.find("\"size_bytes\":15"), 15U, "\"size_bytes\":14");
+
+  expectParsingError(deploymentMessageParser, wrongDeclaredSize,
+                     "Decoded deployment source is larger than the allowed limit");
+}
+
+TEST(ApplicationDeploymentMessageParserTest, RejectsAZeroSourceSizeLimit) {
   EXPECT_THROW(ApplicationDeploymentMessageParser(0U), std::invalid_argument);
 }
 
