@@ -24,25 +24,6 @@ std::filesystem::path executableDirectory(const char *programPath) {
   return fallbackPath.parent_path();
 }
 
-std::filesystem::path findDefaultApplicationDirectory(const char *programPath) {
-  const auto executablePathDirectory     = executableDirectory(programPath);
-  const auto applicationBesideExecutable = executablePathDirectory / "default_python_application";
-  if (std::filesystem::is_directory(applicationBesideExecutable)) {
-    return applicationBesideExecutable;
-  }
-
-  const std::filesystem::path configuredDataDirectory(IOT_INSTALL_DATA_DIRECTORY);
-  const auto                  dataDirectory                  = configuredDataDirectory.is_absolute()
-                                                                   ? configuredDataDirectory
-                                                                   : executablePathDirectory.parent_path() / configuredDataDirectory;
-  const auto                  applicationInSameInstallPrefix = dataDirectory / "iot-app" / "default_python_application";
-  if (std::filesystem::is_directory(applicationInSameInstallPrefix)) {
-    return applicationInSameInstallPrefix;
-  }
-
-  return IOT_INSTALLED_DEFAULT_APPLICATION_DIRECTORY;
-}
-
 std::string environmentValueOrDefault(const char *variableName, const char *defaultValue) {
   const char *value = std::getenv(variableName);
   return value == nullptr || value[0] == '\0' ? defaultValue : value;
@@ -65,6 +46,25 @@ std::uint16_t mqttBrokerPortFromEnvironment() {
 
 } // namespace
 
+std::filesystem::path findDefaultApplicationDirectory(const std::filesystem::path &executableDirectory,
+                                                      const std::filesystem::path &configuredDataDirectory,
+                                                      const std::filesystem::path &installedApplicationDirectory) {
+  const auto applicationBesideExecutable = executableDirectory / "default_python_application";
+  if (std::filesystem::is_directory(applicationBesideExecutable)) {
+    return applicationBesideExecutable;
+  }
+
+  const auto dataDirectory              = configuredDataDirectory.is_absolute()
+                                              ? configuredDataDirectory
+                                              : executableDirectory.parent_path() / configuredDataDirectory;
+  const auto applicationInDataDirectory = dataDirectory / "iot-app" / "default_python_application";
+  if (std::filesystem::is_directory(applicationInDataDirectory)) {
+    return applicationInDataDirectory;
+  }
+
+  return installedApplicationDirectory;
+}
+
 RuntimeConfig loadRuntimeConfig(int argc, char **argv) {
   if (argc <= 0 || argv == nullptr || argv[0] == nullptr) {
     throw std::invalid_argument("Runtime command-line arguments are not available");
@@ -86,12 +86,13 @@ RuntimeConfig loadRuntimeConfig(int argc, char **argv) {
     throw std::runtime_error("Only one command-line argument is supported\n" + runtimeUsage(argv[0]));
   }
 
-  runtimeConfig.defaultApplicationDirectory = findDefaultApplicationDirectory(argv[0]);
-  runtimeConfig.deviceId                    = environmentValueOrDefault("IOT_DEVICE_ID", "raspberrypi-01");
-  runtimeConfig.mqttBrokerHost              = environmentValueOrDefault("IOT_MQTT_HOST", "127.0.0.1");
-  runtimeConfig.mqttBrokerPort              = mqttBrokerPortFromEnvironment();
-  runtimeConfig.mqttUsername                = environmentValueOrDefault("IOT_MQTT_USERNAME", "");
-  runtimeConfig.mqttPassword                = environmentValueOrDefault("IOT_MQTT_PASSWORD", "");
+  runtimeConfig.defaultApplicationDirectory = findDefaultApplicationDirectory(
+      executableDirectory(argv[0]), IOT_INSTALL_DATA_DIRECTORY, IOT_INSTALLED_DEFAULT_APPLICATION_DIRECTORY);
+  runtimeConfig.deviceId       = environmentValueOrDefault("IOT_DEVICE_ID", "raspberrypi-01");
+  runtimeConfig.mqttBrokerHost = environmentValueOrDefault("IOT_MQTT_HOST", "127.0.0.1");
+  runtimeConfig.mqttBrokerPort = mqttBrokerPortFromEnvironment();
+  runtimeConfig.mqttUsername   = environmentValueOrDefault("IOT_MQTT_USERNAME", "");
+  runtimeConfig.mqttPassword   = environmentValueOrDefault("IOT_MQTT_PASSWORD", "");
 
   if (runtimeConfig.defaultApplicationDirectory.empty()) {
     throw std::runtime_error("The shipped default application directory could not be determined");

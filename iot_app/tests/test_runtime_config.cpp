@@ -97,41 +97,44 @@ TEST(RuntimeConfigTest, RejectsMoreThanOneCommandLineArgument) {
   EXPECT_THROW(loadRuntimeConfig(3, commandLineArguments), std::runtime_error);
 }
 
-TEST(RuntimeConfigTest, FindsAnApplicationDirectoryBesideTheRunningExecutable) {
-  std::error_code filesystemError;
-  const auto      executablePath = std::filesystem::read_symlink("/proc/self/exe", filesystemError);
-  ASSERT_FALSE(filesystemError);
-  const auto applicationDirectory = executablePath.parent_path() / "default_python_application";
-  std::filesystem::create_directories(applicationDirectory, filesystemError);
-  ASSERT_FALSE(filesystemError);
-  char  programName[]          = "iot_app";
-  char *commandLineArguments[] = {programName};
+TEST(RuntimeConfigTest, PrefersAnApplicationDirectoryBesideTheExecutable) {
+  tests::TemporaryDirectory temporaryDirectory;
+  const auto                executableDirectory  = temporaryDirectory.path() / "bin";
+  const auto                applicationDirectory = executableDirectory / "default_python_application";
+  std::filesystem::create_directories(applicationDirectory);
+  std::filesystem::create_directories(temporaryDirectory.path() / "share/iot-app/default_python_application");
 
-  const RuntimeConfig runtimeConfig = loadRuntimeConfig(1, commandLineArguments);
-
-  EXPECT_EQ(runtimeConfig.defaultApplicationDirectory, applicationDirectory);
+  EXPECT_EQ(findDefaultApplicationDirectory(executableDirectory, "share", temporaryDirectory.path() / "fallback"),
+            applicationDirectory);
 }
 
 TEST(RuntimeConfigTest, FindsAnApplicationInTheSameInstallPrefixWhenNoneIsBesideTheExecutable) {
-  std::error_code filesystemError;
-  const auto      executablePath = std::filesystem::read_symlink("/proc/self/exe", filesystemError);
-  ASSERT_FALSE(filesystemError);
-  const auto applicationBesideExecutable = executablePath.parent_path() / "default_python_application";
-  const auto samePrefixApplication =
-      executablePath.parent_path().parent_path() / "share/iot-app/default_python_application";
+  tests::TemporaryDirectory temporaryDirectory;
+  const auto                executableDirectory = temporaryDirectory.path() / "bin";
+  const auto samePrefixApplication = temporaryDirectory.path() / "share/iot-app/default_python_application";
+  std::filesystem::create_directories(samePrefixApplication);
 
-  std::filesystem::remove_all(applicationBesideExecutable, filesystemError);
-  ASSERT_FALSE(filesystemError);
-  std::filesystem::create_directories(samePrefixApplication, filesystemError);
-  ASSERT_FALSE(filesystemError);
+  EXPECT_EQ(findDefaultApplicationDirectory(executableDirectory, "share", temporaryDirectory.path() / "fallback"),
+            samePrefixApplication);
+}
 
-  char                programName[]          = "iot_app";
-  char               *commandLineArguments[] = {programName};
-  const RuntimeConfig runtimeConfig          = loadRuntimeConfig(1, commandLineArguments);
-  EXPECT_EQ(runtimeConfig.defaultApplicationDirectory, samePrefixApplication);
+TEST(RuntimeConfigTest, FindsAnApplicationInAnAbsoluteDataDirectory) {
+  tests::TemporaryDirectory temporaryDirectory;
+  const auto                dataDirectory        = temporaryDirectory.path() / "custom-data";
+  const auto                applicationDirectory = dataDirectory / "iot-app/default_python_application";
+  std::filesystem::create_directories(applicationDirectory);
 
-  std::filesystem::remove_all(samePrefixApplication, filesystemError);
-  ASSERT_FALSE(filesystemError);
+  EXPECT_EQ(findDefaultApplicationDirectory(temporaryDirectory.path() / "bin", dataDirectory,
+                                            temporaryDirectory.path() / "fallback"),
+            applicationDirectory);
+}
+
+TEST(RuntimeConfigTest, ReturnsTheInstalledFallbackWhenNoApplicationDirectoryIsFound) {
+  tests::TemporaryDirectory temporaryDirectory;
+  const auto                fallbackDirectory = temporaryDirectory.path() / "fallback";
+
+  EXPECT_EQ(findDefaultApplicationDirectory(temporaryDirectory.path() / "bin", "share", fallbackDirectory),
+            fallbackDirectory);
 }
 
 } // namespace

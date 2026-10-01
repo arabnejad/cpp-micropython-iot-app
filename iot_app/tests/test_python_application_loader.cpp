@@ -31,12 +31,14 @@ TEST(PythonApplicationLoaderTest, LoadsMetadataAndPythonSourceFromOneDirectory) 
 
 TEST(PythonApplicationLoaderTest, RejectsAnEntryPointThatResolvesOutsideThePackage) {
   tests::TemporaryDirectory temporaryDirectory;
-  writeTestFile(temporaryDirectory.path() / "app.json",
+  const auto                applicationDirectory = temporaryDirectory.path() / "application";
+  std::filesystem::create_directories(applicationDirectory);
+  writeTestFile(applicationDirectory / "app.json",
                 R"json({"id":"clock","name":"Clock","entry_point":"../outside.py"})json");
-  writeTestFile(temporaryDirectory.path().parent_path() / "outside.py", "print('outside')\n");
+  writeTestFile(temporaryDirectory.path() / "outside.py", "print('outside')\n");
   const PythonApplicationLoader pythonApplicationLoader(1024U);
 
-  EXPECT_THROW(pythonApplicationLoader.load(temporaryDirectory.path()), std::runtime_error);
+  EXPECT_THROW(pythonApplicationLoader.load(applicationDirectory), std::runtime_error);
 }
 
 TEST(PythonApplicationLoaderTest, RejectsSourceLargerThanItsConfiguredLimit) {

@@ -56,6 +56,11 @@ struct RuntimePaths {
  */
 RuntimeConfig loadRuntimeConfig(int argc, char **argv);
 
+/* Checks the executable and data directories before returning the installed fallback. */
+std::filesystem::path findDefaultApplicationDirectory(const std::filesystem::path &executableDirectory,
+                                                      const std::filesystem::path &configuredDataDirectory,
+                                                      const std::filesystem::path &installedApplicationDirectory);
+
 /*
  * Calculates the per-user temporary paths used by this process. It returns
  * path values only; the downloader and installer create their own directories.
