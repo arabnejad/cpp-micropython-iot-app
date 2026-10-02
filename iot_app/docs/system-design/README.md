@@ -1409,21 +1409,35 @@ values can change while a screen is running.
 
 ### 14.5 `iot.input`
 
-The input binding offers `Controller()` to detect Adafruit first, then
-SeenGreat, at the configured connections. An app can instead name the board it
-needs with `AdafruitMiniI2cGamepad()` or `SeenGreatOledHatController()`.
-Explicit board objects need a `connect()` call; `Controller()` connects during
-construction. Python owns the C++ controller through an opaque handle, and
-joystick and button views keep that Python object alive.
+The input binding provides two board classes:
+
+- `AdafruitMiniI2cGamepad()` for the Adafruit I2C gamepad.
+- `SeenGreatOledHatController()` for the SeenGreat OLED HAT's GPIO controls.
+
+The application chooses its board explicitly, then calls `connect()` before
+reading input. There is no automatic `Controller()` API. Adafruit applications
+can call `calibrate_joystick()` after connecting; the SeenGreat joystick is
+digital and does not need that method. Its buttons are named `K1`, `K2`, `K3`,
+and `Press`, while Adafruit uses `X`, `Y`, `A`, `B`, `Select`, and `Start`.
+
+Python owns the C++ controller through an opaque handle. Joystick and button
+views keep that Python object alive. The shared C++ base is
+`InputControllerBase`; it lets the bridge read either board through the same
+input methods.
 
 Bus numbers, addresses, and SeenGreat GPIO pins are set in
-`src/input/controller_hardware_settings.h`, not passed by Python apps.
+[`src/input/controller_hardware_settings.h`](../../src/input/controller_hardware_settings.h),
+not passed by Python apps. Changing these settings requires rebuilding IoT App.
 `connection_information()` reports the Adafruit I2C connection for diagnostics.
 At startup, `main.cpp` checks only for the SeenGreat OLED status display.
 It does not select a Python controller; each app does that when it starts.
 The OLED shows the IP address and application name, with CPU temperature on
 the left and local time on the right of its bottom row. If a reading is not
 available, that part of the row shows dashes until the next update.
+
+See the [input API guide](../micropython-api/README.md#iotinput) for examples
+and the [SeenGreat hardware notes](../hardware/README.md#seengreat-13-inch-oled-hat)
+for wiring and permissions.
 
 ## 15. Python scheduler and application updates
 

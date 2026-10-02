@@ -140,14 +140,21 @@ The normal runtime creates the renderer in
 [`main.cpp`](../../src/runtime/main.cpp):
 
 ```cpp
+auto exclusiveVideoPlayer =
+    iot::video::makeMpvExclusiveVideoPlayer([] { return shutdownRequested != 0; });
 iot::ui::ScreenManager screenManager{
     activeDisplay,
     iot::ui::makeLvglFramebufferRenderBackend(),
     iot::runtime::maximumPendingRenderCommands,
+    std::move(exclusiveVideoPlayer),
 };
 
 screenManager.start();
 ```
+
+`shutdownRequested` is the signal flag in `main.cpp`. The video player checks
+it so service shutdown can interrupt playback. `ScreenManager` owns this
+player and uses it when an application requests full-screen video.
 
 The factory creates `LvglFramebufferRenderBackend`. During initialization, the
 backend performs this sequence:

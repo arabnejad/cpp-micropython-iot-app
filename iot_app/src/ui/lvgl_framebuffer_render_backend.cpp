@@ -269,7 +269,7 @@ public:
                                                                         : LV_IMAGE_ALIGN_CENTER);
 
     // Keep the background behind text boxes and normal image widgets.
-    // https://docs.lvgl.io/master/details/common-widget-features/layers.html
+    // https://lvgl.io/docs/open/9.5/common-widget-features/layers
     lv_obj_move_to_index(backgroundJpegImageWidget.imageObject, 0);
     m_backgroundJpegImageWidget = std::move(backgroundJpegImageWidget);
   }

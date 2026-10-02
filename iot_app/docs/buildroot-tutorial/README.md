@@ -323,7 +323,6 @@ does not reproduce those cross-compilation commands in `iot_app.mk`.
 ```text
 CMake install rules
         +--> /usr/bin/iot_app
-        +--> /usr/lib/libiot_runtime.so
         +--> /usr/share/iot-app/default_python_application
 
 iot_app.mk shared-image hook
@@ -337,6 +336,10 @@ IOT_APP_INSTALL_INIT_SYSV
         +--> /etc/init.d/S90iot-app
         +--> /etc/init.d/iot-app -> S90iot-app
 ```
+
+`iot_runtime` and `iot_platform` are static libraries linked into `iot_app`.
+CMake does not install a separate `libiot_runtime.so`. System libraries such
+as libmpv and libmosquitto are supplied by their Buildroot packages.
 
 The files under [`iot_app/image_support`](../../image_support/README.md) are
 shared with the Yocto image. The service definition is not shared because

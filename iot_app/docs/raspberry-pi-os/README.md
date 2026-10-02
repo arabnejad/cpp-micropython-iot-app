@@ -99,14 +99,34 @@ Use this progression:
 3. Optionally establish a Raspberry Pi OS cross-toolchain after the application works.
 4. Use the selected Buildroot or Yocto image build for final testing.
 
-Once you have an ARM-compatible binary, copying it is fine:
+Once you have an ARM-compatible binary, copy it together with the default
+Python application. Run these commands from the project root on the build
+machine:
 
 ```bash
-scp build/iot_app/iot_app pi@raspberrypi.local:~/
+ssh pi@raspberrypi.local 'mkdir -p ~/iot-app'
+scp build/iot_app/iot_app pi@raspberrypi.local:~/iot-app/
+scp -r iot_app/default_python_application pi@raspberrypi.local:~/iot-app/
 ssh pi@raspberrypi.local
-chmod +x ~/iot_app
-~/iot_app
+chmod +x ~/iot-app/iot_app
+~/iot-app/iot_app
 ```
+
+The destination should contain:
+
+```text
+~/iot-app/
+├── iot_app
+└── default_python_application/
+    ├── app.json
+    └── main.py
+```
+
+Startup checks for `default_python_application` beside the executable before
+looking in the installation directories. Copying only `iot_app` leaves that
+application missing on a fresh Pi. The Pi also needs the system libraries
+listed in the build instructions above; copying the executable does not
+install them.
 
 Check a binary before copying:
 
@@ -217,13 +237,18 @@ ls -l /dev/dri/
 kmsprint
 ```
 
-Your application user will normally need display, I2C, and input permissions:
+Your application user will normally need display, I2C, input, and GPIO permissions:
 
 ```bash
-sudo usermod -aG video,render,i2c,input "$USER"
+sudo usermod -aG video,render,i2c,input,gpio "$USER"
 ```
 
 Log out and back in after changing group membership.
+
+The SeenGreat HAT needs access to both `/dev/i2c-1` and `/dev/gpiochip0`.
+The `gpio` group provides GPIO access on Raspberry Pi OS; see the official
+[GPIO permissions guide](https://www.raspberrypi.com/documentation/computers/raspberry-pi.html#permissions)
+and the project's [SeenGreat troubleshooting notes](../hardware/README.md#seengreat-troubleshooting).
 
 The best first-stage configuration is therefore:
 

@@ -518,7 +518,7 @@ Buildroot and Yocto images. Compare the built-in profiles in
 [mpv 0.35.1](https://github.com/mpv-player/mpv/blob/v0.35.1/etc/builtin.conf)
 and [mpv 0.40.0](https://github.com/mpv-player/mpv/blob/v0.40.0/etc/builtin.conf).
 
-The [mpv hardware-decoding guide](https://mpv.io/manual/master/#options-hwdec)
+The [mpv manual](https://mpv.io/manual/master/)
 uses the `-copy` suffix for modes that copy decoded video back into system
 memory. It explains that behaviour in general, but it does not list
 `v4l2m2m-copy` by name. That exact mode came from `mpv --hwdec=help` on the
@@ -788,7 +788,7 @@ LVGL overlays.
 - [Linux DRM/KMS display layer](https://docs.kernel.org/gpu/drm-kms.html)
 - [Khronos EGL overview](https://www.khronos.org/egl)
 - [Embedding mpv as libmpv](https://mpv.io/manual/master/#embedding-into-other-programs-libmpv)
-- [mpv hardware-decoding and `-copy` options](https://mpv.io/manual/master/#options-hwdec)
+- [mpv manual, including hardware-decoding and `-copy` options](https://mpv.io/manual/master/)
 - [mpv DRM connector and mode options](https://mpv.io/manual/master/#video-output-drivers)
 - [Official libmpv client header and embedded-player defaults](https://github.com/mpv-player/mpv/blob/v0.40.0/include/mpv/client.h#L429-L460)
 - [Official simple libmpv example source](https://github.com/mpv-player/mpv-examples/blob/master/libmpv/simple/simple.c)

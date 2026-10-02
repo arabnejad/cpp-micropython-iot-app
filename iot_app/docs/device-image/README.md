@@ -854,7 +854,7 @@ handoff inside IoT App. After it works, follow the
 to copy a video, send the Python application, and confirm that LVGL closes for
 playback and starts again afterwards.
 
-The [mpv hardware-decoding guide](https://mpv.io/manual/master/#options-hwdec)
+The [mpv manual](https://mpv.io/manual/master/)
 explains `-copy` modes in general: decoded video is copied back into system
 memory. The guide does not list `v4l2m2m-copy` by name. That exact mode was
 selected because `mpv --hwdec=help` listed it on the tested Raspberry Pi, and

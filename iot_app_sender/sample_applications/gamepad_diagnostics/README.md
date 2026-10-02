@@ -13,8 +13,11 @@ Required hardware:
 - the gamepad available at address `0x50`.
 
 Do not touch the joystick while the application starts. It takes 20 samples to
-measure the centre position. Change `I2C_BUS_NUMBER` or `I2C_ADDRESS` at the top
-of `main.py` when the hardware uses different values.
+measure the centre position. The bus and address are set by
+`adafruitI2cBusNumber` and `adafruitI2cAddress` in
+[`controller_hardware_settings.h`](../../../iot_app/src/input/controller_hardware_settings.h).
+Change those C++ settings and rebuild IoT App if your wiring uses different
+values. The Python application does not accept bus or address arguments.
 
 Use this directory in `sender_config.json`:
 
