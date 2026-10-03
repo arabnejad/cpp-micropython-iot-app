@@ -1,6 +1,7 @@
 # Raspberry Pi OS development notes
 
-These notes describe development on Raspberry Pi OS. They do not describe the
+Use this reference for console setup, device access, deployment, and
+troubleshooting on Raspberry Pi OS. It does not describe the
 complete images produced by Buildroot or Yocto. See the
 [Buildroot guide](../buildroot/README.md) or
 [Yocto guide](../yocto/README.md) for those workflows.
@@ -124,9 +125,9 @@ The destination should contain:
 
 Startup checks for `default_python_application` beside the executable before
 looking in the installation directories. Copying only `iot_app` leaves that
-application missing on a fresh Pi. The Pi also needs the system libraries
-listed in the build instructions above; copying the executable does not
-install them.
+application missing on a fresh Pi. The Pi also needs the system libraries in
+the [native build requirements](../../README.md#build-on-raspberry-pi-os);
+copying the executable does not install them.
 
 Check a binary before copying:
 

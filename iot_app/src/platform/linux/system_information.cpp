@@ -352,7 +352,7 @@ SystemInformation LinuxSystemInformationProvider::readSystemInformation() const 
     systemInformation.oneMinuteLoadAverage = loadAverage;
   }
 
-  struct sysinfo currentSystemInformation {};
+  struct sysinfo currentSystemInformation{};
   if (::sysinfo(&currentSystemInformation) == 0) {
     const auto memoryUnit = static_cast<std::uint64_t>(currentSystemInformation.mem_unit);
     systemInformation.uptimeSeconds =
@@ -362,7 +362,7 @@ SystemInformation LinuxSystemInformationProvider::readSystemInformation() const 
     systemInformation.availableMemoryBytes = readAvailableMemoryBytes(fallbackFreeBytes);
   }
 
-  struct statvfs rootFileSystem {};
+  struct statvfs rootFileSystem{};
   if (::statvfs("/", &rootFileSystem) == 0) {
     systemInformation.rootStorageTotalBytes =
         static_cast<std::uint64_t>(rootFileSystem.f_blocks) * rootFileSystem.f_frsize;
@@ -396,7 +396,7 @@ std::string LinuxSystemInformationProvider::readCurrentLocalTime() const {
 }
 
 std::uint64_t LinuxSystemInformationProvider::readUptimeSeconds() const {
-  struct sysinfo currentSystemInformation {};
+  struct sysinfo currentSystemInformation{};
   if (::sysinfo(&currentSystemInformation) != 0) {
     throw std::system_error(errno, std::generic_category(), "Linux could not read the current system uptime");
   }

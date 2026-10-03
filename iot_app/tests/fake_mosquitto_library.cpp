@@ -129,7 +129,7 @@ void FakeMqttClientApi::deliverMessage(const std::string &topic, const std::stri
   if (m_messageCallback == nullptr) {
     return;
   }
-  struct mosquitto_message message {};
+  struct mosquitto_message message{};
   message.topic      = const_cast<char *>(topic.c_str());
   message.payload    = const_cast<char *>(payload.data());
   message.payloadlen = static_cast<int>(payload.size());
@@ -140,7 +140,7 @@ void FakeMqttClientApi::deliverEmptyMessage(const std::string &topic) {
   if (m_messageCallback == nullptr) {
     return;
   }
-  struct mosquitto_message message {};
+  struct mosquitto_message message{};
   message.topic = const_cast<char *>(topic.c_str());
   m_messageCallback(m_client, m_userData, &message, nullptr);
 }

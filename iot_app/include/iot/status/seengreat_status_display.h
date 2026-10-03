@@ -20,7 +20,7 @@ public:
 
 private:
   std::shared_ptr<input::SeenGreatOledHat> m_hat;
-  hardware::II2cDevice *m_device;
+  hardware::II2cDevice                    *m_device;
 };
 
 } // namespace status

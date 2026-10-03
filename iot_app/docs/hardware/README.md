@@ -1,5 +1,9 @@
 # Hardware Notes
 
+Use this reference for supported boards, wiring, device permissions, and
+hardware troubleshooting. For Python controller classes and their methods,
+see the [API reference](../micropython-api/README.md).
+
 On Raspberry Pi OS, the user running IoT App normally needs membership in the
 `i2c` group to open `/dev/i2c-1`. SeenGreat also needs GPIO access through the
 `gpio` group. The

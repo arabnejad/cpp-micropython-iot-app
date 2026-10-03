@@ -1,5 +1,10 @@
 # MicroPython API guide
 
+This is the reference for Python function arguments, return values, errors,
+and examples. For setup and deployment, start with the
+[IoT App quick start](../../README.md) and
+[sender guide](../../../iot_app_sender/README.md).
+
 Python applications running inside IoT App can import the project-owned
 `iot` module:
 

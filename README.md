@@ -97,6 +97,9 @@ under `iot_app/`, `iot_app_sender/`, `meta-iot-app/`, and `scripts/`.
 The root [`Makefile`](Makefile) provides short commands for common development
 work. Run `make help` to see the available targets.
 
+Normal application builds require CMake 3.16 or newer. Tests and coverage
+require CMake 3.24 or newer.
+
 | Command | What it does |
 |---|---|
 | `make submodules` | Initialize all upstream submodules at the revisions pinned by this repository |
@@ -135,6 +138,9 @@ shows the expected format.
 
 The formatting commands cover the application headers, native MicroPython
 modules, runtime sources, and unit tests. They use [`iot_app/.clang-format`](iot_app/.clang-format).
+The imported STMicroelectronics font files, `iot_app/src/status/font16.c` and
+`iot_app/src/status/fonts.h`, keep their original layout and are excluded from
+both commands.
 If the executable has a versioned name on your system, pass it explicitly:
 
 ```bash
@@ -271,28 +277,28 @@ state changes are covered with replacement implementations.
 
 ## Documentation
 
-Each guide has one main purpose. Start here for the project overview, use the
-IoT App README for normal runtime work, and use the more focused guides for the
-API, deployment, hardware, Buildroot, or Yocto.
+Start with a quick start to build and run the project. Use a reference to look
+up settings, APIs, or a particular task. Explanations describe the design;
+tutorials walk through the files and ideas behind the image builds.
 
 | Document | What it covers |
 |---|---|
-| [IoT App](iot_app/README.md) | Runtime structure, local build, execution, logging, and installation |
+| [IoT App](iot_app/README.md) | Local build, execution, logging, and runtime settings |
 | [System design](iot_app/docs/system-design/README.md) | Component responsibilities, threads, application lifetime, rendering, and MQTT deployment |
-| [LVGL guide](iot_app/docs/lvgl/README.md) | Introduction to LVGL and the project's framebuffer, widget, and render-thread design |
-| [MicroPython API](iot_app/docs/micropython-api/README.md) | Native `iot` modules, required and optional arguments, return values, and examples |
-| [Hardware](iot_app/docs/hardware/README.md) | Adafruit wiring, controller settings, and hardware checks |
+| [LVGL guide](iot_app/docs/lvgl/README.md) | LVGL concepts and the project's framebuffer, widget, and render-thread design |
+| [MicroPython API](iot_app/docs/micropython-api/README.md) | Native `iot` modules, arguments, return values, errors, and examples |
+| [Hardware](iot_app/docs/hardware/README.md) | Adafruit and SeenGreat wiring, controller settings, permissions, and hardware checks |
 | [Device image](iot_app/docs/device-image/README.md) | Shared Wi-Fi, SSH, mDNS, services, device checks, and troubleshooting |
-| [Buildroot tutorial](iot_app/docs/buildroot-tutorial/README.md) | How Buildroot configurations, packages, overlays, startup scripts, and image assembly work in this project |
-| [Buildroot](iot_app/docs/buildroot/README.md) | Buildroot preparation, image build, flashing, package updates, and Buildroot-specific problems |
-| [Yocto tutorial](iot_app/docs/yocto-tutorial/README.md) | How Yocto layers, recipes, appends, BitBake tasks, systemd services, and Wic images work in this project |
-| [Yocto](iot_app/docs/yocto/README.md) | Yocto layers, preparation, image build, flashing, updates, and BitBake-specific problems |
-| [Image storage](iot_app/docs/storage/README.md) | Shared root and `/data` partition sizes, first-boot expansion, and verification |
-| [Development executable](iot_app/docs/development-executable/README.md) | Test a rebuilt executable from `/data` without replacing the installed copy |
-| [IoT App Sender](iot_app_sender/README.md) | Ubuntu sender installation, configuration, MQTT topics, and status replies |
+| [Buildroot tutorial](iot_app/docs/buildroot-tutorial/README.md) | Configurations, packages, overlays, startup scripts, and image assembly |
+| [Buildroot](iot_app/docs/buildroot/README.md) | Preparing, building, flashing, and updating the Buildroot image |
+| [Yocto tutorial](iot_app/docs/yocto-tutorial/README.md) | Layers, recipes, appends, BitBake tasks, systemd services, and Wic images |
+| [Yocto](iot_app/docs/yocto/README.md) | Preparing, building, flashing, and updating the Yocto image |
+| [Image storage](iot_app/docs/storage/README.md) | Root and `/data` partition sizes, first-boot expansion, and verification |
+| [Development executable](iot_app/docs/development-executable/README.md) | Testing a rebuilt executable from `/data` |
+| [IoT App Sender](iot_app_sender/README.md) | Sender installation, configuration, and deploying a Python application |
 | [Sample applications](iot_app_sender/sample_applications/README.md) | Available Python examples and their hardware requirements |
-| [Raspberry Pi OS](iot_app/docs/raspberry-pi-os/README.md) | Raspberry Pi OS configuration notes used during development |
-| [Video playback](iot_app/docs/video-playback/README.md) | Full-screen video behaviour, Python API, Raspberry Pi test results, and current limits |
+| [Raspberry Pi OS](iot_app/docs/raspberry-pi-os/README.md) | Console setup, device access, deployment, and Raspberry Pi OS troubleshooting |
+| [Video playback](iot_app/docs/video-playback/README.md) | Playback concepts, Raspberry Pi test results, and current limits |
 
 ## Main technology choices
 

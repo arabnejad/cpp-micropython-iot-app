@@ -4,6 +4,11 @@ This directory contains the C++ runtime, embedded MicroPython modules, default
 Python application, tests, and Linux-image integration maintained by this
 project.
 
+Use this quick start to build, run, and configure IoT App. The
+[system design guide](docs/system-design/README.md) explains the runtime's
+internals, and the [API reference](docs/micropython-api/README.md) describes
+the functions available to Python applications.
+
 The repository-root `lvgl/`, `micropython/`, `buildroot/`, `poky/`,
 `meta-openembedded/`, and `meta-raspberrypi/` directories are pinned upstream
 submodules. Project changes should stay outside those directories.
@@ -113,6 +118,9 @@ The [system design guide](docs/system-design/README.md) explains how the
 components work together.
 
 ## Build on Raspberry Pi OS
+
+Normal builds require CMake 3.16 or newer. The test and coverage builds require
+CMake 3.24 or newer; see [tests and coverage](../README.md#tests-and-coverage).
 
 Install the native build dependencies:
 

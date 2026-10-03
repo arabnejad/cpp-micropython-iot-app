@@ -38,11 +38,11 @@ public:
       throw std::runtime_error("network unavailable");
     return {{"eth0", connected, connected ? "192.168.1.34" : "", {}}};
   }
-  bool connected;
+  bool                  connected;
   std::optional<double> temperatureCelsius;
-  bool failSystemRead{false};
-  bool failTimeRead{false};
-  bool failNetworkRead{false};
+  bool                  failSystemRead{false};
+  bool                  failTimeRead{false};
+  bool                  failNetworkRead{false};
 };
 
 bool lit(const std::vector<std::vector<std::uint8_t>> &transfers, unsigned x, unsigned y) {
@@ -84,7 +84,7 @@ TEST(SeenGreatStatusDisplayTest, RendersInverseTitleNetworkAppTemperatureAndTime
   EXPECT_TRUE(lit(transfers, 3, 57)); // CPU temperature starts in the left column
   for (unsigned y = 57; y < 64; ++y)
     EXPECT_TRUE(lit(transfers, 64, y)); // divider between temperature and clock
-  EXPECT_TRUE(lit(transfers, 80, 57)); // clock starts in the right column
+  EXPECT_TRUE(lit(transfers, 80, 57));  // clock starts in the right column
   EXPECT_TRUE(std::any_of(transfers[11].begin() + 1, transfers[11].end(), [](auto byte) { return byte != 0; }));
 }
 
@@ -206,7 +206,9 @@ TEST(SeenGreatStatusDisplayTest, SendsDisplayOffWhenItIsDestroyed) {
   EXPECT_CALL(device, write(testing::_)).WillRepeatedly([&](const std::vector<std::uint8_t> &bytes) {
     transfers.push_back(bytes);
   });
-  { iot::status::SeenGreatStatusDisplay display(device); }
+  {
+    iot::status::SeenGreatStatusDisplay display(device);
+  }
   ASSERT_EQ(transfers.size(), 2U);
   EXPECT_EQ(transfers.back(), (std::vector<std::uint8_t>{0x00, 0xae}));
 }
@@ -216,7 +218,9 @@ TEST(SeenGreatStatusDisplayTest, I2cErrorDuringShutdownDoesNotThrow) {
   EXPECT_CALL(device, write(testing::_))
       .WillOnce(testing::Return())
       .WillOnce(testing::Throw(std::runtime_error("I2C disconnected")));
-  { iot::status::SeenGreatStatusDisplay display(device); }
+  {
+    iot::status::SeenGreatStatusDisplay display(device);
+  }
 }
 
 } // namespace

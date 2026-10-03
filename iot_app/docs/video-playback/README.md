@@ -4,6 +4,11 @@ This guide explains how IoT App plays full-screen video. It also records the
 tests run on the Raspberry Pi 4 and why the current playback settings were
 chosen.
 
+For Python playback functions, arguments, and errors, use the
+[MicroPython API reference](../micropython-api/README.md). For image build
+and deployment commands, use the [Buildroot](../buildroot/README.md) or
+[Yocto](../yocto/README.md) guide.
+
 Video playback starts with compressed data in a media file and ends with a
 sequence of decoded pictures appearing on a monitor. The sections below follow
 that path and explain where H.264, MP4, FFmpeg, libmpv, the Raspberry Pi video

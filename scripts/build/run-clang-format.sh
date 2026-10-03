@@ -32,7 +32,10 @@ check)
   ;;
 esac
 
+# Leave the imported STMicroelectronics font data and header in their original layout.
 find "$@" -type f \
+  ! -path '*/src/status/font16.c' \
+  ! -path '*/src/status/fonts.h' \
   \( -name '*.c' -o -name '*.cc' -o -name '*.cpp' -o -name '*.cxx' \
   -o -name '*.h' -o -name '*.hh' -o -name '*.hpp' -o -name '*.hxx' \) \
   -print0 | xargs -0 -r "$clang_format_command" "${clang_format_arguments[@]}"

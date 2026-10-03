@@ -74,8 +74,8 @@ int main(int argc, char **argv) {
       return 0;
     }
 
-    iot::display::DisplayManager                displayManager;
-    iot::system::LinuxSystemInformationProvider systemInformationProvider;
+    iot::display::DisplayManager                         displayManager;
+    iot::system::LinuxSystemInformationProvider          systemInformationProvider;
     std::unique_ptr<iot::status::SeenGreatStatusDisplay> statusDisplay;
     try {
       statusDisplay = std::make_unique<iot::status::SeenGreatStatusDisplay>(iot::input::SeenGreatOledHat::open());
@@ -83,8 +83,8 @@ int main(int argc, char **argv) {
     } catch (const std::exception &error) {
       IOT_LOG_INFO(applicationLogger, "SeenGreat OLED is not available: ", error.what());
     }
-    auto                                        connectedDisplays = displayManager.connectedDisplays();
-    const auto                                 *selectedDisplay   = choosePreferredDisplay(connectedDisplays);
+    auto        connectedDisplays = displayManager.connectedDisplays();
+    const auto *selectedDisplay   = choosePreferredDisplay(connectedDisplays);
     if (selectedDisplay == nullptr) {
       throw std::runtime_error("No connected DRM display was found");
     }
